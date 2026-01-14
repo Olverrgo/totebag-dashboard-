@@ -282,7 +282,7 @@ const ModeloDetalleModal = ({ modelo, linea, onClose, onUpdate, onDelete, isLoca
 
         <div style={{ padding: '20px' }}>
           {/* Estado y Stock */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '25px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '20px', marginBottom: '25px' }}>
             {/* Estado */}
             <div style={{ background: colors.cream, padding: '15px', borderRadius: '8px' }}>
               <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '8px' }}>ESTADO</div>
@@ -379,7 +379,7 @@ const ModeloDetalleModal = ({ modelo, linea, onClose, onUpdate, onDelete, isLoca
                 style={{ display: 'none' }}
               />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px' }}>
               {(modelo.imagenes || []).map((img, idx) => (
                 <div key={img.id || idx} style={{ position: 'relative', paddingBottom: '100%', background: colors.sand, borderRadius: '8px', overflow: 'hidden' }}>
                   <img
@@ -518,7 +518,7 @@ const ModeloDetalleModal = ({ modelo, linea, onClose, onUpdate, onDelete, isLoca
             <div style={{ fontSize: '12px', fontWeight: '600', color: colors.espresso, marginBottom: '15px' }}>
               MOVIMIENTO DE STOCK
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr auto', gap: '10px', alignItems: 'end' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px', alignItems: 'end' }}>
               <div>
                 <label style={{ fontSize: '11px', color: colors.camel, display: 'block', marginBottom: '5px' }}>TIPO</label>
                 <select
@@ -901,7 +901,7 @@ const ModelosManager = ({ modelosPorLinea, setModelosPorLinea }) => {
       </h2>
 
       {/* KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px', marginBottom: '30px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '15px', marginBottom: '30px' }}>
         {[
           { label: 'Total Modelos', value: totalModelos, sub: 'en catálogo', color: colors.gold, icon: '📦' },
           { label: 'Modelos Activos', value: modelosActivos, sub: 'disponibles', color: colors.olive, icon: '✅' },
@@ -917,7 +917,7 @@ const ModelosManager = ({ modelosPorLinea, setModelosPorLinea }) => {
       </div>
 
       {/* Selector de líneas */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '10px', marginBottom: '25px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '10px', marginBottom: '25px' }}>
         {Object.entries(productosInfo).map(([key, p]) => (
           <div
             key={key}
@@ -985,7 +985,7 @@ const ModelosManager = ({ modelosPorLinea, setModelosPorLinea }) => {
             marginBottom: '20px',
             border: `1px dashed ${productosInfo[lineaActiva]?.color}`
           }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: '15px', marginBottom: '15px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px', marginBottom: '15px' }}>
               <div>
                 <label style={{ fontSize: '11px', color: colors.camel, display: 'block', marginBottom: '5px' }}>NOMBRE *</label>
                 <input
@@ -1037,7 +1037,7 @@ const ModelosManager = ({ modelosPorLinea, setModelosPorLinea }) => {
         )}
 
         {/* Lista de modelos */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
           {(modelos[lineaActiva] || []).map((modelo) => (
             <div
               key={modelo.id}

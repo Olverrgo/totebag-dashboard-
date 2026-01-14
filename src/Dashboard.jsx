@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart } from 'recharts';
 import ModelosManager from './ModelosManager';
 
@@ -566,8 +566,8 @@ const colors = {
 
 // ==================== COMPONENTES ====================
 
-// Sidebar
-const Sidebar = ({ seccionActiva, setSeccionActiva }) => {
+// Sidebar responsive
+const Sidebar = ({ seccionActiva, setSeccionActiva, menuAbierto, setMenuAbierto }) => {
   const secciones = [
     { id: 'dashboard', nombre: 'Dashboard', icon: '📊' },
     { id: 'productos', nombre: 'Productos', icon: '🛍️' },
@@ -578,61 +578,104 @@ const Sidebar = ({ seccionActiva, setSeccionActiva }) => {
     { id: 'costos', nombre: 'Costos', icon: '💰' },
   ];
 
-  return (
-    <div style={{
-      width: '220px',
-      minHeight: '100vh',
-      background: colors.espresso,
-      padding: '20px 0',
-      position: 'fixed',
-      left: 0,
-      top: 0,
-      zIndex: 100
-    }}>
-      <div style={{ padding: '0 20px 30px', borderBottom: `1px solid ${colors.camel}40` }}>
-        <div style={{ fontSize: '10px', letterSpacing: '3px', color: colors.camel, marginBottom: '5px' }}>
-          TOTE BAG
-        </div>
-        <div style={{ fontSize: '18px', fontWeight: '300', color: colors.cream, letterSpacing: '2px' }}>
-          DASHBOARD
-        </div>
-      </div>
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
 
-      <nav style={{ marginTop: '20px' }}>
-        {secciones.map(sec => (
-          <div
-            key={sec.id}
-            onClick={() => setSeccionActiva(sec.id)}
-            style={{
-              padding: '15px 20px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              background: seccionActiva === sec.id ? `${colors.camel}30` : 'transparent',
-              borderLeft: seccionActiva === sec.id ? `3px solid ${colors.gold}` : '3px solid transparent',
-              transition: 'all 0.2s',
-              color: seccionActiva === sec.id ? colors.cream : colors.sand
-            }}
-          >
-            <span style={{ fontSize: '18px' }}>{sec.icon}</span>
-            <span style={{ fontSize: '13px', letterSpacing: '1px' }}>{sec.nombre}</span>
-          </div>
-        ))}
-      </nav>
+  return (
+    <>
+      {/* Overlay para cerrar en móvil */}
+      {menuAbierto && (
+        <div
+          onClick={() => setMenuAbierto(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.5)',
+            zIndex: 99,
+            display: isMobile ? 'block' : 'none'
+          }}
+        />
+      )}
 
       <div style={{
-        position: 'absolute',
-        bottom: '20px',
-        left: '20px',
-        right: '20px',
-        fontSize: '10px',
-        color: colors.camel,
-        textAlign: 'center'
+        width: '220px',
+        minHeight: '100vh',
+        background: colors.espresso,
+        padding: '20px 0',
+        position: 'fixed',
+        left: menuAbierto || !isMobile ? 0 : '-220px',
+        top: 0,
+        zIndex: 100,
+        transition: 'left 0.3s ease'
       }}>
-        Hecho a mano en Puebla
+        {/* Botón cerrar en móvil */}
+        <button
+          onClick={() => setMenuAbierto(false)}
+          style={{
+            position: 'absolute',
+            top: '10px',
+            right: '10px',
+            background: 'transparent',
+            border: 'none',
+            color: colors.cream,
+            fontSize: '24px',
+            cursor: 'pointer',
+            display: isMobile ? 'block' : 'none'
+          }}
+        >
+          ✕
+        </button>
+
+        <div style={{ padding: '0 20px 30px', borderBottom: `1px solid ${colors.camel}40` }}>
+          <div style={{ fontSize: '10px', letterSpacing: '3px', color: colors.camel, marginBottom: '5px' }}>
+            TOTE BAG
+          </div>
+          <div style={{ fontSize: '18px', fontWeight: '300', color: colors.cream, letterSpacing: '2px' }}>
+            DASHBOARD
+          </div>
+        </div>
+
+        <nav style={{ marginTop: '20px' }}>
+          {secciones.map(sec => (
+            <div
+              key={sec.id}
+              onClick={() => {
+                setSeccionActiva(sec.id);
+                if (isMobile) setMenuAbierto(false);
+              }}
+              style={{
+                padding: '15px 20px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                background: seccionActiva === sec.id ? `${colors.camel}30` : 'transparent',
+                borderLeft: seccionActiva === sec.id ? `3px solid ${colors.gold}` : '3px solid transparent',
+                transition: 'all 0.2s',
+                color: seccionActiva === sec.id ? colors.cream : colors.sand
+              }}
+            >
+              <span style={{ fontSize: '18px' }}>{sec.icon}</span>
+              <span style={{ fontSize: '13px', letterSpacing: '1px' }}>{sec.nombre}</span>
+            </div>
+          ))}
+        </nav>
+
+        <div style={{
+          position: 'absolute',
+          bottom: '20px',
+          left: '20px',
+          right: '20px',
+          fontSize: '10px',
+          color: colors.camel,
+          textAlign: 'center'
+        }}>
+          Hecho a mano en Puebla
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 
@@ -650,7 +693,7 @@ const DashboardView = ({ productosActualizados }) => {
       </h2>
 
       {/* KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '15px', marginBottom: '30px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px', marginBottom: '30px' }}>
         {[
           { label: 'Total Ventas', value: `${totalVentas} pzas`, color: colors.camel },
           { label: 'Utilidad Total', value: `$${totalUtilidad.toLocaleString()}`, color: colors.olive },
@@ -671,7 +714,7 @@ const DashboardView = ({ productosActualizados }) => {
       </div>
 
       {/* Gráficos */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '25px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '25px' }}>
         <div style={{ background: colors.cotton, padding: '20px', border: `1px solid ${colors.sand}` }}>
           <h3 style={{ margin: '0 0 15px', fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>VENTAS POR LÍNEA DE PRODUCTO</h3>
           <ResponsiveContainer width="100%" height={220}>
@@ -842,7 +885,7 @@ const EditorPreciosEco = ({ producto, preciosEditados, setPreciosEditados }) => 
         <div style={{ fontSize: '11px', fontWeight: '600', color: colors.espresso, marginBottom: '10px' }}>
           📋 REGLAS DE MARGEN MÍNIMO
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '15px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '20px' }}>🏪</span>
             <div>
@@ -863,7 +906,7 @@ const EditorPreciosEco = ({ producto, preciosEditados, setPreciosEditados }) => 
       </div>
 
       {/* Editores de precio */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '20px' }}>
         {/* Precio Público */}
         <div style={{
           background: validoPublico ? colors.cotton : '#FDEDEC',
@@ -892,7 +935,7 @@ const EditorPreciosEco = ({ producto, preciosEditados, setPreciosEditados }) => 
               }}
             />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '10px' }}>
             <div style={{ background: `${colors.olive}20`, padding: '10px', borderRadius: '4px', textAlign: 'center' }}>
               <div style={{ fontSize: '9px', color: colors.camel }}>UTILIDAD</div>
               <div style={{ fontSize: '18px', fontWeight: '700', color: colors.olive }}>${utilidadPublica}</div>
@@ -953,7 +996,7 @@ const EditorPreciosEco = ({ producto, preciosEditados, setPreciosEditados }) => 
               }}
             />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '10px' }}>
             <div style={{ background: `${colors.olive}20`, padding: '10px', borderRadius: '4px', textAlign: 'center' }}>
               <div style={{ fontSize: '9px', color: colors.camel }}>UTILIDAD</div>
               <div style={{ fontSize: '18px', fontWeight: '700', color: colors.olive }}>${utilidadMayoreo}</div>
@@ -992,7 +1035,7 @@ const EditorPreciosEco = ({ producto, preciosEditados, setPreciosEditados }) => 
         <div style={{ fontSize: '11px', fontWeight: '600', color: colors.espresso, marginBottom: '15px' }}>
           📊 SIMULACIÓN DE UTILIDAD CON PRECIOS ACTUALES
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px' }}>
           {[50, 100, 200, 500, 1000].map(qty => {
             const utilMayoreo = qty * utilidadMayoreo;
             const utilMenudeo = Math.round(qty * 0.3) * utilidadPublica + Math.round(qty * 0.7) * utilidadMayoreo;
@@ -1081,7 +1124,7 @@ const EditorPreciosPublicitaria = ({ producto, preciosEditados, setPreciosEditad
         <div style={{ fontSize: '11px', fontWeight: '600', color: colors.espresso, marginBottom: '10px' }}>
           📋 REGLAS DE MARGEN MÍNIMO (PRODUCTO VOLUMEN)
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '15px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '20px' }}>🏪</span>
             <div>
@@ -1102,7 +1145,7 @@ const EditorPreciosPublicitaria = ({ producto, preciosEditados, setPreciosEditad
       </div>
 
       {/* Editores de precio */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '20px' }}>
         {/* Precio Público */}
         <div style={{
           background: validoPublico ? colors.cotton : '#FDEDEC',
@@ -1131,7 +1174,7 @@ const EditorPreciosPublicitaria = ({ producto, preciosEditados, setPreciosEditad
               }}
             />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '10px' }}>
             <div style={{ background: `${colors.olive}20`, padding: '10px', borderRadius: '4px', textAlign: 'center' }}>
               <div style={{ fontSize: '9px', color: colors.camel }}>UTILIDAD</div>
               <div style={{ fontSize: '18px', fontWeight: '700', color: colors.olive }}>${utilidadPublica}</div>
@@ -1192,7 +1235,7 @@ const EditorPreciosPublicitaria = ({ producto, preciosEditados, setPreciosEditad
               }}
             />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '10px' }}>
             <div style={{ background: `${colors.olive}20`, padding: '10px', borderRadius: '4px', textAlign: 'center' }}>
               <div style={{ fontSize: '9px', color: colors.camel }}>UTILIDAD</div>
               <div style={{ fontSize: '18px', fontWeight: '700', color: colors.olive }}>${utilidadMayoreo}</div>
@@ -1231,7 +1274,7 @@ const EditorPreciosPublicitaria = ({ producto, preciosEditados, setPreciosEditad
         <div style={{ fontSize: '11px', fontWeight: '600', color: colors.espresso, marginBottom: '15px' }}>
           📊 SIMULACIÓN DE UTILIDAD (VOLUMEN ALTO)
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px' }}>
           {[100, 200, 500, 1000, 2000].map(qty => {
             const utilMayoreo = qty * utilidadMayoreo;
             return (
@@ -1252,7 +1295,7 @@ const EditorPreciosPublicitaria = ({ producto, preciosEditados, setPreciosEditad
         <div style={{ fontSize: '11px', fontWeight: '600', color: colors.espresso, marginBottom: '10px' }}>
           🎨 COSTO SERIGRAFÍA (ADICIONAL AL PRECIO)
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
           <div style={{ background: colors.cotton, padding: '10px', textAlign: 'center', borderRadius: '4px' }}>
             <div style={{ fontSize: '10px', color: colors.camel }}>1 TINTA</div>
             <div style={{ fontSize: '16px', fontWeight: '700', color: colors.terracotta }}>+$4-6/pza</div>
@@ -1342,7 +1385,7 @@ const EditorPreciosGenerico = ({ producto, preciosEditados, setPreciosEditados, 
         <div style={{ fontSize: '11px', fontWeight: '600', color: colors.espresso, marginBottom: '10px' }}>
           📋 REGLAS DE MARGEN MÍNIMO (Costo: ${costo})
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '15px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '20px' }}>🏪</span>
             <div>
@@ -1363,7 +1406,7 @@ const EditorPreciosGenerico = ({ producto, preciosEditados, setPreciosEditados, 
       </div>
 
       {/* Editores de precio */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '20px' }}>
         {/* Precio Público */}
         <div style={{
           background: validoPublico ? colors.cotton : '#FDEDEC',
@@ -1392,7 +1435,7 @@ const EditorPreciosGenerico = ({ producto, preciosEditados, setPreciosEditados, 
               }}
             />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '10px' }}>
             <div style={{ background: `${colors.olive}20`, padding: '10px', borderRadius: '4px', textAlign: 'center' }}>
               <div style={{ fontSize: '9px', color: colors.camel }}>UTILIDAD</div>
               <div style={{ fontSize: '18px', fontWeight: '700', color: colors.olive }}>${utilidadPublica}</div>
@@ -1442,7 +1485,7 @@ const EditorPreciosGenerico = ({ producto, preciosEditados, setPreciosEditados, 
               }}
             />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '10px' }}>
             <div style={{ background: `${colors.olive}20`, padding: '10px', borderRadius: '4px', textAlign: 'center' }}>
               <div style={{ fontSize: '9px', color: colors.camel }}>UTILIDAD</div>
               <div style={{ fontSize: '18px', fontWeight: '700', color: colors.olive }}>${utilidadMayoreo}</div>
@@ -1492,7 +1535,7 @@ const EditorPreciosGenerico = ({ producto, preciosEditados, setPreciosEditados, 
           <div style={{ fontSize: '11px', fontWeight: '600', color: colors.espresso, marginBottom: '12px' }}>
             🚚 CONDICIONES ENVÍO GRATIS (manteniendo rentabilidad)
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
             <div style={{ background: colors.cotton, padding: '10px', textAlign: 'center', borderRadius: '4px' }}>
               <div style={{ fontSize: '9px', color: colors.camel }}>MAYOREO NAC</div>
               <div style={{ fontSize: '18px', fontWeight: '700', color: colors.olive }}>{condiciones.mayoreo.nacional.unidadesMin}+</div>
@@ -1523,7 +1566,7 @@ const EditorPreciosGenerico = ({ producto, preciosEditados, setPreciosEditados, 
           <div style={{ fontSize: '11px', fontWeight: '600', color: colors.espresso, marginBottom: '12px' }}>
             🎁 PROMOCIONES RENTABLES CON ENVÍO INCLUIDO
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
             <div style={{ background: colors.cotton, padding: '12px', textAlign: 'center', borderRadius: '4px' }}>
               <div style={{ fontSize: '9px', color: colors.camel }}>PACK 2 + ENVÍO NAC</div>
               <div style={{ fontSize: '20px', fontWeight: '700', color: colors.gold }}>${condiciones.promociones.pack2Nacional.precio}</div>
@@ -1596,7 +1639,7 @@ const ProductosView = ({ productosActualizados, preciosGlobales, setPreciosGloba
       </h2>
 
       {/* Selector de producto - 6 líneas */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '12px', marginBottom: '25px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '12px', marginBottom: '25px' }}>
         {Object.entries(productosUsar).map(([key, p]) => (
           <div
             key={key}
@@ -1613,7 +1656,7 @@ const ProductosView = ({ productosActualizados, preciosGlobales, setPreciosGloba
             <span style={{ fontSize: '36px' }}>{p.icon}</span>
             <h3 style={{ margin: '10px 0 5px', fontSize: '16px', color: p.color, letterSpacing: '2px' }}>{p.nombre}</h3>
             <p style={{ margin: 0, fontSize: '11px', color: colors.camel }}>{p.material}</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '15px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '10px', marginTop: '15px' }}>
               <div style={{ background: `${p.color}15`, padding: '8px', borderRadius: '4px' }}>
                 <div style={{ fontSize: '9px', color: colors.camel }}>COSTO</div>
                 <div style={{ fontSize: '16px', fontWeight: '600', color: colors.espresso }}>${p.costoTotal}</div>
@@ -1647,7 +1690,7 @@ const ProductosView = ({ productosActualizados, preciosGlobales, setPreciosGloba
         </div>
 
         {/* Especificaciones */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '25px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '25px' }}>
           <div>
             <h4 style={{ margin: '0 0 10px', fontSize: '12px', letterSpacing: '1px', color: colors.espresso }}>ESPECIFICACIONES</h4>
             {Object.entries(producto.especificaciones).map(([key, val]) => (
@@ -1673,7 +1716,7 @@ const ProductosView = ({ productosActualizados, preciosGlobales, setPreciosGloba
         </div>
 
         {/* KPIs del producto */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '10px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px' }}>
           {[
             { label: 'Precio Público', value: `$${producto.precioPublico}`, color: producto.color },
             { label: 'Utilidad Pública', value: `$${producto.utilidadPublica}`, color: colors.olive },
@@ -1732,7 +1775,7 @@ const MayoreoView = ({ productosActualizados, condicionesEco, condicionesEcoForr
       </h2>
 
       {/* Selector de línea */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '15px', marginBottom: '25px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px', marginBottom: '25px' }}>
         {Object.entries(productosUsar).map(([key, p]) => (
           <div
             key={key}
@@ -1768,7 +1811,7 @@ const MayoreoView = ({ productosActualizados, condicionesEco, condicionesEcoForr
               ENVÍO GRATIS MAYOREO — {linea.nombre} (Precio actual: ${linea.precioMayoreo})
             </h3>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '15px' }}>
             <div style={{ background: colors.cotton, padding: '15px', textAlign: 'center', borderRadius: '6px' }}>
               <div style={{ fontSize: '10px', color: colors.camel }}>NACIONAL</div>
               <div style={{ fontSize: '28px', fontWeight: '700', color: colors.olive }}>
@@ -1922,13 +1965,13 @@ const EcommerceView = ({ productosActualizados, condicionesEco, condicionesEcoFo
               ENVÍO GRATIS E-COMMERCE — Líneas ECO (Precios editables en Productos)
             </h3>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
             {condicionesEco && (
               <div style={{ background: colors.cotton, padding: '15px', borderRadius: '6px', border: `1px solid ${productosUsar.eco.color}` }}>
                 <div style={{ fontSize: '12px', fontWeight: '600', color: productosUsar.eco.color, marginBottom: '10px' }}>
                   💎 ECO — Precio: ${productosUsar.eco.precioPublico}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '9px', color: colors.camel }}>NAC. ENVÍO GRATIS</div>
                     <div style={{ fontSize: '20px', fontWeight: '700', color: colors.olive }}>
@@ -1959,7 +2002,7 @@ const EcommerceView = ({ productosActualizados, condicionesEco, condicionesEcoFo
                 <div style={{ fontSize: '12px', fontWeight: '600', color: productosUsar.ecoForro.color, marginBottom: '10px' }}>
                   💠 ECO+FORRO — Precio: ${productosUsar.ecoForro.precioPublico}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '9px', color: colors.camel }}>NAC. ENVÍO GRATIS</div>
                     <div style={{ fontSize: '20px', fontWeight: '700', color: colors.olive }}>
@@ -2032,7 +2075,7 @@ const EcommerceView = ({ productosActualizados, condicionesEco, condicionesEcoFo
       {/* Recomendaciones */}
       <div style={{ background: `${colors.gold}20`, padding: '20px', border: `1px solid ${colors.gold}` }}>
         <h3 style={{ margin: '0 0 15px', fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>💡 RECOMENDACIONES ESTRATÉGICAS</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px' }}>
           {[
             { titulo: 'PRIORIDAD LOCAL', desc: 'Tu promo 2x$400 + envío gratis en Puebla es la MÁS RENTABLE (~$98/pza)' },
             { titulo: 'MERCADO LIBRE', desc: 'Vende en PACKS de 2 bolsas a $399-$499 para diluir comisiones y envío' },
@@ -2074,7 +2117,7 @@ const PromocionesView = ({ productosActualizados }) => {
           🎉 PROMO 2x1: 20% DESCUENTO + ENVÍO GRATIS
         </h3>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '30px' }}>
           <div style={{ background: colors.cotton, padding: '20px' }}>
             <h4 style={{ margin: '0 0 15px', fontSize: '13px', color: colors.espresso }}>PARA EL CLIENTE:</h4>
             <div style={{ fontSize: '13px' }}>
@@ -2163,7 +2206,7 @@ const PromocionesView = ({ productosActualizados }) => {
       {/* Personalización */}
       <div style={{ background: colors.cotton, padding: '20px', border: `1px solid ${colors.sand}` }}>
         <h3 style={{ margin: '0 0 15px', fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>🎨 OPCIONES DE PERSONALIZACIÓN</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
           {personalizacion.map((p, i) => (
             <div key={i} style={{ background: colors.cream, padding: '15px', textAlign: 'center', border: `1px solid ${colors.sand}` }}>
               <div style={{ fontWeight: '600', fontSize: '12px', marginBottom: '8px', color: colors.espresso }}>{p.tipo}</div>
@@ -2222,7 +2265,7 @@ const CostosView = ({ productosActualizados, condicionesEco, condicionesEcoForro
       </div>
 
       {/* Costos de envío */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '25px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '25px' }}>
         <div style={{ background: colors.cotton, padding: '20px', border: `1px solid ${colors.sand}` }}>
           <h3 style={{ margin: '0 0 15px', fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>🏍️ ENVÍO LOCAL — PUEBLA</h3>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
@@ -2271,7 +2314,7 @@ const CostosView = ({ productosActualizados, condicionesEco, condicionesEcoForro
       {/* Estrategia de envío */}
       <div style={{ background: `${colors.olive}15`, padding: '20px', border: `1px solid ${colors.olive}` }}>
         <h3 style={{ margin: '0 0 15px', fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>💡 ESTRATEGIA DE ENVÍO RECOMENDADA</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '15px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' }}>
           {[
             { pedido: '1-24 pzas', estrategia: 'Cobrar envío aparte', detalle: 'Local: $50-80 / Nacional: $85-100' },
             { pedido: '25-49 pzas', estrategia: 'Envío subsidiado 50%', detalle: 'Cliente paga $25-40' },
@@ -2389,7 +2432,7 @@ const ModelosView = ({ modelosPorLinea, setModelosPorLinea }) => {
       </h2>
 
       {/* KPIs de modelos */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px', marginBottom: '30px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '15px', marginBottom: '30px' }}>
         {[
           { label: 'Total Modelos', value: totalModelos, sub: 'en catálogo', color: colors.gold, icon: '📦' },
           { label: 'Modelos Activos', value: modelosActivos, sub: 'disponibles', color: colors.olive, icon: '✅' },
@@ -2411,7 +2454,7 @@ const ModelosView = ({ modelosPorLinea, setModelosPorLinea }) => {
       </div>
 
       {/* Selector de líneas */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '10px', marginBottom: '25px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px', marginBottom: '25px' }}>
         {Object.entries(productos).map(([key, p]) => (
           <div
             key={key}
@@ -2573,7 +2616,7 @@ const ModelosView = ({ modelosPorLinea, setModelosPorLinea }) => {
         )}
 
         {/* Lista de modelos */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px' }}>
           {(modelos[lineaActiva] || []).map((modelo, idx) => (
             <div
               key={modelo.id}
@@ -2836,13 +2879,13 @@ const PanelEnvioGratis = ({ producto, precios, condiciones }) => {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px', marginBottom: '15px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px', marginBottom: '15px' }}>
         {/* Mayoreo */}
         <div style={{ background: colors.cotton, padding: '15px', border: `1px solid ${colors.sand}`, borderRadius: '6px' }}>
           <div style={{ fontSize: '12px', fontWeight: '600', color: colors.espresso, marginBottom: '12px' }}>
             📦 MAYOREO (Precio: ${precios.precioMayoreo})
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '10px' }}>
             <div style={{ background: `${colors.olive}15`, padding: '12px', borderRadius: '4px', textAlign: 'center' }}>
               <div style={{ fontSize: '9px', color: colors.camel }}>NACIONAL</div>
               <div style={{ fontSize: '22px', fontWeight: '700', color: colors.olive }}>
@@ -2865,7 +2908,7 @@ const PanelEnvioGratis = ({ producto, precios, condiciones }) => {
           <div style={{ fontSize: '12px', fontWeight: '600', color: colors.espresso, marginBottom: '12px' }}>
             🛒 E-COMMERCE / MENUDEO (Precio: ${precios.precioPublico})
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '10px' }}>
             <div style={{ background: `${colors.olive}15`, padding: '12px', borderRadius: '4px', textAlign: 'center' }}>
               <div style={{ fontSize: '9px', color: colors.camel }}>NACIONAL</div>
               <div style={{ fontSize: '22px', fontWeight: '700', color: colors.olive }}>
@@ -2889,7 +2932,7 @@ const PanelEnvioGratis = ({ producto, precios, condiciones }) => {
         <div style={{ fontSize: '12px', fontWeight: '600', color: colors.espresso, marginBottom: '10px' }}>
           🎁 PROMOCIONES SUGERIDAS CON ENVÍO INCLUIDO (Mantienen 31% margen)
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
           <div style={{ background: colors.cotton, padding: '10px', textAlign: 'center', borderRadius: '4px' }}>
             <div style={{ fontSize: '9px', color: colors.camel }}>PACK 2 + ENVÍO NAC</div>
             <div style={{ fontSize: '18px', fontWeight: '700', color: colors.gold }}>
@@ -2952,6 +2995,18 @@ const PanelEnvioGratis = ({ producto, precios, condiciones }) => {
 
 export default function DashboardToteBag() {
   const [seccionActiva, setSeccionActiva] = useState('dashboard');
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
+
+  // Detectar cambios de tamaño de pantalla
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const isMobile = windowWidth <= 768;
 
   // Estado global de precios editables para TODAS las líneas
   const [preciosGlobales, setPreciosGlobales] = useState({
@@ -3081,30 +3136,73 @@ export default function DashboardToteBag() {
       fontFamily: "'Cormorant Garamond', Georgia, serif",
       color: colors.espresso
     }}>
-      <Sidebar seccionActiva={seccionActiva} setSeccionActiva={setSeccionActiva} />
+      <Sidebar
+        seccionActiva={seccionActiva}
+        setSeccionActiva={setSeccionActiva}
+        menuAbierto={menuAbierto}
+        setMenuAbierto={setMenuAbierto}
+      />
 
-      <div style={{ marginLeft: '220px', padding: '30px' }}>
-        {/* Header */}
+      <div style={{
+        marginLeft: isMobile ? 0 : '220px',
+        padding: isMobile ? '15px' : '30px',
+        transition: 'margin-left 0.3s ease'
+      }}>
+        {/* Header móvil con hamburguesa */}
+        {isMobile && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '15px',
+            marginBottom: '15px',
+            padding: '10px 15px',
+            background: colors.espresso,
+            borderRadius: '8px'
+          }}>
+            <button
+              onClick={() => setMenuAbierto(true)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: colors.cream,
+                fontSize: '24px',
+                cursor: 'pointer',
+                padding: '5px'
+              }}
+            >
+              ☰
+            </button>
+            <div>
+              <div style={{ fontSize: '9px', letterSpacing: '2px', color: colors.camel }}>TOTE BAG</div>
+              <div style={{ fontSize: '14px', fontWeight: '300', color: colors.cream, letterSpacing: '1px' }}>DASHBOARD</div>
+            </div>
+          </div>
+        )}
+
+        {/* Header desktop */}
         <div style={{
-          marginBottom: '30px',
-          padding: '20px 25px',
+          marginBottom: isMobile ? '20px' : '30px',
+          padding: isMobile ? '15px' : '20px 25px',
           background: colors.cotton,
           border: `1px solid ${colors.camel}`,
           display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
           justifyContent: 'space-between',
-          alignItems: 'center'
+          alignItems: isMobile ? 'flex-start' : 'center',
+          gap: isMobile ? '10px' : '0',
+          borderRadius: isMobile ? '8px' : '0'
         }}>
           <div>
-            <div style={{ fontSize: '10px', letterSpacing: '3px', color: colors.camel, marginBottom: '5px' }}>
+            <div style={{ fontSize: isMobile ? '9px' : '10px', letterSpacing: '3px', color: colors.camel, marginBottom: '5px' }}>
               HECHO A MANO EN PUEBLA, MÉXICO
             </div>
-            <h1 style={{ margin: 0, fontSize: '26px', fontWeight: '300', letterSpacing: '2px', color: colors.espresso }}>
+            <h1 style={{ margin: 0, fontSize: isMobile ? '18px' : '26px', fontWeight: '300', letterSpacing: '2px', color: colors.espresso }}>
               TOTE BAG PREMIUM
             </h1>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '12px', color: colors.camel }}>Meta: 20 → 150 bolsas/mes</div>
-            <div style={{ fontSize: '12px', color: colors.olive }}>100 modelos en 10 meses</div>
+          <div style={{ textAlign: isMobile ? 'left' : 'right' }}>
+            <div style={{ fontSize: isMobile ? '11px' : '12px', color: colors.camel }}>Meta: 20 → 150 bolsas/mes</div>
+            <div style={{ fontSize: isMobile ? '11px' : '12px', color: colors.olive }}>100 modelos en 10 meses</div>
           </div>
         </div>
 
@@ -3114,7 +3212,7 @@ export default function DashboardToteBag() {
         {/* Footer */}
         <div style={{
           textAlign: 'center',
-          marginTop: '40px',
+          marginTop: isMobile ? '30px' : '40px',
           paddingTop: '20px',
           borderTop: `1px solid ${colors.sand}`,
           fontSize: '11px',
