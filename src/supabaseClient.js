@@ -247,4 +247,64 @@ export const deletePDF = async (pdfId, url) => {
   return { error };
 };
 
+// =====================================================
+// FUNCIONES DE AUTENTICACIÓN
+// =====================================================
+
+// Iniciar sesión
+export const signIn = async (email, password) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password
+  });
+
+  return { data, error };
+};
+
+// Cerrar sesión
+export const signOut = async () => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+
+  const { error } = await supabase.auth.signOut();
+  return { error };
+};
+
+// Obtener sesión actual
+export const getSession = async () => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase.auth.getSession();
+  return { data: data?.session, error };
+};
+
+// Obtener usuario actual
+export const getCurrentUser = async () => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data: { user }, error } = await supabase.auth.getUser();
+  return { data: user, error };
+};
+
+// Obtener perfil del usuario (con rol)
+export const getUserProfile = async (userId) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('*')
+    .eq('id', userId)
+    .single();
+
+  return { data, error };
+};
+
+// Escuchar cambios de autenticación
+export const onAuthStateChange = (callback) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  return supabase.auth.onAuthStateChange(callback);
+};
+
 export default supabase;

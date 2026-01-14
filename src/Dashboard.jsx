@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from './AuthContext';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart } from 'recharts';
 import ModelosManager from './ModelosManager';
 
@@ -2994,6 +2995,9 @@ const PanelEnvioGratis = ({ producto, precios, condiciones }) => {
 // ==================== COMPONENTE PRINCIPAL ====================
 
 export default function DashboardToteBag() {
+  // Autenticacion y roles
+  const { user, profile, isAdmin, logout } = useAuth();
+
   const [seccionActiva, setSeccionActiva] = useState('dashboard');
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
@@ -3120,7 +3124,7 @@ export default function DashboardToteBag() {
           todasCondiciones={todasCondiciones}
         />
       );
-      case 'modelos': return <ModelosManager modelosPorLinea={modelosPorLinea} setModelosPorLinea={setModelosPorLinea} />;
+      case 'modelos': return <ModelosManager modelosPorLinea={modelosPorLinea} setModelosPorLinea={setModelosPorLinea} isAdmin={isAdmin} />;
       case 'mayoreo': return <MayoreoView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} />;
       case 'ecommerce': return <EcommerceView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} />;
       case 'promociones': return <PromocionesView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} />;
@@ -3200,9 +3204,16 @@ export default function DashboardToteBag() {
               TOTE BAG PREMIUM
             </h1>
           </div>
-          <div style={{ textAlign: isMobile ? 'left' : 'right' }}>
-            <div style={{ fontSize: isMobile ? '11px' : '12px', color: colors.camel }}>Meta: 20 → 150 bolsas/mes</div>
-            <div style={{ fontSize: isMobile ? '11px' : '12px', color: colors.olive }}>100 modelos en 10 meses</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <div>
+              <div style={{ fontSize: '11px', color: colors.camel }}>{profile?.email || user?.email}</div>
+              <div style={{ fontSize: '10px', fontWeight: '600', color: isAdmin ? colors.olive : colors.terracotta }}>
+                {isAdmin ? 'Admin' : 'Usuario'}
+              </div>
+            </div>
+            <button onClick={logout} style={{ padding: '8px 12px', background: colors.terracotta, color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>
+              Salir
+            </button>
           </div>
         </div>
 

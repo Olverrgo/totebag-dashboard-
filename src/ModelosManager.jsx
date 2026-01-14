@@ -81,7 +81,7 @@ const tiposDiseno = [
 ];
 
 // Componente Modal para detalles del modelo
-const ModeloDetalleModal = ({ modelo, linea, onClose, onUpdate, onDelete, isLocal }) => {
+const ModeloDetalleModal = ({ modelo, linea, onClose, onUpdate, onDelete, isLocal, isAdmin = false }) => {
   const [editando, setEditando] = useState(false);
   const [datosEdit, setDatosEdit] = useState({ ...modelo });
   const [nuevoComentario, setNuevoComentario] = useState('');
@@ -260,7 +260,7 @@ const ModeloDetalleModal = ({ modelo, linea, onClose, onUpdate, onDelete, isLoca
             </div>
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
-            {editando ? (
+            {isAdmin && (editando ? (
               <>
                 <button onClick={handleGuardar} style={{ padding: '8px 16px', background: colors.olive, color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
                   Guardar
@@ -273,7 +273,7 @@ const ModeloDetalleModal = ({ modelo, linea, onClose, onUpdate, onDelete, isLoca
               <button onClick={() => setEditando(true)} style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.2)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
                 Editar
               </button>
-            )}
+            ))}
             <button onClick={onClose} style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.2)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '18px' }}>
               ✕
             </button>
@@ -629,29 +629,31 @@ const ModeloDetalleModal = ({ modelo, linea, onClose, onUpdate, onDelete, isLoca
             </div>
           </div>
 
-          {/* Botón eliminar */}
-          <div style={{ borderTop: `1px solid ${colors.sand}`, paddingTop: '20px', textAlign: 'center' }}>
-            <button
-              onClick={() => {
-                if (window.confirm('¿Estás seguro de eliminar este modelo? Esta acción no se puede deshacer.')) {
-                  onDelete(linea, modelo.id);
-                  onClose();
-                }
-              }}
-              style={{
-                padding: '12px 30px',
-                background: '#E74C3C',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '13px',
-                fontWeight: '600'
-              }}
-            >
-              Eliminar Modelo
-            </button>
-          </div>
+          {/* Botón eliminar - solo admin */}
+          {isAdmin && (
+            <div style={{ borderTop: `1px solid ${colors.sand}`, paddingTop: '20px', textAlign: 'center' }}>
+              <button
+                onClick={() => {
+                  if (window.confirm('¿Estás seguro de eliminar este modelo? Esta acción no se puede deshacer.')) {
+                    onDelete(linea, modelo.id);
+                    onClose();
+                  }
+                }}
+                style={{
+                  padding: '12px 30px',
+                  background: '#E74C3C',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: '600'
+                }}
+              >
+                Eliminar Modelo
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -659,7 +661,7 @@ const ModeloDetalleModal = ({ modelo, linea, onClose, onUpdate, onDelete, isLoca
 };
 
 // Componente principal ModelosManager
-const ModelosManager = ({ modelosPorLinea, setModelosPorLinea }) => {
+const ModelosManager = ({ modelosPorLinea, setModelosPorLinea, isAdmin = false }) => {
   const [lineaActiva, setLineaActiva] = useState('estandar');
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [nuevoModelo, setNuevoModelo] = useState({ nombre: '', tipo: '', descripcion: '' });
@@ -959,25 +961,27 @@ const ModelosManager = ({ modelosPorLinea, setModelosPorLinea }) => {
               </p>
             </div>
           </div>
-          <button
-            onClick={() => setMostrarFormulario(!mostrarFormulario)}
-            style={{
-              padding: '12px 25px',
-              background: productosInfo[lineaActiva]?.color,
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '13px',
-              fontWeight: '600'
-            }}
-          >
-            {mostrarFormulario ? '✕ Cancelar' : '+ Agregar Modelo'}
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setMostrarFormulario(!mostrarFormulario)}
+              style={{
+                padding: '12px 25px',
+                background: productosInfo[lineaActiva]?.color,
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: '600'
+              }}
+            >
+              {mostrarFormulario ? '✕ Cancelar' : '+ Agregar Modelo'}
+            </button>
+          )}
         </div>
 
         {/* Formulario nuevo modelo */}
-        {mostrarFormulario && (
+        {isAdmin && mostrarFormulario && (
           <div style={{
             background: `${productosInfo[lineaActiva]?.color}15`,
             padding: '20px',
@@ -1106,6 +1110,7 @@ const ModelosManager = ({ modelosPorLinea, setModelosPorLinea }) => {
           onUpdate={actualizarModelo}
           onDelete={eliminarModelo}
           isLocal={isLocal}
+          isAdmin={isAdmin}
         />
       )}
     </div>
