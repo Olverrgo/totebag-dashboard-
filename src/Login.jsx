@@ -12,7 +12,9 @@ const colors = {
   gold: '#B8860B',
   cotton: '#FAF9F6',
   linen: '#E8E4DC',
-  sage: '#9CAF88'
+  sage: '#9CAF88',
+  fireOrange: '#FF6B35',
+  canvasBeige: '#E8DFD0'
 };
 
 const Login = ({ onLoginSuccess }) => {
@@ -74,7 +76,7 @@ const Login = ({ onLoginSuccess }) => {
       }}>
         {/* Header */}
         <div style={{
-          background: colors.espresso,
+          background: colors.canvasBeige,
           padding: '30px',
           textAlign: 'center'
         }}>
@@ -99,18 +101,18 @@ const Login = ({ onLoginSuccess }) => {
           <div style={{
             fontSize: '22px',
             fontWeight: '300',
-            color: colors.cream,
+            color: colors.espresso,
             letterSpacing: '2px'
           }}>
             Totebags Yolotl
           </div>
           <div style={{
             fontSize: '11px',
-            color: colors.sand,
+            color: colors.camel,
             marginTop: '10px',
             letterSpacing: '2px'
           }}>
-            DASHBOARD
+            100% ALGODÓN
           </div>
         </div>
 
@@ -199,8 +201,8 @@ const Login = ({ onLoginSuccess }) => {
             style={{
               width: '100%',
               padding: '16px',
-              background: loading ? colors.sand : colors.espresso,
-              color: colors.cream,
+              background: loading ? colors.sand : colors.fireOrange,
+              color: 'white',
               border: 'none',
               borderRadius: '6px',
               fontSize: '14px',
