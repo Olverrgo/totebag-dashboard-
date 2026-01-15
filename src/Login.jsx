@@ -20,13 +20,25 @@ const Login = ({ onLoginSuccess }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
 
+  // Detectar cambios de tamano de ventana
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Cargar fuente
   useEffect(() => {
     const link = document.createElement('link');
     link.href = 'https://fonts.googleapis.com/css2?family=Caveat:wght@400;600&display=swap';
     link.rel = 'stylesheet';
     document.head.appendChild(link);
   }, []);
+
+  const isMobile = windowWidth <= 480;
+  const isTablet = windowWidth > 480 && windowWidth <= 768;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -56,6 +68,12 @@ const Login = ({ onLoginSuccess }) => {
     }
   };
 
+  const handleButtonClick = () => {
+    if (!loading) {
+      document.querySelector('form')?.requestSubmit();
+    }
+  };
+
   const borderStyle = '1px solid ' + colors.sand;
   const errorBg = colors.terracotta + '20';
   const errorBorder = '1px solid ' + colors.terracotta;
@@ -63,28 +81,30 @@ const Login = ({ onLoginSuccess }) => {
   return (
     <div style={{
       minHeight: '100vh',
+      minHeight: '-webkit-fill-available',
       background: 'linear-gradient(180deg, #E8DFD0 0%, #D4C5B5 50%, #C4B396 100%)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '20px',
-      fontFamily: "'Cormorant Garamond', Georgia, serif"
+      padding: isMobile ? '10px' : '20px',
+      fontFamily: "'Cormorant Garamond', Georgia, serif",
+      boxSizing: 'border-box'
     }}>
       <div style={{
         background: colors.cotton,
-        borderRadius: '0',
+        borderRadius: isMobile ? '8px' : '0',
         boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
         width: '100%',
-        maxWidth: '380px',
+        maxWidth: isMobile ? '100%' : '380px',
         overflow: 'hidden'
       }}>
         {/* Header con imagen de fondo */}
         <div style={{
-          backgroundImage: 'url("/login-header-bg.png?v=2")',
+          backgroundImage: 'url("/login-header-bg.png?v=3")',
           backgroundSize: 'cover',
           backgroundPosition: 'center top',
           padding: '0',
-          minHeight: '280px',
+          minHeight: isMobile ? '220px' : isTablet ? '250px' : '280px',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -94,13 +114,13 @@ const Login = ({ onLoginSuccess }) => {
 
         {/* Formulario */}
         <form onSubmit={handleSubmit} style={{
-          padding: '25px 30px',
+          padding: isMobile ? '20px 15px' : '25px 30px',
           background: colors.cotton
         }}>
-          <div style={{ marginBottom: '18px' }}>
+          <div style={{ marginBottom: isMobile ? '15px' : '18px' }}>
             <label style={{
               display: 'block',
-              fontSize: '11px',
+              fontSize: isMobile ? '10px' : '11px',
               letterSpacing: '2px',
               color: colors.camel,
               marginBottom: '8px',
@@ -114,25 +134,28 @@ const Login = ({ onLoginSuccess }) => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              autoComplete="email"
+              autoCapitalize="none"
               style={{
                 width: '100%',
-                padding: '12px 14px',
+                padding: isMobile ? '14px 12px' : '12px 14px',
                 border: borderStyle,
                 borderRadius: '4px',
-                fontSize: '15px',
+                fontSize: '16px',
                 background: '#FAFAF8',
                 color: colors.espresso,
                 outline: 'none',
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
+                WebkitAppearance: 'none'
               }}
               placeholder="tu@email.com"
             />
           </div>
 
-          <div style={{ marginBottom: '22px' }}>
+          <div style={{ marginBottom: isMobile ? '20px' : '22px' }}>
             <label style={{
               display: 'block',
-              fontSize: '11px',
+              fontSize: isMobile ? '10px' : '11px',
               letterSpacing: '2px',
               color: colors.camel,
               marginBottom: '8px',
@@ -146,16 +169,18 @@ const Login = ({ onLoginSuccess }) => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              autoComplete="current-password"
               style={{
                 width: '100%',
-                padding: '12px 14px',
+                padding: isMobile ? '14px 12px' : '12px 14px',
                 border: borderStyle,
                 borderRadius: '4px',
-                fontSize: '15px',
+                fontSize: '16px',
                 background: '#FAFAF8',
                 color: colors.espresso,
                 outline: 'none',
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
+                WebkitAppearance: 'none'
               }}
               placeholder="********"
             />
@@ -179,19 +204,23 @@ const Login = ({ onLoginSuccess }) => {
           <button
             type="submit"
             disabled={loading}
+            onClick={handleButtonClick}
+            onTouchEnd={(e) => { e.preventDefault(); handleButtonClick(); }}
             style={{
               width: '100%',
-              padding: '14px',
+              padding: isMobile ? '16px' : '14px',
               background: loading ? colors.sand : colors.olive,
               color: 'white',
               border: 'none',
               borderRadius: '4px',
-              fontSize: '13px',
+              fontSize: isMobile ? '14px' : '13px',
               fontWeight: '600',
               letterSpacing: '3px',
               cursor: loading ? 'not-allowed' : 'pointer',
               transition: 'all 0.3s',
-              textTransform: 'uppercase'
+              textTransform: 'uppercase',
+              WebkitTapHighlightColor: 'transparent',
+              touchAction: 'manipulation'
             }}
           >
             {loading ? 'INGRESANDO...' : 'INGRESAR'}
@@ -201,9 +230,9 @@ const Login = ({ onLoginSuccess }) => {
         {/* Footer */}
         <div style={{
           borderTop: borderStyle,
-          padding: '15px 20px',
+          padding: isMobile ? '12px 15px' : '15px 20px',
           textAlign: 'center',
-          fontSize: '10px',
+          fontSize: isMobile ? '9px' : '10px',
           color: colors.camel,
           letterSpacing: '1px',
           background: colors.cotton
