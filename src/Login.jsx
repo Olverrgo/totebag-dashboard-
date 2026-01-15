@@ -237,7 +237,7 @@ const Login = ({ onLoginSuccess }) => {
           letterSpacing: '1px',
           background: colors.cotton
         }}>
-          Hecho con el corazon desde Puebla
+          Hecho con el corazon desde Puebla (v5)
         </div>
       </div>
     </div>
