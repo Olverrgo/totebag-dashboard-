@@ -22,45 +22,75 @@ export const AuthProvider = ({ children }) => {
 
   // Cargar sesión al iniciar
   useEffect(() => {
+    let isMounted = true;
+    let subscription = null;
+
     const initAuth = async () => {
       try {
         setLoading(true);
 
-        // Obtener sesión actual
-        const { data: session } = await getSession();
+        // Timeout de 5 segundos para evitar que se quede cargando
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout')), 5000)
+        );
+
+        // Obtener sesión actual con timeout
+        const sessionPromise = getSession();
+
+        const { data: session } = await Promise.race([sessionPromise, timeoutPromise])
+          .catch(err => {
+            console.log('Error o timeout obteniendo sesión:', err.message);
+            return { data: null };
+          });
+
+        if (!isMounted) return;
 
         if (session?.user) {
           setUser(session.user);
 
           // Obtener perfil con rol
-          const { data: profileData } = await getUserProfile(session.user.id);
-          setProfile(profileData);
+          try {
+            const { data: profileData } = await getUserProfile(session.user.id);
+            if (isMounted) setProfile(profileData);
+          } catch (profileErr) {
+            console.error('Error obteniendo perfil:', profileErr);
+          }
         }
       } catch (err) {
         console.error('Error inicializando auth:', err);
-        setError(err.message);
+        if (isMounted) setError(err.message);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
     initAuth();
 
     // Escuchar cambios de autenticación
-    const { data: { subscription } } = onAuthStateChange(async (event, session) => {
-      console.log('Auth event:', event);
+    try {
+      const authListener = onAuthStateChange(async (event, session) => {
+        console.log('Auth event:', event);
 
-      if (event === 'SIGNED_IN' && session?.user) {
-        setUser(session.user);
-        const { data: profileData } = await getUserProfile(session.user.id);
-        setProfile(profileData);
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setProfile(null);
-      }
-    });
+        if (event === 'SIGNED_IN' && session?.user) {
+          setUser(session.user);
+          try {
+            const { data: profileData } = await getUserProfile(session.user.id);
+            if (isMounted) setProfile(profileData);
+          } catch (err) {
+            console.error('Error obteniendo perfil:', err);
+          }
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+          setProfile(null);
+        }
+      });
+      subscription = authListener?.data?.subscription;
+    } catch (err) {
+      console.error('Error configurando listener de auth:', err);
+    }
 
     return () => {
+      isMounted = false;
       subscription?.unsubscribe();
     };
   }, []);
