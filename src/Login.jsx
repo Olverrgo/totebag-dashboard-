@@ -49,10 +49,15 @@ const Login = ({ onLoginSuccess }) => {
     }
   };
 
+  const gradientBg = 'linear-gradient(180deg, ' + colors.cream + ' 0%, ' + colors.sand + ' 50%, ' + colors.linen + ' 100%)';
+  const borderStyle = '1px solid ' + colors.sand;
+  const errorBg = colors.terracotta + '20';
+  const errorBorder = '1px solid ' + colors.terracotta;
+
   return (
     <div style={{
       minHeight: '100vh',
-      background: ,
+      background: gradientBg,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -130,7 +135,7 @@ const Login = ({ onLoginSuccess }) => {
               style={{
                 width: '100%',
                 padding: '14px',
-                border: ,
+                border: borderStyle,
                 borderRadius: '6px',
                 fontSize: '16px',
                 background: colors.cream,
@@ -161,7 +166,7 @@ const Login = ({ onLoginSuccess }) => {
               style={{
                 width: '100%',
                 padding: '14px',
-                border: ,
+                border: borderStyle,
                 borderRadius: '6px',
                 fontSize: '16px',
                 background: colors.cream,
@@ -175,8 +180,8 @@ const Login = ({ onLoginSuccess }) => {
 
           {error && (
             <div style={{
-              background: ,
-              border: ,
+              background: errorBg,
+              border: errorBorder,
               color: colors.terracotta,
               padding: '12px',
               borderRadius: '6px',
@@ -212,7 +217,7 @@ const Login = ({ onLoginSuccess }) => {
 
         {/* Footer */}
         <div style={{
-          borderTop: ,
+          borderTop: borderStyle,
           padding: '20px',
           textAlign: 'center',
           fontSize: '11px',
