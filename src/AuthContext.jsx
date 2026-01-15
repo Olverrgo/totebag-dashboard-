@@ -97,9 +97,19 @@ export const AuthProvider = ({ children }) => {
 
   // Cerrar sesión
   const logout = async () => {
-    await signOut();
-    setUser(null);
-    setProfile(null);
+    try {
+      await signOut();
+      setUser(null);
+      setProfile(null);
+      // Forzar recarga para limpiar todo el estado
+      window.location.reload();
+    } catch (err) {
+      console.error('Error al cerrar sesión:', err);
+      // Aún así intentar limpiar el estado local
+      setUser(null);
+      setProfile(null);
+      window.location.reload();
+    }
   };
 
   // Verificar si es admin
