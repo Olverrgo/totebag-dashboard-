@@ -84,7 +84,7 @@ const Login = ({ onLoginSuccess }) => {
             src="/Yolotl_logo_OK.png"
             alt="Yolotl Logo"
             style={{
-              height: '70px',
+              height: '120px',
               width: 'auto',
               objectFit: 'contain',
               marginBottom: '15px'
