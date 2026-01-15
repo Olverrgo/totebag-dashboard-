@@ -3222,7 +3222,7 @@ export default function DashboardToteBag() {
                 {isAdmin ? 'Admin' : 'Usuario'}
               </div>
             </div>
-            <button onClick={logout} style={{ padding: '8px 12px', background: colors.terracotta, color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>
+            <button onClick={() => logout()} onTouchEnd={(e) => { e.preventDefault(); logout(); }} style={{ padding: '12px 18px', background: colors.terracotta, color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>
               Salir
             </button>
           </div>
