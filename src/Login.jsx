@@ -76,9 +76,8 @@ const Login = ({ onLoginSuccess }) => {
       }}>
         {/* Header */}
         <div style={{
-          background: '#D4C8B8',
-          backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\"40\" height=\"40\" viewBox=\"0 0 40 40\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cg fill=\"%23C4B8A8\" fill-opacity=\"0.4\"%3E%3Cpath d=\"M0 0h20v20H0zM20 20h20v20H20z\"/%3E%3C/g%3E%3C/svg%3E")',
-          backgroundSize: '8px 8px',
+          background: '#D5C8B8',
+          backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\"http://www.w3.org/2000/svg\" width=\"100\" height=\"100\"%3E%3Cfilter id=\"n\"%3E%3CfeTurbulence type=\"fractalNoise\" baseFrequency=\"0.8\" numOctaves=\"4\" stitchTiles=\"stitch\"/%3E%3C/filter%3E%3Crect width=\"100%25\" height=\"100%25\" filter=\"url(%23n)\" opacity=\"0.15\"/%3E%3C/svg%3E"), repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(200,187,171,0.3) 2px, rgba(200,187,171,0.3) 4px), repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(224,213,197,0.2) 2px, rgba(224,213,197,0.2) 4px)',
           padding: '40px 30px',
           textAlign: 'center'
         }}>
