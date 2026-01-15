@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { signIn } from './supabaseClient';
 
-// Colores del tema
 const colors = {
   cream: '#FDF6E9',
   sand: '#D4C5B5',
@@ -13,8 +12,7 @@ const colors = {
   cotton: '#FAF9F6',
   linen: '#E8E4DC',
   sage: '#9CAF88',
-  fireOrange: '#FF6B35',
-  canvasBeige: '#E8DFD0'
+  burlap: '#C4B396'
 };
 
 const Login = ({ onLoginSuccess }) => {
@@ -23,10 +21,9 @@ const Login = ({ onLoginSuccess }) => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Cargar fuente Caveat para efecto crayola
   useEffect(() => {
     const link = document.createElement('link');
-    link.href = 'https://fonts.googleapis.com/css2?family=Caveat:wght@600&display=swap';
+    link.href = 'https://fonts.googleapis.com/css2?family=Caveat:wght@400;600&display=swap';
     link.rel = 'stylesheet';
     document.head.appendChild(link);
   }, []);
@@ -41,7 +38,7 @@ const Login = ({ onLoginSuccess }) => {
 
       if (signInError) {
         if (signInError.message.includes('Invalid login')) {
-          setError('Email o contraseña incorrectos');
+          setError('Email o contrasena incorrectos');
         } else {
           setError(signInError.message);
         }
@@ -52,14 +49,13 @@ const Login = ({ onLoginSuccess }) => {
         onLoginSuccess?.();
       }
     } catch (err) {
-      setError('Error al iniciar sesión');
+      setError('Error al iniciar sesion');
       console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  const gradientBg = 'linear-gradient(180deg, ' + colors.cream + ' 0%, ' + colors.sand + ' 50%, ' + colors.linen + ' 100%)';
   const borderStyle = '1px solid ' + colors.sand;
   const errorBg = colors.terracotta + '20';
   const errorBorder = '1px solid ' + colors.terracotta;
@@ -67,7 +63,7 @@ const Login = ({ onLoginSuccess }) => {
   return (
     <div style={{
       minHeight: '100vh',
-      background: gradientBg,
+      background: 'linear-gradient(180deg, #E8DFD0 0%, #D4C5B5 50%, #C4B396 100%)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -76,66 +72,40 @@ const Login = ({ onLoginSuccess }) => {
     }}>
       <div style={{
         background: colors.cotton,
-        borderRadius: '12px',
-        boxShadow: '0 10px 40px rgba(0,0,0,0.1)',
+        borderRadius: '0',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
         width: '100%',
-        maxWidth: '400px',
+        maxWidth: '380px',
         overflow: 'hidden'
       }}>
-        {/* Header */}
+        {/* Header con imagen de fondo */}
         <div style={{
-          backgroundColor: '#F5F0E6',
-          backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Cdefs%3E%3Cpattern id='weave' width='4' height='4' patternUnits='userSpaceOnUse'%3E%3Crect width='4' height='4' fill='%23D5C8B8'/%3E%3Crect x='0' y='0' width='2' height='2' fill='%23CFC2B2' opacity='0.7'/%3E%3Crect x='2' y='2' width='2' height='2' fill='%23CFC2B2' opacity='0.7'/%3E%3Crect x='0' y='0' width='1' height='4' fill='%23C8BBAB' opacity='0.3'/%3E%3Crect x='2' y='0' width='1' height='4' fill='%23E0D5C5' opacity='0.3'/%3E%3Crect x='0' y='0' width='4' height='1' fill='%23C8BBAB' opacity='0.25'/%3E%3Crect x='0' y='2' width='4' height='1' fill='%23E0D5C5' opacity='0.25'/%3E%3C/pattern%3E%3Cfilter id='grain'%3E%3CfeTurbulence baseFrequency='0.9' numOctaves='3' type='fractalNoise'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeBlend in='SourceGraphic' mode='multiply'/%3E%3C/filter%3E%3C/defs%3E%3Crect width='16' height='16' fill='url(%23weave)'/%3E%3Crect width='16' height='16' filter='url(%23grain)' opacity='0.08'/%3E%3C/svg%3E")',
-          backgroundSize: '16px 16px',
-          padding: '40px 30px',
-          textAlign: 'center'
+          backgroundImage: 'url("/login-header-bg.png")',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center top',
+          padding: '0',
+          minHeight: '280px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center'
         }}>
-          <img
-            src="/Yolotl_logo_OK.png"
-            alt="Yolotl Logo"
-            style={{
-              height: '180px',
-              width: 'auto',
-              objectFit: 'contain',
-              marginBottom: '15px'
-            }}
-          />
-          <div style={{
-            fontSize: '12px',
-            letterSpacing: '4px',
-            color: colors.camel,
-            marginBottom: '10px'
-          }}>
-            SINAI HOGAR
-          </div>
-          <div style={{
-            fontSize: '22px',
-            fontWeight: '300',
-            color: colors.espresso,
-            letterSpacing: '2px'
-          }}>
-            Totebags Yolotl
-          </div>
-          <div style={{
-            fontSize: '11px',
-            color: colors.camel,
-            marginTop: '10px',
-            letterSpacing: '2px'
-          }}>
-            100% ALGODÓN
-          </div>
         </div>
 
         {/* Formulario */}
-        <form onSubmit={handleSubmit} style={{ padding: '30px' }}>
-          <div style={{ marginBottom: '20px' }}>
+        <form onSubmit={handleSubmit} style={{
+          padding: '25px 30px',
+          background: colors.cotton
+        }}>
+          <div style={{ marginBottom: '18px' }}>
             <label style={{
               display: 'block',
               fontSize: '11px',
               letterSpacing: '2px',
               color: colors.camel,
               marginBottom: '8px',
-              textTransform: 'uppercase'
+              textTransform: 'uppercase',
+              fontWeight: '600'
             }}>
               Email
             </label>
@@ -146,11 +116,11 @@ const Login = ({ onLoginSuccess }) => {
               required
               style={{
                 width: '100%',
-                padding: '14px',
+                padding: '12px 14px',
                 border: borderStyle,
-                borderRadius: '6px',
-                fontSize: '16px',
-                background: colors.cream,
+                borderRadius: '4px',
+                fontSize: '15px',
+                background: '#FAFAF8',
                 color: colors.espresso,
                 outline: 'none',
                 boxSizing: 'border-box'
@@ -159,16 +129,17 @@ const Login = ({ onLoginSuccess }) => {
             />
           </div>
 
-          <div style={{ marginBottom: '25px' }}>
+          <div style={{ marginBottom: '22px' }}>
             <label style={{
               display: 'block',
               fontSize: '11px',
               letterSpacing: '2px',
               color: colors.camel,
               marginBottom: '8px',
-              textTransform: 'uppercase'
+              textTransform: 'uppercase',
+              fontWeight: '600'
             }}>
-              Contraseña
+              Contrasena
             </label>
             <input
               type="password"
@@ -177,16 +148,16 @@ const Login = ({ onLoginSuccess }) => {
               required
               style={{
                 width: '100%',
-                padding: '14px',
+                padding: '12px 14px',
                 border: borderStyle,
-                borderRadius: '6px',
-                fontSize: '16px',
-                background: colors.cream,
+                borderRadius: '4px',
+                fontSize: '15px',
+                background: '#FAFAF8',
                 color: colors.espresso,
                 outline: 'none',
                 boxSizing: 'border-box'
               }}
-              placeholder="••••••••"
+              placeholder="********"
             />
           </div>
 
@@ -196,8 +167,8 @@ const Login = ({ onLoginSuccess }) => {
               border: errorBorder,
               color: colors.terracotta,
               padding: '12px',
-              borderRadius: '6px',
-              marginBottom: '20px',
+              borderRadius: '4px',
+              marginBottom: '18px',
               fontSize: '13px',
               textAlign: 'center'
             }}>
@@ -210,33 +181,34 @@ const Login = ({ onLoginSuccess }) => {
             disabled={loading}
             style={{
               width: '100%',
-              padding: '16px',
-              background: loading ? colors.sand : colors.fireOrange,
+              padding: '14px',
+              background: loading ? colors.sand : colors.olive,
               color: 'white',
               border: 'none',
-              borderRadius: '6px',
-              fontSize: '14px',
+              borderRadius: '4px',
+              fontSize: '13px',
               fontWeight: '600',
-              letterSpacing: '2px',
+              letterSpacing: '3px',
               cursor: loading ? 'not-allowed' : 'pointer',
               transition: 'all 0.3s',
               textTransform: 'uppercase'
             }}
           >
-            {loading ? 'Ingresando...' : 'Ingresar'}
+            {loading ? 'INGRESANDO...' : 'INGRESAR'}
           </button>
         </form>
 
         {/* Footer */}
         <div style={{
           borderTop: borderStyle,
-          padding: '20px',
+          padding: '15px 20px',
           textAlign: 'center',
-          fontSize: '11px',
+          fontSize: '10px',
           color: colors.camel,
-          letterSpacing: '1px'
+          letterSpacing: '1px',
+          background: colors.cotton
         }}>
-          Hecho a mano en Puebla, México
+          Hecho a mano en Puebla, Mexico
         </div>
       </div>
     </div>
