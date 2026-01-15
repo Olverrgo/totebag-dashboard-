@@ -208,7 +208,7 @@ const Login = ({ onLoginSuccess }) => {
           letterSpacing: '1px',
           background: colors.cotton
         }}>
-          Hecho a mano en Puebla, Mexico
+          Hecho con el corazon desde Puebla
         </div>
       </div>
     </div>
