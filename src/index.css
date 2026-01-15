@@ -29,3 +29,20 @@ body {
     min-height: 44px;
   }
 }
+
+/* Mobile responsive overrides */
+@media screen and (max-width: 480px) {
+  body {
+    font-size: 14px;
+  }
+
+  input, button, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+}
