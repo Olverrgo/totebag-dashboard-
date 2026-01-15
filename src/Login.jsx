@@ -76,15 +76,15 @@ const Login = ({ onLoginSuccess }) => {
       }}>
         {/* Header */}
         <div style={{
-          background: colors.canvasBeige,
-          padding: '30px',
+          background: 'repeating-linear-gradient(0deg, #E8DFD0, #E8DFD0 2px, #DED5C6 2px, #DED5C6 4px)',
+          padding: '40px 30px',
           textAlign: 'center'
         }}>
           <img
             src="/Yolotl_logo_OK.png"
             alt="Yolotl Logo"
             style={{
-              height: '120px',
+              height: '140px',
               width: 'auto',
               objectFit: 'contain',
               marginBottom: '15px'
