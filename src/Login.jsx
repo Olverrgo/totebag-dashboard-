@@ -76,8 +76,9 @@ const Login = ({ onLoginSuccess }) => {
       }}>
         {/* Header */}
         <div style={{
-          background: '#D5C8B8',
-          backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\"http://www.w3.org/2000/svg\" width=\"100\" height=\"100\"%3E%3Cfilter id=\"n\"%3E%3CfeTurbulence type=\"fractalNoise\" baseFrequency=\"0.8\" numOctaves=\"4\" stitchTiles=\"stitch\"/%3E%3C/filter%3E%3Crect width=\"100%25\" height=\"100%25\" filter=\"url(%23n)\" opacity=\"0.15\"/%3E%3C/svg%3E"), repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(200,187,171,0.3) 2px, rgba(200,187,171,0.3) 4px), repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(224,213,197,0.2) 2px, rgba(224,213,197,0.2) 4px)',
+          backgroundColor: '#D5C8B8',
+          backgroundImage: 'repeating-linear-gradient(0deg, #D5C8B8 0px, #D5C8B8 1px, #CEC1B1 1px, #CEC1B1 2px, #D5C8B8 2px, #D5C8B8 3px, #E0D5C5 3px, #E0D5C5 4px), repeating-linear-gradient(90deg, #D5C8B8 0px, #D5C8B8 1px, #C8BBAB 1px, #C8BBAB 2px, #D5C8B8 2px, #D5C8B8 3px, #DDD2C2 3px, #DDD2C2 4px)',
+          backgroundBlendMode: 'multiply',
           padding: '40px 30px',
           textAlign: 'center'
         }}>
