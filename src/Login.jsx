@@ -77,8 +77,8 @@ const Login = ({ onLoginSuccess }) => {
         {/* Header */}
         <div style={{
           backgroundColor: '#D5C8B8',
-          backgroundImage: 'repeating-linear-gradient(0deg, #D5C8B8 0px, #D5C8B8 1px, #CEC1B1 1px, #CEC1B1 2px, #D5C8B8 2px, #D5C8B8 3px, #E0D5C5 3px, #E0D5C5 4px), repeating-linear-gradient(90deg, #D5C8B8 0px, #D5C8B8 1px, #C8BBAB 1px, #C8BBAB 2px, #D5C8B8 2px, #D5C8B8 3px, #DDD2C2 3px, #DDD2C2 4px)',
-          backgroundBlendMode: 'multiply',
+          backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Cdefs%3E%3Cpattern id='weave' width='4' height='4' patternUnits='userSpaceOnUse'%3E%3Crect width='4' height='4' fill='%23D5C8B8'/%3E%3Crect x='0' y='0' width='2' height='2' fill='%23CFC2B2' opacity='0.7'/%3E%3Crect x='2' y='2' width='2' height='2' fill='%23CFC2B2' opacity='0.7'/%3E%3Crect x='0' y='0' width='1' height='4' fill='%23C8BBAB' opacity='0.3'/%3E%3Crect x='2' y='0' width='1' height='4' fill='%23E0D5C5' opacity='0.3'/%3E%3Crect x='0' y='0' width='4' height='1' fill='%23C8BBAB' opacity='0.25'/%3E%3Crect x='0' y='2' width='4' height='1' fill='%23E0D5C5' opacity='0.25'/%3E%3C/pattern%3E%3Cfilter id='grain'%3E%3CfeTurbulence baseFrequency='0.9' numOctaves='3' type='fractalNoise'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeBlend in='SourceGraphic' mode='multiply'/%3E%3C/filter%3E%3C/defs%3E%3Crect width='16' height='16' fill='url(%23weave)'/%3E%3Crect width='16' height='16' filter='url(%23grain)' opacity='0.08'/%3E%3C/svg%3E")',
+          backgroundSize: '16px 16px',
           padding: '40px 30px',
           textAlign: 'center'
         }}>
