@@ -52,7 +52,7 @@ const Login = ({ onLoginSuccess }) => {
   return (
     <div style={{
       minHeight: '100vh',
-      background: `linear-gradient(180deg, ${colors.cream} 0%, ${colors.sand} 50%, ${colors.linen} 100%)`,
+      background: ,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -73,21 +73,31 @@ const Login = ({ onLoginSuccess }) => {
           padding: '30px',
           textAlign: 'center'
         }}>
+          <img
+            src="/Yolotl_logo_OK.png"
+            alt="Yolotl Logo"
+            style={{
+              height: '70px',
+              width: 'auto',
+              objectFit: 'contain',
+              marginBottom: '15px'
+            }}
+          />
           <div style={{
             fontSize: '12px',
             letterSpacing: '4px',
             color: colors.camel,
             marginBottom: '10px'
           }}>
-            BLANCOS SINAI
+            SINAI HOGAR
           </div>
           <div style={{
-            fontSize: '28px',
+            fontSize: '22px',
             fontWeight: '300',
             color: colors.cream,
-            letterSpacing: '3px'
+            letterSpacing: '2px'
           }}>
-            TOTE BAG
+            Totebags Yolotl
           </div>
           <div style={{
             fontSize: '11px',
@@ -120,7 +130,7 @@ const Login = ({ onLoginSuccess }) => {
               style={{
                 width: '100%',
                 padding: '14px',
-                border: `1px solid ${colors.sand}`,
+                border: ,
                 borderRadius: '6px',
                 fontSize: '16px',
                 background: colors.cream,
@@ -151,7 +161,7 @@ const Login = ({ onLoginSuccess }) => {
               style={{
                 width: '100%',
                 padding: '14px',
-                border: `1px solid ${colors.sand}`,
+                border: ,
                 borderRadius: '6px',
                 fontSize: '16px',
                 background: colors.cream,
@@ -165,8 +175,8 @@ const Login = ({ onLoginSuccess }) => {
 
           {error && (
             <div style={{
-              background: `${colors.terracotta}20`,
-              border: `1px solid ${colors.terracotta}`,
+              background: ,
+              border: ,
               color: colors.terracotta,
               padding: '12px',
               borderRadius: '6px',
@@ -202,7 +212,7 @@ const Login = ({ onLoginSuccess }) => {
 
         {/* Footer */}
         <div style={{
-          borderTop: `1px solid ${colors.sand}`,
+          borderTop: ,
           padding: '20px',
           textAlign: 'center',
           fontSize: '11px',

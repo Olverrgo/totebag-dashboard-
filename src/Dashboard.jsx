@@ -3196,13 +3196,24 @@ export default function DashboardToteBag() {
           gap: isMobile ? '10px' : '0',
           borderRadius: isMobile ? '8px' : '0'
         }}>
-          <div>
-            <div style={{ fontSize: isMobile ? '9px' : '10px', letterSpacing: '3px', color: colors.camel, marginBottom: '5px' }}>
-              HECHO A MANO EN PUEBLA, MÉXICO
+          <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '10px' : '15px' }}>
+            <img
+              src="/Yolotl_logo_OK.png"
+              alt="Yolotl Logo"
+              style={{
+                height: isMobile ? '45px' : '60px',
+                width: 'auto',
+                objectFit: 'contain'
+              }}
+            />
+            <div>
+              <div style={{ fontSize: isMobile ? '9px' : '10px', letterSpacing: '3px', color: colors.camel, marginBottom: '5px' }}>
+                HECHO A MANO EN PUEBLA, MÉXICO
+              </div>
+              <h1 style={{ margin: 0, fontSize: isMobile ? '16px' : '24px', fontWeight: '300', letterSpacing: '2px', color: colors.espresso }}>
+                Sinai Hogar - Totebags Yolotl
+              </h1>
             </div>
-            <h1 style={{ margin: 0, fontSize: isMobile ? '18px' : '26px', fontWeight: '300', letterSpacing: '2px', color: colors.espresso }}>
-              TOTE BAG PREMIUM
-            </h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
             <div>
