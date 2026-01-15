@@ -80,7 +80,7 @@ const Login = ({ onLoginSuccess }) => {
       }}>
         {/* Header con imagen de fondo */}
         <div style={{
-          backgroundImage: 'url("/login-header-bg.png")',
+          backgroundImage: 'url("/login-header-bg.png?v=2")',
           backgroundSize: 'cover',
           backgroundPosition: 'center top',
           padding: '0',
