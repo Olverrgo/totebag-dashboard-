@@ -102,7 +102,7 @@ const Login = ({ onLoginSuccess }) => {
 
         {/* Footer */}
         <div className="login-footer">
-          Hecho con el corazon desde Puebla (v6)
+          Hecho con el corazon desde Puebla (v7)<span className="login-version"></span>
         </div>
       </div>
     </div>

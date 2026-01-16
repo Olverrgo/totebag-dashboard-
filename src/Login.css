@@ -1,4 +1,4 @@
-/* Login Component Styles */
+/* Login Component Styles - v7 */
 .login-container {
   min-height: 100vh;
   min-height: -webkit-fill-available;
@@ -21,7 +21,7 @@
 }
 
 .login-header {
-  background-image: url('/login-header-bg.png?v=6');
+  background-image: url('/login-header-bg.png?v=7');
   background-size: cover;
   background-position: center top;
   padding: 0;
@@ -58,6 +58,7 @@
   outline: none;
   box-sizing: border-box;
   -webkit-appearance: none;
+  appearance: none;
 }
 
 .login-input:focus {
@@ -105,8 +106,9 @@
   cursor: not-allowed;
 }
 
-.login-button:not(:disabled):hover {
+.login-button:not(:disabled):active {
   background: #4a5a3a;
+  transform: scale(0.98);
 }
 
 .login-footer {
@@ -119,30 +121,55 @@
   background: #FAF9F6;
 }
 
-/* TABLET STYLES */
-@media screen and (max-width: 768px) {
-  .login-header {
-    min-height: 250px;
-  }
+.login-version {
+  display: none;
 }
 
-/* MOBILE STYLES */
-@media screen and (max-width: 480px) {
+/* MOBILE STYLES - screens up to 768px wide */
+@media only screen and (max-width: 768px) {
   .login-container {
-    padding: 10px;
+    padding: 15px;
   }
 
   .login-card {
     max-width: 100%;
-    border-radius: 8px;
+    border-radius: 12px;
   }
 
   .login-header {
-    min-height: 220px;
+    min-height: 200px;
   }
 
   .login-form {
-    padding: 20px 15px;
+    padding: 20px;
+  }
+
+  .login-button {
+    padding: 16px;
+    font-size: 14px;
+  }
+
+  .login-version {
+    display: inline;
+  }
+
+  .login-version::after {
+    content: " [Mobile]";
+  }
+}
+
+/* SMALL MOBILE - screens up to 480px */
+@media only screen and (max-width: 480px) {
+  .login-container {
+    padding: 8px;
+  }
+
+  .login-header {
+    min-height: 180px;
+  }
+
+  .login-form {
+    padding: 18px 15px;
   }
 
   .login-label {
@@ -151,20 +178,14 @@
 
   .login-input {
     padding: 14px 12px;
-    font-size: 16px;
   }
 
   .login-field {
-    margin-bottom: 15px;
+    margin-bottom: 14px;
   }
 
   .login-field-password {
-    margin-bottom: 20px;
-  }
-
-  .login-button {
-    padding: 16px;
-    font-size: 14px;
+    margin-bottom: 18px;
   }
 
   .login-footer {
