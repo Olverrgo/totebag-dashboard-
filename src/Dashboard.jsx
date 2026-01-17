@@ -559,7 +559,7 @@ const colors = {
   camel: '#C9A96E',
   espresso: '#4A3728',
   sidebarBg: '#FAABB3',
-  sidebarText: '#F56E99',
+  sidebarText: '#FF8C42',
   olive: '#6B7B5E',
   gold: '#B8954F',
   cotton: '#F8F4EF',
