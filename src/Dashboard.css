@@ -1,44 +1,4 @@
-/* Dashboard Responsive Styles - v8 */
-
-/* Force all direct children of root to be responsive */
-#root > div > div {
-  transition: all 0.3s ease;
-}
-
-/* MOBILE STYLES - Force override with !important */
-@media only screen and (max-width: 768px) {
-  /* Hide sidebar on mobile */
-  #root > div > div:first-child {
-    display: none !important;
-  }
-
-  /* Main content - remove sidebar margin */
-  #root > div > div:last-child,
-  #root > div > div:nth-child(2) {
-    margin-left: 0 !important;
-    padding: 10px !important;
-    width: 100% !important;
-  }
-
-  /* Force all fixed position sidebars hidden */
-  div[style*="position: fixed"][style*="width: 220px"] {
-    left: -220px !important;
-  }
-
-  /* Force main content to full width */
-  div[style*="marginLeft"][style*="220px"] {
-    margin-left: 0 !important;
-  }
-
-  div[style*="margin-left"][style*="220px"] {
-    margin-left: 0 !important;
-  }
-
-  /* Show mobile menu button if exists */
-  button[style*="transparent"][style*="24px"] {
-    display: block !important;
-  }
-}
+/* Dashboard Responsive Styles - v9 */
 
 /* Logout button hover effect - invert colors */
 .logout-btn:hover {
@@ -51,4 +11,17 @@
   background: white !important;
   color: #A66241 !important;
   box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+/* Mobile responsive adjustments */
+@media only screen and (max-width: 768px) {
+  /* Ensure inputs don't zoom on iOS */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+
+  /* Better touch targets */
+  button {
+    min-height: 44px;
+  }
 }
