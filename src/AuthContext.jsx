@@ -1,6 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from './supabaseClient';
-import { signOut } from './supabaseClient';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { supabase, signOut } from './supabaseClient';
 
 const AuthContext = createContext({});
 
@@ -17,103 +16,155 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
+  const mountedRef = useRef(true);
 
-  useEffect(() => {
-    let isMounted = true;
+  const loadProfile = async (userId, retryCount = 0) => {
+    console.log('loadProfile attempt', retryCount + 1, 'for', userId);
+    
+    try {
+      // Refresh session to ensure token is valid
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('Session refreshed:', !!session);
+      
+      if (!session) {
+        console.log('No session after refresh');
+        return null;
+      }
 
-    // Function to load profile with delay and retry
-    const loadProfile = async (userId) => {
-      console.log('loadProfile called for:', userId);
-      
-      // Small delay to ensure auth token is ready
-      await new Promise(r => setTimeout(r, 500));
-      
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          console.log('Profile fetch attempt', attempt);
-          
-          const { data, error } = await supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('id', userId)
-            .single();
-          
-          console.log('Profile result:', { data, error: error?.message });
-          
-          if (data && data.rol) {
-            return data;
-          }
-          
-          if (attempt < 3) {
-            await new Promise(r => setTimeout(r, 1000));
-          }
-        } catch (err) {
-          console.error('Profile fetch error:', err);
-        }
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      console.log('Profile query result:', { data, error: error?.message });
+
+      if (data) {
+        return data;
+      }
+
+      if (error && retryCount < 2) {
+        console.log('Retrying in 1s...');
+        await new Promise(r => setTimeout(r, 1000));
+        return loadProfile(userId, retryCount + 1);
+      }
+
+      return null;
+    } catch (err) {
+      console.error('loadProfile error:', err);
+      if (retryCount < 2) {
+        await new Promise(r => setTimeout(r, 1000));
+        return loadProfile(userId, retryCount + 1);
       }
       return null;
-    };
+    }
+  };
 
-    // Use onAuthStateChange as the ONLY source of truth
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth event:', event, 'session:', !!session);
-        
-        if (!isMounted) return;
+  const handleLogout = async () => {
+    console.log('handleLogout called');
+    setUser(null);
+    setProfile(null);
+    setLoading(false);
+    try {
+      await signOut();
+      console.log('signOut complete');
+    } catch (err) {
+      console.error('signOut error:', err);
+    }
+  };
+
+  useEffect(() => {
+    mountedRef.current = true;
+    let isInitialized = false;
+
+    const initializeAuth = async () => {
+      console.log('initializeAuth starting');
+      
+      try {
+        // Get current session
+        const { data: { session }, error } = await supabase.auth.getSession();
+        console.log('Initial session:', !!session, error?.message || '');
+
+        if (!mountedRef.current) return;
 
         if (session?.user) {
+          console.log('User found:', session.user.email);
           setUser(session.user);
-          
-          // Load profile
+
+          // Wait a bit for auth to be fully ready
+          await new Promise(r => setTimeout(r, 800));
+
+          if (!mountedRef.current) return;
+
           const profileData = await loadProfile(session.user.id);
           
-          if (isMounted) {
+          if (mountedRef.current) {
             if (profileData) {
+              console.log('Setting profile:', profileData.rol);
               setProfile(profileData);
-              console.log('Profile set:', profileData.rol);
             } else {
+              console.log('No profile data');
               setAuthError('No se pudo cargar el perfil');
             }
-            setLoading(false);
           }
         } else {
+          console.log('No session found');
+        }
+      } catch (err) {
+        console.error('initializeAuth error:', err);
+        if (mountedRef.current) {
+          setAuthError(err.message);
+        }
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
+          isInitialized = true;
+        }
+      }
+    };
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('onAuthStateChange:', event);
+
+        if (!mountedRef.current) return;
+
+        // Only handle SIGNED_IN after initialization (new logins)
+        if (event === 'SIGNED_IN' && isInitialized && session?.user) {
+          console.log('New sign in detected');
+          setUser(session.user);
+          setLoading(true);
+          
+          await new Promise(r => setTimeout(r, 500));
+          
+          const profileData = await loadProfile(session.user.id);
+          if (mountedRef.current) {
+            setProfile(profileData);
+            setLoading(false);
+          }
+        } else if (event === 'SIGNED_OUT') {
+          console.log('Sign out detected');
           setUser(null);
           setProfile(null);
-          if (isMounted) setLoading(false);
+          setLoading(false);
         }
       }
     );
 
-    // Timeout safety
-    const timeout = setTimeout(() => {
-      if (isMounted && loading) {
-        console.log('Auth timeout');
-        setLoading(false);
-      }
-    }, 15000);
+    initializeAuth();
 
     return () => {
-      isMounted = false;
-      clearTimeout(timeout);
+      mountedRef.current = false;
       subscription?.unsubscribe();
     };
   }, []);
-
-  const logout = async () => {
-    try {
-      await signOut();
-    } catch (err) {
-      console.error('Logout error:', err);
-    }
-    setUser(null);
-    setProfile(null);
-  };
 
   const isAdmin = profile?.rol === 'admin';
   const isUsuario = profile?.rol === 'usuario';
   const isAuthenticated = !!user;
 
-  console.log('Render - user:', !!user, 'rol:', profile?.rol, 'isAdmin:', isAdmin, 'loading:', loading);
+  console.log('AUTH STATE:', { user: user?.email, rol: profile?.rol, isAdmin, loading });
 
   return (
     <AuthContext.Provider value={{
@@ -124,7 +175,7 @@ export const AuthProvider = ({ children }) => {
       isUsuario,
       isAuthenticated,
       authError,
-      logout
+      logout: handleLogout
     }}>
       {children}
     </AuthContext.Provider>
