@@ -2,6 +2,32 @@ import { AuthProvider, useAuth } from './AuthContext'
 import DashboardToteBag from './Dashboard'
 import Login from './Login'
 
+function DebugPanel() {
+  const { user, profile, isAdmin, loading, authError } = useAuth();
+  
+  return (
+    <div style={{
+      position: 'fixed',
+      bottom: 10,
+      right: 10,
+      background: 'rgba(0,0,0,0.8)',
+      color: '#0f0',
+      padding: '10px',
+      fontSize: '11px',
+      fontFamily: 'monospace',
+      borderRadius: '5px',
+      zIndex: 9999,
+      maxWidth: '300px'
+    }}>
+      <div>user: {user ? user.email : 'null'}</div>
+      <div>profile.rol: {profile?.rol || 'null'}</div>
+      <div>isAdmin: {String(isAdmin)}</div>
+      <div>loading: {String(loading)}</div>
+      {authError && <div style={{color: 'red'}}>error: {authError}</div>}
+    </div>
+  );
+}
+
 function AppContent() {
   const { isAuthenticated, loading } = useAuth();
 
@@ -33,6 +59,7 @@ function AppContent() {
 function App() {
   return (
     <AuthProvider>
+      <DebugPanel />
       <AppContent />
     </AuthProvider>
   );
