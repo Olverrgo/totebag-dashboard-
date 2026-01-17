@@ -559,6 +559,7 @@ const colors = {
   camel: '#C9A96E',
   espresso: '#4A3728',
   sidebarBg: '#F0BD1A',
+  sidebarText: '#66FFB0',
   olive: '#6B7B5E',
   gold: '#B8954F',
   cotton: '#F8F4EF',
@@ -621,7 +622,7 @@ const Sidebar = ({ seccionActiva, setSeccionActiva, menuAbierto, setMenuAbierto,
             right: '10px',
             background: 'transparent',
             border: 'none',
-            color: colors.cream,
+            color: colors.sidebarText,
             fontSize: '24px',
             cursor: 'pointer',
             display: isMobile ? 'block' : 'none'
@@ -631,10 +632,10 @@ const Sidebar = ({ seccionActiva, setSeccionActiva, menuAbierto, setMenuAbierto,
         </button>
 
         <div style={{ padding: '0 20px 30px', borderBottom: `1px solid ${colors.camel}40` }}>
-          <div style={{ fontSize: '10px', letterSpacing: '3px', color: colors.camel, marginBottom: '5px' }}>
+          <div style={{ fontSize: '10px', letterSpacing: '3px', color: colors.sidebarText, marginBottom: '5px' }}>
             TOTE BAG
           </div>
-          <div style={{ fontSize: '18px', fontWeight: '300', color: colors.cream, letterSpacing: '2px' }}>
+          <div style={{ fontSize: '18px', fontWeight: '300', color: colors.sidebarText, letterSpacing: '2px' }}>
             DASHBOARD
           </div>
         </div>
@@ -656,7 +657,7 @@ const Sidebar = ({ seccionActiva, setSeccionActiva, menuAbierto, setMenuAbierto,
                 background: seccionActiva === sec.id ? `${colors.camel}30` : 'transparent',
                 borderLeft: seccionActiva === sec.id ? `3px solid ${colors.gold}` : '3px solid transparent',
                 transition: 'all 0.2s',
-                color: seccionActiva === sec.id ? colors.cream : colors.sand
+                color: seccionActiva === sec.id ? colors.sidebarText : colors.sidebarText
               }}
             >
               <span style={{ fontSize: '18px' }}>{sec.icon}</span>
