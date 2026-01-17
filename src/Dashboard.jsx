@@ -558,7 +558,7 @@ const colors = {
   sand: '#E8DFD0',
   camel: '#C9A96E',
   espresso: '#4A3728',
-  sidebarBg: '#062690',
+  sidebarBg: '#F0BD1A',
   olive: '#6B7B5E',
   gold: '#B8954F',
   cotton: '#F8F4EF',
