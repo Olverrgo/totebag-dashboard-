@@ -558,8 +558,8 @@ const colors = {
   sand: '#E8DFD0',
   camel: '#C9A96E',
   espresso: '#4A3728',
-  sidebarBg: '#FAABB3',
-  sidebarText: '#FFD499',
+  sidebarBg: '#005F84',
+  sidebarText: '#ABD55E',
   olive: '#6B7B5E',
   gold: '#B8954F',
   cotton: '#F8F4EF',
@@ -654,10 +654,10 @@ const Sidebar = ({ seccionActiva, setSeccionActiva, menuAbierto, setMenuAbierto,
                 display: 'flex',
                 alignItems: 'center',
                 gap: '12px',
-                background: seccionActiva === sec.id ? `${colors.camel}30` : 'transparent',
-                borderLeft: seccionActiva === sec.id ? `3px solid ${colors.gold}` : '3px solid transparent',
+                background: seccionActiva === sec.id ? colors.sidebarText : 'transparent',
+                borderLeft: seccionActiva === sec.id ? `3px solid ${colors.sidebarText}` : '3px solid transparent',
                 transition: 'all 0.2s',
-                color: seccionActiva === sec.id ? colors.sidebarText : colors.sidebarText
+                color: seccionActiva === sec.id ? colors.sidebarBg : colors.sidebarText
               }}
             >
               <span style={{ fontSize: '20px' }}>{sec.icon}</span>
@@ -3210,7 +3210,7 @@ export default function DashboardToteBag() {
               }}
             />
             <div>
-              <div style={{ fontSize: isMobile ? '9px' : '10px', letterSpacing: '3px', color: colors.camel, marginBottom: '5px' }}>
+              <div style={{ fontSize: isMobile ? '9px' : '10px', letterSpacing: '3px', color: '#A27B36', marginBottom: '5px' }}>
                 HECHO A MANO EN PUEBLA, MÉXICO
               </div>
               <h1 style={{ margin: 0, fontSize: isMobile ? '16px' : '24px', fontWeight: '300', letterSpacing: '2px', color: colors.espresso }}>
@@ -3225,7 +3225,7 @@ export default function DashboardToteBag() {
                 {isAdmin ? 'Admin' : 'Usuario'}
               </div>
             </div>
-            <button onClick={() => logout()} onTouchEnd={(e) => { e.preventDefault(); logout(); }} style={{ padding: '12px 18px', background: colors.terracotta, color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>
+            <button className="logout-btn" onClick={() => logout()} onTouchEnd={(e) => { e.preventDefault(); logout(); }} style={{ padding: '12px 18px', background: colors.sidebarBg, color: colors.sidebarText, border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', transition: 'all 0.2s' }}>
               Salir
             </button>
           </div>

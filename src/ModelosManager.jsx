@@ -65,7 +65,7 @@ const modelosInicialesLocal = {
 
 // Productos info
 const productosInfo = {
-  publicitaria: { nombre: 'PUBLICITARIA', icon: '📢', color: '#95A5A6', colorLight: '#F2F3F4', descripcion: 'Manta Cruda • Serigrafía • Ultra Económica' },
+  publicitaria: { nombre: 'PUBLICITARIA', icon: '📢', color: '#A66241', colorLight: '#F2F3F4', descripcion: 'Manta Cruda • Serigrafía • Ultra Económica' },
   eco: { nombre: 'ECO', icon: '🌿', color: '#27AE60', colorLight: '#D5F5E3', descripcion: 'Loneta 2.40m • 100% Algodón Orgánico' },
   ecoForro: { nombre: 'ECO+FORRO', icon: '🌱', color: '#2ECC71', colorLight: '#D5F5E3', descripcion: 'Loneta 2.40m + Forro Manta' },
   basica: { nombre: 'BÁSICA', icon: '🛍️', color: '#E67E22', colorLight: '#FDEBD0', descripcion: 'Loneta 100% Algodón • Sin Forro' },
@@ -963,6 +963,7 @@ const ModelosManager = ({ modelosPorLinea, setModelosPorLinea, isAdmin = false }
           </div>
           {isAdmin && (
             <button
+              className="agregar-modelo-btn"
               onClick={() => setMostrarFormulario(!mostrarFormulario)}
               style={{
                 padding: '12px 25px',
@@ -972,7 +973,8 @@ const ModelosManager = ({ modelosPorLinea, setModelosPorLinea, isAdmin = false }
                 borderRadius: '6px',
                 cursor: 'pointer',
                 fontSize: '13px',
-                fontWeight: '600'
+                fontWeight: '600',
+                transition: 'all 0.2s'
               }}
             >
               {mostrarFormulario ? '✕ Cancelar' : '+ Agregar Modelo'}
