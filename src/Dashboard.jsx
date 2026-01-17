@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import "./Dashboard.css";
 import { useAuth } from './AuthContext';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart } from 'recharts';
 import ModelosManager from './ModelosManager';
@@ -568,7 +569,7 @@ const colors = {
 // ==================== COMPONENTES ====================
 
 // Sidebar responsive
-const Sidebar = ({ seccionActiva, setSeccionActiva, menuAbierto, setMenuAbierto }) => {
+const Sidebar = ({ seccionActiva, setSeccionActiva, menuAbierto, setMenuAbierto, isMobile }) => {
   const secciones = [
     { id: 'dashboard', nombre: 'Dashboard', icon: '📊' },
     { id: 'productos', nombre: 'Productos', icon: '🛍️' },
@@ -579,7 +580,6 @@ const Sidebar = ({ seccionActiva, setSeccionActiva, menuAbierto, setMenuAbierto 
     { id: 'costos', nombre: 'Costos', icon: '💰' },
   ];
 
-  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
 
   return (
     <>
@@ -3006,7 +3006,7 @@ export default function DashboardToteBag() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const handleResize = () => setWindowWidth(window.innerWidth);
-    window.addEventListener('resize', handleResize);
+    handleResize(); window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
@@ -3145,6 +3145,7 @@ export default function DashboardToteBag() {
         setSeccionActiva={setSeccionActiva}
         menuAbierto={menuAbierto}
         setMenuAbierto={setMenuAbierto}
+        isMobile={isMobile}
       />
 
       <div style={{
