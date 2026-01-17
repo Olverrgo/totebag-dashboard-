@@ -16,24 +16,44 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Fetch profile with retry logic
+  const fetchProfile = async (userId, retries = 3) => {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const { data, error } = await getUserProfile(userId);
+        if (data) {
+          console.log('Profile loaded:', data.rol);
+          return data;
+        }
+        if (error) console.error('Profile fetch error:', error);
+        // Wait before retry
+        if (i < retries - 1) await new Promise(r => setTimeout(r, 500));
+      } catch (err) {
+        console.error('Profile fetch exception:', err);
+      }
+    }
+    return null;
+  };
+
   useEffect(() => {
     let isMounted = true;
 
-    // Safety timeout to prevent infinite loading
+    // Safety timeout
     const timeoutId = setTimeout(() => {
-      console.log('Auth timeout reached - forcing loading to false');
+      console.log('Auth timeout - forcing loading to false');
       if (isMounted) setLoading(false);
-    }, 8000);
+    }, 10000);
 
     const initAuth = async () => {
       try {
         const { data: session } = await getSession();
+        console.log('Initial session:', session ? 'exists' : 'none');
 
         if (!isMounted) return;
 
         if (session?.user) {
           setUser(session.user);
-          const { data: profileData } = await getUserProfile(session.user.id);
+          const profileData = await fetchProfile(session.user.id);
           if (isMounted && profileData) {
             setProfile(profileData);
           }
@@ -51,9 +71,10 @@ export const AuthProvider = ({ children }) => {
     const authListener = onAuthStateChange(async (event, session) => {
       console.log('Auth event:', event);
 
-      if (event === 'SIGNED_IN' && session?.user) {
+      // Handle both SIGNED_IN and INITIAL_SESSION events
+      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
         setUser(session.user);
-        const { data: profileData } = await getUserProfile(session.user.id);
+        const profileData = await fetchProfile(session.user.id);
         if (isMounted && profileData) {
           setProfile(profileData);
         }
@@ -73,12 +94,17 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const logout = async () => {
+    console.log('Logout initiated');
     try {
       await signOut();
       setUser(null);
       setProfile(null);
+      console.log('Logout complete');
     } catch (err) {
       console.error('Error al cerrar sesion:', err);
+      // Force clear state even on error
+      setUser(null);
+      setProfile(null);
     }
   };
 
