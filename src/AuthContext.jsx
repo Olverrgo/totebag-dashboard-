@@ -19,6 +19,12 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     let isMounted = true;
 
+    // Safety timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      console.log('Auth timeout reached - forcing loading to false');
+      if (isMounted) setLoading(false);
+    }, 8000);
+
     const initAuth = async () => {
       try {
         const { data: session } = await getSession();
@@ -35,6 +41,7 @@ export const AuthProvider = ({ children }) => {
       } catch (err) {
         console.error('Error inicializando auth:', err);
       } finally {
+        clearTimeout(timeoutId);
         if (isMounted) setLoading(false);
       }
     };
@@ -60,6 +67,7 @@ export const AuthProvider = ({ children }) => {
 
     return () => {
       isMounted = false;
+      clearTimeout(timeoutId);
       subscription?.unsubscribe();
     };
   }, []);
