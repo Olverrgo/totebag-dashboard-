@@ -19,16 +19,13 @@ export const AuthProvider = ({ children }) => {
   const mountedRef = useRef(true);
 
   const loadProfile = async (userId, retryCount = 0) => {
-    console.log('loadProfile attempt', retryCount + 1, 'for', userId);
-    
+        
     try {
       // Refresh session to ensure token is valid
       const { data: { session } } = await supabase.auth.getSession();
-      console.log('Session refreshed:', !!session);
-      
+            
       if (!session) {
-        console.log('No session after refresh');
-        return null;
+                return null;
       }
 
       const { data, error } = await supabase
@@ -37,15 +34,13 @@ export const AuthProvider = ({ children }) => {
         .eq('id', userId)
         .single();
 
-      console.log('Profile query result:', { data, error: error?.message });
-
+      
       if (data) {
         return data;
       }
 
       if (error && retryCount < 2) {
-        console.log('Retrying in 1s...');
-        await new Promise(r => setTimeout(r, 1000));
+                await new Promise(r => setTimeout(r, 1000));
         return loadProfile(userId, retryCount + 1);
       }
 
@@ -61,14 +56,12 @@ export const AuthProvider = ({ children }) => {
   };
 
   const handleLogout = async () => {
-    console.log('handleLogout called');
-    setUser(null);
+        setUser(null);
     setProfile(null);
     setLoading(false);
     try {
       await signOut();
-      console.log('signOut complete');
-    } catch (err) {
+          } catch (err) {
       console.error('signOut error:', err);
     }
   };
@@ -78,18 +71,15 @@ export const AuthProvider = ({ children }) => {
     let isInitialized = false;
 
     const initializeAuth = async () => {
-      console.log('initializeAuth starting');
-      
+            
       try {
         // Get current session
         const { data: { session }, error } = await supabase.auth.getSession();
-        console.log('Initial session:', !!session, error?.message || '');
-
+        
         if (!mountedRef.current) return;
 
         if (session?.user) {
-          console.log('User found:', session.user.email);
-          setUser(session.user);
+                    setUser(session.user);
 
           // Wait a bit for auth to be fully ready
           await new Promise(r => setTimeout(r, 800));
@@ -100,16 +90,13 @@ export const AuthProvider = ({ children }) => {
           
           if (mountedRef.current) {
             if (profileData) {
-              console.log('Setting profile:', profileData.rol);
-              setProfile(profileData);
+                            setProfile(profileData);
             } else {
-              console.log('No profile data');
-              setAuthError('No se pudo cargar el perfil');
+                            setAuthError('No se pudo cargar el perfil');
             }
           }
         } else {
-          console.log('No session found');
-        }
+                  }
       } catch (err) {
         console.error('initializeAuth error:', err);
         if (mountedRef.current) {
@@ -126,14 +113,12 @@ export const AuthProvider = ({ children }) => {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('onAuthStateChange:', event);
-
+        
         if (!mountedRef.current) return;
 
         // Only handle SIGNED_IN after initialization (new logins)
         if (event === 'SIGNED_IN' && isInitialized && session?.user) {
-          console.log('New sign in detected');
-          setUser(session.user);
+                    setUser(session.user);
           setLoading(true);
           
           await new Promise(r => setTimeout(r, 500));
@@ -144,8 +129,7 @@ export const AuthProvider = ({ children }) => {
             setLoading(false);
           }
         } else if (event === 'SIGNED_OUT') {
-          console.log('Sign out detected');
-          setUser(null);
+                    setUser(null);
           setProfile(null);
           setLoading(false);
         }
@@ -164,8 +148,7 @@ export const AuthProvider = ({ children }) => {
   const isUsuario = profile?.rol === 'usuario';
   const isAuthenticated = !!user;
 
-  console.log('AUTH STATE:', { user: user?.email, rol: profile?.rol, isAdmin, loading });
-
+  
   return (
     <AuthContext.Provider value={{
       user,
