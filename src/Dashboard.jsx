@@ -558,6 +558,7 @@ const colors = {
   sand: '#E8DFD0',
   camel: '#C9A96E',
   espresso: '#4A3728',
+  sidebarBg: '#062690',
   olive: '#6B7B5E',
   gold: '#B8954F',
   cotton: '#F8F4EF',
@@ -603,7 +604,7 @@ const Sidebar = ({ seccionActiva, setSeccionActiva, menuAbierto, setMenuAbierto,
       <div style={{
         width: '220px',
         minHeight: '100vh',
-        background: colors.espresso,
+        background: colors.sidebarBg,
         padding: '20px 0',
         position: 'fixed',
         left: menuAbierto || !isMobile ? 0 : '-220px',
@@ -3161,7 +3162,7 @@ export default function DashboardToteBag() {
             gap: '15px',
             marginBottom: '15px',
             padding: '10px 15px',
-            background: colors.espresso,
+            background: colors.sidebarBg,
             borderRadius: '8px'
           }}>
             <button
