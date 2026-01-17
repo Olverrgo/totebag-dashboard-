@@ -205,7 +205,7 @@ export const AuthProvider = ({ children }) => {
 
   const isAdmin = profile?.rol === 'admin';
   const isUsuario = profile?.rol === 'usuario';
-  const isAuthenticated = !!user && !!profile;
+  const isAuthenticated = !!user;
 
   const value = {
     user,

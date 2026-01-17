@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Paleta de Colores CMYK</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: white;
+    }
+
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 25px;
+      font-size: 28px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    /* Vista previa del color */
+    .color-preview {
+      width: 100%;
+      height: 180px;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+      margin-bottom: 25px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      transition: all 0.3s ease;
+      border: 3px solid rgba(255,255,255,0.1);
+    }
+
+    .color-preview .hex-value {
+      font-size: 36px;
+      font-weight: bold;
+      font-family: 'Consolas', monospace;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .color-preview .rgb-value {
+      font-size: 16px;
+      opacity: 0.85;
+      margin-top: 8px;
+    }
+
+    /* Secciones */
+    .section {
+      background: rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .section h2 {
+      font-size: 18px;
+      margin-bottom: 15px;
+      color: #e0e0e0;
+    }
+
+    /* Controles CMYK */
+    .cmyk-controls {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 15px;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .control-group label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 14px;
+      color: #b0b0b0;
+    }
+
+    .color-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .color-dot.cyan { background: #00bcd4; }
+    .color-dot.magenta { background: #e91e63; }
+    .color-dot.yellow { background: #ffeb3b; }
+    .color-dot.black { background: #607d8b; }
+
+    .control-group input[type="number"] {
+      width: 100%;
+      padding: 12px;
+      background: rgba(0,0,0,0.3);
+      border: 2px solid rgba(255,255,255,0.15);
+      border-radius: 8px;
+      color: white;
+      font-size: 18px;
+      font-family: 'Consolas', monospace;
+      text-align: center;
+      transition: border-color 0.3s;
+    }
+
+    .control-group input[type="number"]:focus {
+      outline: none;
+      border-color: #4fc3f7;
+    }
+
+    .control-group input[type="range"] {
+      width: 100%;
+      margin-top: 8px;
+      -webkit-appearance: none;
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.2);
+    }
+
+    .control-group input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #4fc3f7;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+
+    .percent-value {
+      text-align: center;
+      font-size: 12px;
+      color: #888;
+      margin-top: 5px;
+    }
+
+    /* Valores de salida */
+    .output-values {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .output-box {
+      background: rgba(0,0,0,0.25);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .output-box .label {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 5px;
+    }
+
+    .output-box .value {
+      font-family: 'Consolas', monospace;
+      font-size: 16px;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+
+    .copy-btn {
+      background: transparent;
+      border: 1px solid rgba(79, 195, 247, 0.5);
+      color: #4fc3f7;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      transition: all 0.2s;
+    }
+
+    .copy-btn:hover {
+      background: rgba(79, 195, 247, 0.2);
+    }
+
+    .copy-btn.copied {
+      background: #4caf50;
+      border-color: #4caf50;
+      color: white;
+    }
+
+    /* Botón guardar */
+    .save-btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 15px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .save-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    /* Paleta guardada */
+    .saved-colors {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .saved-color {
+      position: relative;
+      height: 70px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform 0.2s;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 8px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }
+
+    .saved-color:hover {
+      transform: scale(1.05);
+    }
+
+    .saved-color .hex-label {
+      font-size: 10px;
+      font-family: 'Consolas', monospace;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    }
+
+    .saved-color .delete-btn {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      width: 22px;
+      height: 22px;
+      background: #f44336;
+      border: none;
+      border-radius: 50%;
+      color: white;
+      font-size: 12px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .saved-color:hover .delete-btn {
+      opacity: 1;
+    }
+
+    .tip {
+      text-align: center;
+      font-size: 13px;
+      color: #666;
+      margin-top: 20px;
+    }
+
+    .empty-palette {
+      text-align: center;
+      color: #666;
+      padding: 20px;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎨 Paleta de Colores CMYK</h1>
+
+    <!-- Vista previa -->
+    <div class="color-preview" id="colorPreview">
+      <span class="hex-value" id="hexDisplay">#FFFFFF</span>
+      <span class="rgb-value" id="rgbDisplay">RGB(255, 255, 255)</span>
+    </div>
+
+    <!-- Controles CMYK -->
+    <div class="section">
+      <h2>Valores CMYK</h2>
+      <div class="cmyk-controls">
+        <div class="control-group">
+          <label><span class="color-dot cyan"></span>Cyan</label>
+          <input type="number" id="cyan" min="0" max="100" value="0">
+          <input type="range" id="cyanRange" min="0" max="100" value="0">
+          <span class="percent-value" id="cyanPercent">0%</span>
+        </div>
+        <div class="control-group">
+          <label><span class="color-dot magenta"></span>Magenta</label>
+          <input type="number" id="magenta" min="0" max="100" value="0">
+          <input type="range" id="magentaRange" min="0" max="100" value="0">
+          <span class="percent-value" id="magentaPercent">0%</span>
+        </div>
+        <div class="control-group">
+          <label><span class="color-dot yellow"></span>Yellow</label>
+          <input type="number" id="yellow" min="0" max="100" value="0">
+          <input type="range" id="yellowRange" min="0" max="100" value="0">
+          <span class="percent-value" id="yellowPercent">0%</span>
+        </div>
+        <div class="control-group">
+          <label><span class="color-dot black"></span>Black</label>
+          <input type="number" id="black" min="0" max="100" value="0">
+          <input type="range" id="blackRange" min="0" max="100" value="0">
+          <span class="percent-value" id="blackPercent">0%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Valores de salida -->
+    <div class="section">
+      <h2>Valores de Color</h2>
+      <div class="output-values">
+        <div class="output-box">
+          <div class="label">CMYK</div>
+          <div class="value" id="cmykValue">0, 0, 0, 0</div>
+          <button class="copy-btn" onclick="copyValue('cmyk')">📋 Copiar</button>
+        </div>
+        <div class="output-box">
+          <div class="label">RGB</div>
+          <div class="value" id="rgbValue">255, 255, 255</div>
+          <button class="copy-btn" onclick="copyValue('rgb')">📋 Copiar</button>
+        </div>
+        <div class="output-box">
+          <div class="label">Hexadecimal</div>
+          <div class="value" id="hexValue">#FFFFFF</div>
+          <button class="copy-btn" onclick="copyValue('hex')">📋 Copiar</button>
+        </div>
+      </div>
+      <button class="save-btn" onclick="saveColor()">➕ Guardar en Paleta</button>
+    </div>
+
+    <!-- Paleta guardada -->
+    <div class="section" id="paletteSection" style="display: none;">
+      <h2>Colores Guardados (<span id="colorCount">0</span>)</h2>
+      <div class="saved-colors" id="savedColors"></div>
+    </div>
+
+    <p class="tip">💡 Tip: Haz clic en un color guardado para cargarlo</p>
+  </div>
+
+  <script>
+    // Estado
+    let cmyk = { c: 0, m: 0, y: 0, k: 0 };
+    let rgb = { r: 255, g: 255, b: 255 };
+    let hex = '#FFFFFF';
+    let savedColors = [];
+
+    // Cargar colores guardados del localStorage
+    const stored = localStorage.getItem('savedColors');
+    if (stored) {
+      savedColors = JSON.parse(stored);
+      renderSavedColors();
+    }
+
+    // Elementos DOM
+    const elements = {
+      cyan: document.getElementById('cyan'),
+      magenta: document.getElementById('magenta'),
+      yellow: document.getElementById('yellow'),
+      black: document.getElementById('black'),
+      cyanRange: document.getElementById('cyanRange'),
+      magentaRange: document.getElementById('magentaRange'),
+      yellowRange: document.getElementById('yellowRange'),
+      blackRange: document.getElementById('blackRange'),
+      cyanPercent: document.getElementById('cyanPercent'),
+      magentaPercent: document.getElementById('magentaPercent'),
+      yellowPercent: document.getElementById('yellowPercent'),
+      blackPercent: document.getElementById('blackPercent'),
+      colorPreview: document.getElementById('colorPreview'),
+      hexDisplay: document.getElementById('hexDisplay'),
+      rgbDisplay: document.getElementById('rgbDisplay'),
+      cmykValue: document.getElementById('cmykValue'),
+      rgbValue: document.getElementById('rgbValue'),
+      hexValue: document.getElementById('hexValue'),
+      savedColors: document.getElementById('savedColors'),
+      paletteSection: document.getElementById('paletteSection'),
+      colorCount: document.getElementById('colorCount')
+    };
+
+    // Convertir CMYK a RGB
+    function cmykToRgb(c, m, y, k) {
+      const r = Math.round(255 * (1 - c / 100) * (1 - k / 100));
+      const g = Math.round(255 * (1 - m / 100) * (1 - k / 100));
+      const b = Math.round(255 * (1 - y / 100) * (1 - k / 100));
+      return { r, g, b };
+    }
+
+    // Convertir RGB a Hex
+    function rgbToHex(r, g, b) {
+      const toHex = (n) => n.toString(16).padStart(2, '0').toUpperCase();
+      return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+    }
+
+    // Determinar color de texto
+    function getTextColor(r, g, b) {
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      return luminance > 0.5 ? '#000000' : '#FFFFFF';
+    }
+
+    // Actualizar display
+    function updateDisplay() {
+      rgb = cmykToRgb(cmyk.c, cmyk.m, cmyk.y, cmyk.k);
+      hex = rgbToHex(rgb.r, rgb.g, rgb.b);
+      const textColor = getTextColor(rgb.r, rgb.g, rgb.b);
+
+      elements.colorPreview.style.backgroundColor = hex;
+      elements.colorPreview.style.color = textColor;
+      elements.hexDisplay.textContent = hex;
+      elements.rgbDisplay.textContent = `RGB(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+
+      elements.cmykValue.textContent = `${cmyk.c}, ${cmyk.m}, ${cmyk.y}, ${cmyk.k}`;
+      elements.rgbValue.textContent = `${rgb.r}, ${rgb.g}, ${rgb.b}`;
+      elements.hexValue.textContent = hex;
+
+      elements.cyanPercent.textContent = `${cmyk.c}%`;
+      elements.magentaPercent.textContent = `${cmyk.m}%`;
+      elements.yellowPercent.textContent = `${cmyk.y}%`;
+      elements.blackPercent.textContent = `${cmyk.k}%`;
+    }
+
+    // Sincronizar inputs
+    function syncInputs(channel, value) {
+      const numValue = Math.min(100, Math.max(0, parseInt(value) || 0));
+      cmyk[channel] = numValue;
+      
+      const channelMap = { c: 'cyan', m: 'magenta', y: 'yellow', k: 'black' };
+      const name = channelMap[channel];
+      elements[name].value = numValue;
+      elements[name + 'Range'].value = numValue;
+      
+      updateDisplay();
+    }
+
+    // Event listeners para inputs numéricos
+    ['cyan', 'magenta', 'yellow', 'black'].forEach(name => {
+      const channel = name[0]; // c, m, y, k (para black usamos 'b' pero necesitamos 'k')
+      const channelKey = name === 'black' ? 'k' : name[0];
+      
+      elements[name].addEventListener('input', (e) => syncInputs(channelKey, e.target.value));
+      elements[name + 'Range'].addEventListener('input', (e) => syncInputs(channelKey, e.target.value));
+    });
+
+    // Copiar al portapapeles
+    function copyValue(type) {
+      let text = '';
+      switch(type) {
+        case 'cmyk':
+          text = `cmyk(${cmyk.c}%, ${cmyk.m}%, ${cmyk.y}%, ${cmyk.k}%)`;
+          break;
+        case 'rgb':
+          text = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+          break;
+        case 'hex':
+          text = hex;
+          break;
+      }
+      
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = event.target;
+        btn.textContent = '✓ Copiado';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = '📋 Copiar';
+          btn.classList.remove('copied');
+        }, 1500);
+      });
+    }
+
+    // Guardar color
+    function saveColor() {
+      const newColor = {
+        cmyk: { ...cmyk },
+        rgb: { ...rgb },
+        hex: hex
+      };
+      savedColors.push(newColor);
+      localStorage.setItem('savedColors', JSON.stringify(savedColors));
+      renderSavedColors();
+    }
+
+    // Renderizar colores guardados
+    function renderSavedColors() {
+      if (savedColors.length === 0) {
+        elements.paletteSection.style.display = 'none';
+        return;
+      }
+
+      elements.paletteSection.style.display = 'block';
+      elements.colorCount.textContent = savedColors.length;
+
+      elements.savedColors.innerHTML = savedColors.map((color, index) => {
+        const textColor = getTextColor(color.rgb.r, color.rgb.g, color.rgb.b);
+        return `
+          <div class="saved-color" 
+               style="background-color: ${color.hex}; color: ${textColor};"
+               onclick="loadColor(${index})">
+            <span class="hex-label">${color.hex}</span>
+            <button class="delete-btn" onclick="event.stopPropagation(); deleteColor(${index})">✕</button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Cargar color guardado
+    function loadColor(index) {
+      const color = savedColors[index];
+      cmyk = { ...color.cmyk };
+      
+      elements.cyan.value = cmyk.c;
+      elements.magenta.value = cmyk.m;
+      elements.yellow.value = cmyk.y;
+      elements.black.value = cmyk.k;
+      elements.cyanRange.value = cmyk.c;
+      elements.magentaRange.value = cmyk.m;
+      elements.yellowRange.value = cmyk.y;
+      elements.blackRange.value = cmyk.k;
+      
+      updateDisplay();
+    }
+
+    // Eliminar color
+    function deleteColor(index) {
+      savedColors.splice(index, 1);
+      localStorage.setItem('savedColors', JSON.stringify(savedColors));
+      renderSavedColors();
+    }
+
+    // Inicializar
+    updateDisplay();
+  </script>
+</body>
+</html>

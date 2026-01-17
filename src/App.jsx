@@ -4,7 +4,7 @@ import Login from './Login'
 
 // Componente que maneja la logica de autenticacion
 function AppContent() {
-  const { isAuthenticated, loading, authError, clearAuthError } = useAuth();
+  const { isAuthenticated, loading, authError, clearAuthError, profile } = useAuth();
 
   // Mostrar loading mientras verifica la sesion
   if (loading) {
@@ -20,6 +20,25 @@ function AppContent() {
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '24px', marginBottom: '10px' }}>🛍️</div>
           <div style={{ color: '#A67B5B', letterSpacing: '2px' }}>Cargando...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Mostrar loading mientras carga el perfil (despues de login)
+  if (isAuthenticated && !profile) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#FDF6E9',
+        fontFamily: "'Cormorant Garamond', Georgia, serif"
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '24px', marginBottom: '10px' }}>🛍️</div>
+          <div style={{ color: '#A67B5B', letterSpacing: '2px' }}>Cargando perfil...</div>
         </div>
       </div>
     );
