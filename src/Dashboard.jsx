@@ -632,10 +632,10 @@ const Sidebar = ({ seccionActiva, setSeccionActiva, menuAbierto, setMenuAbierto,
         </button>
 
         <div style={{ padding: '0 20px 30px', borderBottom: `1px solid ${colors.camel}40` }}>
-          <div style={{ fontSize: '10px', letterSpacing: '3px', color: colors.sidebarText, marginBottom: '5px' }}>
+          <div style={{ fontSize: '11px', letterSpacing: '3px', color: colors.sidebarText, marginBottom: '5px' }}>
             TOTE BAG
           </div>
-          <div style={{ fontSize: '18px', fontWeight: '300', color: colors.sidebarText, letterSpacing: '2px' }}>
+          <div style={{ fontSize: '20px', fontWeight: '300', color: colors.sidebarText, letterSpacing: '2px' }}>
             DASHBOARD
           </div>
         </div>
@@ -660,8 +660,8 @@ const Sidebar = ({ seccionActiva, setSeccionActiva, menuAbierto, setMenuAbierto,
                 color: seccionActiva === sec.id ? colors.sidebarText : colors.sidebarText
               }}
             >
-              <span style={{ fontSize: '18px' }}>{sec.icon}</span>
-              <span style={{ fontSize: '13px', letterSpacing: '1px' }}>{sec.nombre}</span>
+              <span style={{ fontSize: '20px' }}>{sec.icon}</span>
+              <span style={{ fontSize: '14px', letterSpacing: '1px' }}>{sec.nombre}</span>
             </div>
           ))}
         </nav>
