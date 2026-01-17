@@ -19,7 +19,15 @@ const isConfigured = !supabaseUrl.includes('TU_SUPABASE') && !supabaseAnonKey.in
 
 // Crear cliente de Supabase (solo si está configurado)
 export const supabase = isConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        storageKey: 'totebag-auth-token',
+        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+      }
+    })
   : null;
 
 export const isSupabaseConfigured = isConfigured;
