@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { getSession, getUserProfile, onAuthStateChange, signOut } from './supabaseClient';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from './supabaseClient';
+import { signOut } from './supabaseClient';
 
 const AuthContext = createContext({});
 
@@ -17,47 +18,47 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
 
-  // Fetch profile with retry
-  const loadProfile = useCallback(async (userId) => {
-    console.log('Loading profile for:', userId);
-    
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        const { data, error } = await getUserProfile(userId);
-        console.log('Profile attempt', attempt, '- data:', data, 'error:', error);
-        
-        if (data && data.rol) {
-          console.log('Profile loaded successfully, rol:', data.rol);
-          return data;
-        }
-        
-        if (error) {
-          console.error('Profile error:', error.message);
-        }
-        
-        // Wait before retry
-        if (attempt < 3) {
-          await new Promise(r => setTimeout(r, 1000));
-        }
-      } catch (err) {
-        console.error('Profile exception:', err);
-      }
-    }
-    
-    console.error('Failed to load profile after 3 attempts');
-    return null;
-  }, []);
-
   useEffect(() => {
     let isMounted = true;
-    let profileLoaded = false;
 
-    const setupAuth = async () => {
-      try {
-        // Get current session
-        const { data: session, error: sessionError } = await getSession();
-        console.log('Session check:', session ? 'found' : 'none', sessionError || '');
+    // Function to load profile with delay and retry
+    const loadProfile = async (userId) => {
+      console.log('loadProfile called for:', userId);
+      
+      // Small delay to ensure auth token is ready
+      await new Promise(r => setTimeout(r, 500));
+      
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          console.log('Profile fetch attempt', attempt);
+          
+          const { data, error } = await supabase
+            .from('user_profiles')
+            .select('*')
+            .eq('id', userId)
+            .single();
+          
+          console.log('Profile result:', { data, error: error?.message });
+          
+          if (data && data.rol) {
+            return data;
+          }
+          
+          if (attempt < 3) {
+            await new Promise(r => setTimeout(r, 1000));
+          }
+        } catch (err) {
+          console.error('Profile fetch error:', err);
+        }
+      }
+      return null;
+    };
 
+    // Use onAuthStateChange as the ONLY source of truth
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth event:', event, 'session:', !!session);
+        
         if (!isMounted) return;
 
         if (session?.user) {
@@ -65,65 +66,45 @@ export const AuthProvider = ({ children }) => {
           
           // Load profile
           const profileData = await loadProfile(session.user.id);
-          if (isMounted && profileData) {
-            setProfile(profileData);
-            profileLoaded = true;
-          } else if (isMounted) {
-            setAuthError('No se pudo cargar el perfil');
+          
+          if (isMounted) {
+            if (profileData) {
+              setProfile(profileData);
+              console.log('Profile set:', profileData.rol);
+            } else {
+              setAuthError('No se pudo cargar el perfil');
+            }
+            setLoading(false);
           }
+        } else {
+          setUser(null);
+          setProfile(null);
+          if (isMounted) setLoading(false);
         }
-      } catch (err) {
-        console.error('Setup auth error:', err);
-        if (isMounted) setAuthError(err.message);
-      } finally {
-        if (isMounted) setLoading(false);
       }
-    };
+    );
 
-    // Listen for auth changes (login/logout only, not initial)
-    const authListener = onAuthStateChange(async (event, session) => {
-      console.log('Auth event:', event);
-      
-      if (!isMounted) return;
-
-      if (event === 'SIGNED_IN') {
-        // Only handle if we don't already have the profile loaded
-        if (!profileLoaded && session?.user) {
-          setUser(session.user);
-          const profileData = await loadProfile(session.user.id);
-          if (isMounted && profileData) {
-            setProfile(profileData);
-            profileLoaded = true;
-          }
-          setLoading(false);
-        }
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setProfile(null);
-        profileLoaded = false;
+    // Timeout safety
+    const timeout = setTimeout(() => {
+      if (isMounted && loading) {
+        console.log('Auth timeout');
+        setLoading(false);
       }
-      // Ignore INITIAL_SESSION - we handle it in setupAuth
-    });
-
-    setupAuth();
-
-    const subscription = authListener?.data?.subscription;
+    }, 15000);
 
     return () => {
       isMounted = false;
+      clearTimeout(timeout);
       subscription?.unsubscribe();
     };
-  }, [loadProfile]);
+  }, []);
 
   const logout = async () => {
-    console.log('Logout called');
     try {
-      const { error } = await signOut();
-      if (error) console.error('Logout error:', error);
+      await signOut();
     } catch (err) {
-      console.error('Logout exception:', err);
+      console.error('Logout error:', err);
     }
-    // Always clear state
     setUser(null);
     setProfile(null);
   };
@@ -132,8 +113,7 @@ export const AuthProvider = ({ children }) => {
   const isUsuario = profile?.rol === 'usuario';
   const isAuthenticated = !!user;
 
-  // Debug log
-  console.log('Auth state - user:', !!user, 'profile rol:', profile?.rol, 'isAdmin:', isAdmin);
+  console.log('Render - user:', !!user, 'rol:', profile?.rol, 'isAdmin:', isAdmin, 'loading:', loading);
 
   return (
     <AuthContext.Provider value={{
