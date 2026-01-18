@@ -1032,6 +1032,38 @@ const ProductosView = ({ isAdmin }) => {
     }
   };
 
+  // Editar producto directamente desde la tarjeta
+  const editarProductoDirecto = (producto) => {
+    // Crear objeto de línea desde el producto
+    const linea = {
+      id: producto.linea_id,
+      nombre: producto.linea_nombre,
+      medidas: producto.linea_medidas
+    };
+
+    setLineaSeleccionada(linea);
+    setProductoEditandoId(producto.id);
+    setMensaje({ tipo: '', texto: '' });
+
+    setFormProducto({
+      descripcion: producto.descripcion || '',
+      telaSeleccionada: producto.tipo_tela_id || anchosTela[0]?.id || null,
+      cantidadTela: parseFloat(producto.cantidad_tela) || 0,
+      piezasPorCorte: producto.piezas_por_corte || 1,
+      costoMaquila: parseFloat(producto.costo_maquila) || 0,
+      insumos: parseFloat(producto.insumos) || 0,
+      merma: parseFloat(producto.merma) || 5,
+      serigrafia1: parseFloat(producto.serigrafia_1_tinta) || 0,
+      serigrafia2: parseFloat(producto.serigrafia_2_tintas) || 0,
+      serigrafia3: parseFloat(producto.serigrafia_3_tintas) || 0,
+      serigrafia4: parseFloat(producto.serigrafia_4_tintas) || 0,
+      empaque: parseFloat(producto.empaque) || 0,
+      tipoEntrega: producto.tipo_entrega || 'envio',
+      envio: formProducto.envio || 0,
+      minPiezasEnvio: formProducto.minPiezasEnvio || 20
+    });
+  };
+
   // Guardar producto en Supabase
   const guardarProducto = async () => {
     if (!lineaSeleccionada) return;
@@ -1699,9 +1731,26 @@ const ProductosView = ({ isAdmin }) => {
                         <div style={{ fontSize: '20px', fontWeight: '600', color: colors.sidebarBg }}>${prod.costo_total_1_tinta?.toFixed(2)}</div>
                       </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '15px', marginTop: '10px', fontSize: '12px', color: colors.camel }}>
-                      <span>2 tintas: ${prod.costo_total_2_tintas?.toFixed(2)}</span>
-                      <span>3 tintas: ${prod.costo_total_3_tintas?.toFixed(2)}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
+                      <div style={{ display: 'flex', gap: '15px', fontSize: '12px', color: colors.camel }}>
+                        <span>2 tintas: ${prod.costo_total_2_tintas?.toFixed(2)}</span>
+                        <span>3 tintas: ${prod.costo_total_3_tintas?.toFixed(2)}</span>
+                        {prod.costo_total_4_tintas > 0 && <span>4 tintas: ${prod.costo_total_4_tintas?.toFixed(2)}</span>}
+                      </div>
+                      <button
+                        onClick={() => editarProductoDirecto(prod)}
+                        style={{
+                          padding: '6px 16px',
+                          background: colors.terracotta,
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontWeight: '500'
+                        }}>
+                        Editar
+                      </button>
                     </div>
                   </div>
                 ))}
