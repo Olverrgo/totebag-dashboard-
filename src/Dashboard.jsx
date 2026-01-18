@@ -1055,17 +1055,34 @@ const ProductosView = ({ isAdmin }) => {
 
   // Guardar tipos de tela (solo admin)
   const guardarTiposTela = async () => {
-    if (!isAdmin) return;
-
-    for (const tela of anchosTela) {
-      await updateTipoTela(tela.id, {
-        nombre: tela.nombre,
-        ancho: tela.ancho,
-        precio_metro: tela.precio
-      });
+    if (!isAdmin) {
+      setMensaje({ tipo: 'error', texto: 'Solo admin puede guardar' });
+      return;
     }
-    setMensaje({ tipo: 'exito', texto: 'Tipos de tela actualizados' });
-    setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+
+    setMensaje({ tipo: '', texto: 'Guardando...' });
+
+    try {
+      let errores = [];
+      for (const tela of anchosTela) {
+        const { error } = await updateTipoTela(tela.id, {
+          nombre: tela.nombre,
+          ancho: tela.ancho,
+          precio_metro: tela.precio
+        });
+        if (error) errores.push(error.message || error);
+      }
+
+      if (errores.length > 0) {
+        setMensaje({ tipo: 'error', texto: 'Error: ' + errores.join(', ') });
+      } else {
+        setMensaje({ tipo: 'exito', texto: 'Tipos de tela actualizados correctamente' });
+      }
+      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+    } catch (err) {
+      console.error('Error guardando telas:', err);
+      setMensaje({ tipo: 'error', texto: 'Error: ' + err.message });
+    }
   };
 
   // Guardar configuración de envío (solo admin)
