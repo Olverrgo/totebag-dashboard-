@@ -859,6 +859,7 @@ const ProductosView = ({ isAdmin }) => {
   const [mostrarAgregarLinea, setMostrarAgregarLinea] = useState(false);
   const [nuevaLinea, setNuevaLinea] = useState({ nombre: '', medidas: '' });
   const [hoverItems, setHoverItems] = useState({});
+  const [hoverEditar, setHoverEditar] = useState({});
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
   const [productosGuardados, setProductosGuardados] = useState([]);
@@ -1739,15 +1740,18 @@ const ProductosView = ({ isAdmin }) => {
                       </div>
                       <button
                         onClick={() => editarProductoDirecto(prod)}
+                        onMouseEnter={() => setHoverEditar({ ...hoverEditar, [prod.id]: true })}
+                        onMouseLeave={() => setHoverEditar({ ...hoverEditar, [prod.id]: false })}
                         style={{
-                          padding: '6px 16px',
-                          background: colors.terracotta,
-                          color: 'white',
+                          padding: '8px 18px',
+                          background: hoverEditar[prod.id] ? colors.sidebarText : colors.sidebarBg,
+                          color: hoverEditar[prod.id] ? colors.sidebarBg : colors.sidebarText,
                           border: 'none',
                           borderRadius: '4px',
                           cursor: 'pointer',
-                          fontSize: '12px',
-                          fontWeight: '500'
+                          fontSize: '13px',
+                          fontWeight: '500',
+                          transition: 'all 0.3s ease'
                         }}>
                         Editar
                       </button>
