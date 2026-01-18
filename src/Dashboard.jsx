@@ -2854,7 +2854,8 @@ export default function DashboardToteBag() {
               style={{
                 height: isMobile ? '45px' : '60px',
                 width: 'auto',
-                objectFit: 'contain'
+                objectFit: 'contain',
+                borderRadius: '12px'
               }}
             />
             <div>
