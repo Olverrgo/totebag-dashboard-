@@ -1186,7 +1186,7 @@ const ProductosView = ({ isAdmin }) => {
   const inputStyle = {
     width: '100%',
     padding: '10px 12px',
-    border: `1px solid ${colors.sand}`,
+    border: '2px solid #DA9F17',
     borderRadius: '6px',
     fontSize: '14px',
     boxSizing: 'border-box',
@@ -1203,7 +1203,7 @@ const ProductosView = ({ isAdmin }) => {
 
   const sectionStyle = {
     background: colors.cream,
-    border: `1px solid ${colors.sand}`,
+    border: '2px solid #DA9F17',
     borderRadius: '8px',
     padding: '20px',
     marginBottom: '20px'
