@@ -1757,7 +1757,7 @@ const ProductosView = ({ isAdmin }) => {
               </div>
             </div>
           ) : (
-            <div style={{ background: colors.cotton, border: `1px solid ${colors.sand}`, padding: '40px', textAlign: 'center', borderRadius: '8px' }}>
+            <div style={{ background: colors.cotton, border: '2px solid #F7E836', padding: '40px', textAlign: 'center', borderRadius: '8px' }}>
               <span style={{ fontSize: '48px' }}>🛍️</span>
               <h3 style={{ margin: '20px 0 10px', color: colors.espresso }}>Sin productos registrados</h3>
               <p style={{ color: colors.camel, fontSize: '14px' }}>Haz clic en "+ Agregar" para crear tu primer producto</p>
