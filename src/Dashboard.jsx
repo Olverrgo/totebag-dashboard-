@@ -862,6 +862,7 @@ const ProductosView = ({ isAdmin }) => {
   const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
   const [productosGuardados, setProductosGuardados] = useState([]);
   const [configEnvioId, setConfigEnvioId] = useState(null);
+  const [productoEditandoId, setProductoEditandoId] = useState(null); // ID del producto que se está editando
 
   // Cargar datos de Supabase al montar
   useEffect(() => {
@@ -983,23 +984,51 @@ const ProductosView = ({ isAdmin }) => {
     setLineaSeleccionada(linea);
     setMostrarPopup(false);
     setMensaje({ tipo: '', texto: '' });
-    setFormProducto({
-      descripcion: '',
-      telaSeleccionada: anchosTela[0]?.id || null,
-      cantidadTela: 0,
-      piezasPorCorte: 1,
-      costoMaquila: 0,
-      insumos: 0,
-      merma: 5,
-      serigrafia1: 0,
-      serigrafia2: 0,
-      serigrafia3: 0,
-      serigrafia4: 0,
-      empaque: 0,
-      tipoEntrega: 'envio',
-      envio: formProducto.envio || 0,
-      minPiezasEnvio: formProducto.minPiezasEnvio || 20
-    });
+
+    // Buscar si ya existe un producto para esta línea
+    const productoExistente = productosGuardados.find(p => p.linea_id === linea.id);
+
+    if (productoExistente) {
+      // Cargar datos del producto existente
+      setProductoEditandoId(productoExistente.id);
+      setFormProducto({
+        descripcion: productoExistente.descripcion || '',
+        telaSeleccionada: productoExistente.tipo_tela_id || anchosTela[0]?.id || null,
+        cantidadTela: parseFloat(productoExistente.cantidad_tela) || 0,
+        piezasPorCorte: productoExistente.piezas_por_corte || 1,
+        costoMaquila: parseFloat(productoExistente.costo_maquila) || 0,
+        insumos: parseFloat(productoExistente.insumos) || 0,
+        merma: parseFloat(productoExistente.merma) || 5,
+        serigrafia1: parseFloat(productoExistente.serigrafia_1_tinta) || 0,
+        serigrafia2: parseFloat(productoExistente.serigrafia_2_tintas) || 0,
+        serigrafia3: parseFloat(productoExistente.serigrafia_3_tintas) || 0,
+        serigrafia4: parseFloat(productoExistente.serigrafia_4_tintas) || 0,
+        empaque: parseFloat(productoExistente.empaque) || 0,
+        tipoEntrega: productoExistente.tipo_entrega || 'envio',
+        envio: formProducto.envio || 0,
+        minPiezasEnvio: formProducto.minPiezasEnvio || 20
+      });
+    } else {
+      // Nuevo producto - valores por defecto
+      setProductoEditandoId(null);
+      setFormProducto({
+        descripcion: '',
+        telaSeleccionada: anchosTela[0]?.id || null,
+        cantidadTela: 0,
+        piezasPorCorte: 1,
+        costoMaquila: 0,
+        insumos: 0,
+        merma: 5,
+        serigrafia1: 0,
+        serigrafia2: 0,
+        serigrafia3: 0,
+        serigrafia4: 0,
+        empaque: 0,
+        tipoEntrega: 'envio',
+        envio: formProducto.envio || 0,
+        minPiezasEnvio: formProducto.minPiezasEnvio || 20
+      });
+    }
   };
 
   // Guardar producto en Supabase
@@ -1026,23 +1055,46 @@ const ProductosView = ({ isAdmin }) => {
         serigrafia_1_tinta: formProducto.serigrafia1,
         serigrafia_2_tintas: formProducto.serigrafia2,
         serigrafia_3_tintas: formProducto.serigrafia3,
+        serigrafia_4_tintas: formProducto.serigrafia4,
+        tipo_entrega: formProducto.tipoEntrega,
         empaque: formProducto.empaque,
         envio_id: configEnvioId,
         costo_total_1_tinta: parseFloat(costosCalculados.total1Tinta),
         costo_total_2_tintas: parseFloat(costosCalculados.total2Tintas),
-        costo_total_3_tintas: parseFloat(costosCalculados.total3Tintas)
+        costo_total_3_tintas: parseFloat(costosCalculados.total3Tintas),
+        costo_total_4_tintas: parseFloat(costosCalculados.total4Tintas)
       };
 
-      const { data, error } = await createProducto(productoData);
+      let data, error;
+
+      if (productoEditandoId) {
+        // Actualizar producto existente
+        const result = await updateProducto(productoEditandoId, productoData);
+        data = result.data;
+        error = result.error;
+      } else {
+        // Crear nuevo producto
+        const result = await createProducto(productoData);
+        data = result.data;
+        error = result.error;
+      }
 
       if (error) {
         setMensaje({ tipo: 'error', texto: 'Error al guardar: ' + error.message });
       } else {
-        setMensaje({ tipo: 'exito', texto: 'Producto guardado correctamente' });
-        setProductosGuardados([data, ...productosGuardados]);
+        setMensaje({ tipo: 'exito', texto: productoEditandoId ? 'Producto actualizado correctamente' : 'Producto guardado correctamente' });
+
+        // Actualizar lista de productos
+        if (productoEditandoId) {
+          setProductosGuardados(productosGuardados.map(p => p.id === productoEditandoId ? data : p));
+        } else {
+          setProductosGuardados([data, ...productosGuardados]);
+        }
+
         // Limpiar formulario después de 2 segundos
         setTimeout(() => {
           setLineaSeleccionada(null);
+          setProductoEditandoId(null);
           setMensaje({ tipo: '', texto: '' });
         }, 2000);
       }
@@ -1175,27 +1227,46 @@ const ProductosView = ({ isAdmin }) => {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
-              {lineasProducto.map((linea) => (
-                <div key={linea.id} onClick={() => seleccionarLinea(linea)}
-                  onMouseEnter={() => setHoverItems({ ...hoverItems, [linea.id]: true })}
-                  onMouseLeave={() => setHoverItems({ ...hoverItems, [linea.id]: false })}
-                  style={{
-                    padding: '18px 20px',
-                    background: hoverItems[linea.id] ? colors.sidebarBg : colors.cream,
-                    color: hoverItems[linea.id] ? colors.sidebarText : colors.espresso,
-                    border: `2px solid ${hoverItems[linea.id] ? colors.sidebarBg : colors.sand}`,
-                    borderRadius: '8px', cursor: 'pointer', transition: 'all 0.3s ease',
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                  }}>
-                  <div>
-                    <div style={{ fontWeight: '600', fontSize: '16px' }}>{linea.nombre}</div>
-                    <div style={{ fontSize: '13px', marginTop: '4px', color: hoverItems[linea.id] ? 'rgba(171,213,94,0.8)' : colors.camel }}>
-                      {linea.medidas}
+              {lineasProducto.map((linea) => {
+                const tieneProducto = productosGuardados.some(p => p.linea_id === linea.id);
+                return (
+                  <div key={linea.id} onClick={() => seleccionarLinea(linea)}
+                    onMouseEnter={() => setHoverItems({ ...hoverItems, [linea.id]: true })}
+                    onMouseLeave={() => setHoverItems({ ...hoverItems, [linea.id]: false })}
+                    style={{
+                      padding: '18px 20px',
+                      background: tieneProducto
+                        ? (hoverItems[linea.id] ? colors.olive : 'rgba(171,213,94,0.15)')
+                        : (hoverItems[linea.id] ? colors.sidebarBg : colors.cream),
+                      color: hoverItems[linea.id] ? colors.sidebarText : colors.espresso,
+                      border: `2px solid ${tieneProducto ? colors.olive : (hoverItems[linea.id] ? colors.sidebarBg : colors.sand)}`,
+                      borderRadius: '8px', cursor: 'pointer', transition: 'all 0.3s ease',
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                    }}>
+                    <div>
+                      <div style={{ fontWeight: '600', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {linea.nombre}
+                        {tieneProducto && (
+                          <span style={{
+                            fontSize: '11px',
+                            background: colors.olive,
+                            color: 'white',
+                            padding: '2px 8px',
+                            borderRadius: '10px',
+                            fontWeight: '500'
+                          }}>
+                            Configurado
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '13px', marginTop: '4px', color: hoverItems[linea.id] ? 'rgba(171,213,94,0.8)' : colors.camel }}>
+                        {linea.medidas} {tieneProducto ? '• Click para editar' : '• Click para configurar'}
+                      </div>
                     </div>
+                    <span style={{ fontSize: '20px' }}>{tieneProducto ? '✓' : '🛍️'}</span>
                   </div>
-                  <span style={{ fontSize: '20px' }}>🛍️</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {!mostrarAgregarLinea ? (
@@ -1599,7 +1670,7 @@ const ProductosView = ({ isAdmin }) => {
               style={{ padding: '12px 25px', background: guardando ? colors.camel : colors.sidebarBg, color: colors.sidebarText,
                 border: 'none', borderRadius: '6px', cursor: guardando ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: '500',
                 opacity: guardando ? 0.8 : 1 }}>
-              {guardando ? 'Guardando...' : 'Guardar Producto'}
+              {guardando ? 'Guardando...' : (productoEditandoId ? 'Actualizar Producto' : 'Guardar Producto')}
             </button>
           </div>
         </div>
