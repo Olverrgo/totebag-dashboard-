@@ -2595,6 +2595,7 @@ export default function DashboardToteBag() {
   const [seccionActiva, setSeccionActiva] = useState('dashboard');
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
+  const [hoverHeader, setHoverHeader] = useState(false);
 
   // Detectar cambios de tamaño de pantalla
   useEffect(() => {
@@ -2825,22 +2826,27 @@ export default function DashboardToteBag() {
         )}
 
         {/* Header desktop - Sticky */}
-        <div style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 100,
-          marginBottom: isMobile ? '20px' : '30px',
-          padding: isMobile ? '15px' : '20px 25px',
-          background: colors.cotton,
-          border: `1px solid ${colors.camel}`,
-          display: 'flex',
-          flexDirection: isMobile ? 'column' : 'row',
-          justifyContent: 'space-between',
-          alignItems: isMobile ? 'flex-start' : 'center',
-          gap: isMobile ? '10px' : '0',
-          borderRadius: isMobile ? '8px' : '0',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-        }}>
+        <div
+          onMouseEnter={() => setHoverHeader(true)}
+          onMouseLeave={() => setHoverHeader(false)}
+          style={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 100,
+            marginBottom: isMobile ? '20px' : '30px',
+            padding: isMobile ? '15px' : '20px 25px',
+            background: hoverHeader ? colors.sidebarBg : colors.cotton,
+            border: '2px solid #F7E836',
+            display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
+            justifyContent: 'space-between',
+            alignItems: isMobile ? 'flex-start' : 'center',
+            gap: isMobile ? '10px' : '0',
+            borderRadius: '12px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            transition: 'all 0.3s ease',
+            cursor: 'pointer'
+          }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '10px' : '15px' }}>
             <img
               src="/Yolotl_logo_OK.png"
@@ -2852,10 +2858,23 @@ export default function DashboardToteBag() {
               }}
             />
             <div>
-              <div style={{ fontSize: isMobile ? '9px' : '10px', letterSpacing: '3px', color: '#A27B36', marginBottom: '5px' }}>
+              <div style={{
+                fontSize: isMobile ? '9px' : '10px',
+                letterSpacing: '3px',
+                color: hoverHeader ? '#F7E836' : colors.sidebarBg,
+                marginBottom: '5px',
+                transition: 'color 0.3s ease'
+              }}>
                 HECHO A MANO EN PUEBLA, MÉXICO
               </div>
-              <h1 style={{ margin: 0, fontSize: isMobile ? '16px' : '24px', fontWeight: '300', letterSpacing: '2px', color: colors.espresso }}>
+              <h1 style={{
+                margin: 0,
+                fontSize: isMobile ? '16px' : '24px',
+                fontWeight: '300',
+                letterSpacing: '2px',
+                color: hoverHeader ? '#F7E836' : colors.sidebarBg,
+                transition: 'color 0.3s ease'
+              }}>
                 Sinai Hogar - Totebags Yolotl
               </h1>
             </div>
