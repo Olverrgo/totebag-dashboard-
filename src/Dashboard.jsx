@@ -839,7 +839,45 @@ const DashboardView = ({ productosActualizados }) => {
 // Vista Productos
 const ProductosView = () => {
   const [hoverAgregar, setHoverAgregar] = useState(false);
-  const [mostrarFormulario, setMostrarFormulario] = useState(false);
+  const [mostrarPopup, setMostrarPopup] = useState(false);
+  const [lineasProducto, setLineasProducto] = useState([
+    {
+      id: 'publicitaria-sencilla',
+      nombre: 'Publicitaria Sencilla',
+      medidas: '35 x 40',
+      modelos: []
+    },
+    {
+      id: 'publicitaria-bolsa-lateral',
+      nombre: 'Publicitaria Bolsa Lateral',
+      medidas: '35 x 40',
+      modelos: []
+    }
+  ]);
+  const [lineaSeleccionada, setLineaSeleccionada] = useState(null);
+  const [mostrarAgregarLinea, setMostrarAgregarLinea] = useState(false);
+  const [nuevaLinea, setNuevaLinea] = useState({ nombre: '', medidas: '' });
+  const [hoverItems, setHoverItems] = useState({});
+
+  const agregarLineaProducto = () => {
+    if (nuevaLinea.nombre.trim()) {
+      const id = nuevaLinea.nombre.toLowerCase().replace(/\s+/g, '-');
+      setLineasProducto([...lineasProducto, {
+        id,
+        nombre: nuevaLinea.nombre,
+        medidas: nuevaLinea.medidas,
+        modelos: []
+      }]);
+      setNuevaLinea({ nombre: '', medidas: '' });
+      setMostrarAgregarLinea(false);
+    }
+  };
+
+  const seleccionarLinea = (linea) => {
+    setLineaSeleccionada(linea);
+    setMostrarPopup(false);
+    // Aquí después agregaremos los campos del formulario
+  };
 
   return (
     <div>
@@ -849,7 +887,7 @@ const ProductosView = () => {
           Productos
         </h2>
         <button
-          onClick={() => setMostrarFormulario(true)}
+          onClick={() => setMostrarPopup(true)}
           onMouseEnter={() => setHoverAgregar(true)}
           onMouseLeave={() => setHoverAgregar(false)}
           style={{
@@ -869,20 +907,233 @@ const ProductosView = () => {
         </button>
       </div>
 
-      {/* Contenido */}
-      <div style={{
-        background: colors.cotton,
-        border: `1px solid ${colors.sand}`,
-        padding: '40px',
-        textAlign: 'center',
-        borderRadius: '8px'
-      }}>
-        <span style={{ fontSize: '48px' }}>🛍️</span>
-        <h3 style={{ margin: '20px 0 10px', color: colors.espresso }}>Sin productos registrados</h3>
-        <p style={{ color: colors.camel, fontSize: '14px' }}>
-          Haz clic en "+ Agregar" para crear tu primer producto
-        </p>
-      </div>
+      {/* Popup para seleccionar línea de producto */}
+      {mostrarPopup && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: colors.cotton,
+            borderRadius: '12px',
+            padding: '30px',
+            maxWidth: '500px',
+            width: '90%',
+            maxHeight: '80vh',
+            overflowY: 'auto',
+            boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
+          }}>
+            {/* Header del popup */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
+              <h3 style={{ margin: 0, color: colors.espresso, fontSize: '20px', fontWeight: '500' }}>
+                Seleccionar Línea de Producto
+              </h3>
+              <button
+                onClick={() => setMostrarPopup(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: colors.camel,
+                  padding: '5px'
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Lista de líneas de producto */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
+              {lineasProducto.map((linea) => (
+                <div
+                  key={linea.id}
+                  onClick={() => seleccionarLinea(linea)}
+                  onMouseEnter={() => setHoverItems({ ...hoverItems, [linea.id]: true })}
+                  onMouseLeave={() => setHoverItems({ ...hoverItems, [linea.id]: false })}
+                  style={{
+                    padding: '18px 20px',
+                    background: hoverItems[linea.id] ? colors.sidebarBg : colors.cream,
+                    color: hoverItems[linea.id] ? colors.sidebarText : colors.espresso,
+                    border: `2px solid ${hoverItems[linea.id] ? colors.sidebarBg : colors.sand}`,
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: '600', fontSize: '16px' }}>{linea.nombre}</div>
+                    <div style={{
+                      fontSize: '13px',
+                      marginTop: '4px',
+                      color: hoverItems[linea.id] ? 'rgba(171,213,94,0.8)' : colors.camel
+                    }}>
+                      {linea.medidas}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: '20px' }}>🛍️</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Sección para agregar nueva línea */}
+            {!mostrarAgregarLinea ? (
+              <button
+                onClick={() => setMostrarAgregarLinea(true)}
+                style={{
+                  width: '100%',
+                  padding: '15px',
+                  background: 'transparent',
+                  border: `2px dashed ${colors.camel}`,
+                  borderRadius: '8px',
+                  color: colors.camel,
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                + Agregar Nueva Línea de Producto
+              </button>
+            ) : (
+              <div style={{
+                padding: '20px',
+                background: colors.cream,
+                borderRadius: '8px',
+                border: `2px solid ${colors.sand}`
+              }}>
+                <input
+                  type="text"
+                  placeholder="Nombre de la línea"
+                  value={nuevaLinea.nombre}
+                  onChange={(e) => setNuevaLinea({ ...nuevaLinea, nombre: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: `1px solid ${colors.sand}`,
+                    borderRadius: '6px',
+                    marginBottom: '10px',
+                    fontSize: '14px',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                <input
+                  type="text"
+                  placeholder="Medidas (ej: 35 x 40)"
+                  value={nuevaLinea.medidas}
+                  onChange={(e) => setNuevaLinea({ ...nuevaLinea, medidas: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: `1px solid ${colors.sand}`,
+                    borderRadius: '6px',
+                    marginBottom: '15px',
+                    fontSize: '14px',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    onClick={agregarLineaProducto}
+                    style={{
+                      flex: 1,
+                      padding: '12px',
+                      background: colors.sidebarBg,
+                      color: colors.sidebarText,
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: '500'
+                    }}
+                  >
+                    Guardar
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMostrarAgregarLinea(false);
+                      setNuevaLinea({ nombre: '', medidas: '' });
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '12px',
+                      background: colors.sand,
+                      color: colors.espresso,
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: '500'
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Contenido - muestra línea seleccionada o mensaje vacío */}
+      {lineaSeleccionada ? (
+        <div style={{
+          background: colors.cotton,
+          border: `1px solid ${colors.sand}`,
+          padding: '30px',
+          borderRadius: '8px'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <div>
+              <h3 style={{ margin: 0, color: colors.espresso, fontSize: '18px' }}>
+                {lineaSeleccionada.nombre}
+              </h3>
+              <p style={{ margin: '5px 0 0', color: colors.camel, fontSize: '14px' }}>
+                {lineaSeleccionada.medidas}
+              </p>
+            </div>
+            <button
+              onClick={() => setLineaSeleccionada(null)}
+              style={{
+                padding: '8px 16px',
+                background: colors.sand,
+                color: colors.espresso,
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '13px'
+              }}
+            >
+              Cancelar
+            </button>
+          </div>
+          <p style={{ color: colors.camel, fontSize: '14px', textAlign: 'center', padding: '20px 0' }}>
+            Próximamente: campos del formulario para agregar modelo
+          </p>
+        </div>
+      ) : (
+        <div style={{
+          background: colors.cotton,
+          border: `1px solid ${colors.sand}`,
+          padding: '40px',
+          textAlign: 'center',
+          borderRadius: '8px'
+        }}>
+          <span style={{ fontSize: '48px' }}>🛍️</span>
+          <h3 style={{ margin: '20px 0 10px', color: colors.espresso }}>Sin productos registrados</h3>
+          <p style={{ color: colors.camel, fontSize: '14px' }}>
+            Haz clic en "+ Agregar" para crear tu primer producto
+          </p>
+        </div>
+      )}
     </div>
   );
 };
