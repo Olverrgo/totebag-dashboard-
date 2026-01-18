@@ -3,13 +3,6 @@ import { createClient } from '@supabase/supabase-js';
 // =====================================================
 // CONFIGURACIÓN DE SUPABASE - BLANCOS SINAI TOTEBAG
 // =====================================================
-//
-// INSTRUCCIONES:
-// 1. Ve a https://supabase.com y crea una cuenta
-// 2. Crea un nuevo proyecto llamado "blancos-sinai-totebag"
-// 3. Ve a Settings > API
-// 4. Copia la "Project URL" y "anon public key"
-// 5. Pégalas abajo:
 
 const supabaseUrl = 'https://xaacdoacjzjjvldgovxs.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhhYWNkb2FjanpqanZsZGdvdnhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzNDcxNjQsImV4cCI6MjA4MzkyMzE2NH0.BoLWKoMk3cLjttEJAGwSQNxlyDgUs6xZya1SDIOgLvc';
@@ -33,46 +26,28 @@ export const supabase = isConfigured
 export const isSupabaseConfigured = isConfigured;
 
 // =====================================================
-// FUNCIONES DE AYUDA PARA LA BASE DE DATOS
+// FUNCIONES PARA LÍNEAS DE PRODUCTO
 // =====================================================
 
-// Obtener todos los modelos
-export const getModelos = async () => {
+// Obtener todas las líneas de producto
+export const getLineasProducto = async () => {
   if (!supabase) return { data: null, error: 'Supabase no configurado' };
 
   const { data, error } = await supabase
-    .from('modelos')
-    .select(`
-      *,
-      modelo_imagenes (*),
-      modelo_pdfs (*),
-      modelo_comentarios (*),
-      modelo_stock (*)
-    `)
-    .order('created_at', { ascending: false });
+    .from('lineas_producto')
+    .select('*')
+    .eq('activo', true)
+    .order('orden', { ascending: true });
 
   return { data, error };
 };
 
-// Crear modelo
-export const createModelo = async (modelo) => {
+// Actualizar una línea de producto
+export const updateLineaProducto = async (id, updates) => {
   if (!supabase) return { data: null, error: 'Supabase no configurado' };
 
   const { data, error } = await supabase
-    .from('modelos')
-    .insert([modelo])
-    .select()
-    .single();
-
-  return { data, error };
-};
-
-// Actualizar modelo
-export const updateModelo = async (id, updates) => {
-  if (!supabase) return { data: null, error: 'Supabase no configurado' };
-
-  const { data, error } = await supabase
-    .from('modelos')
+    .from('lineas_producto')
     .update(updates)
     .eq('id', id)
     .select()
@@ -81,178 +56,421 @@ export const updateModelo = async (id, updates) => {
   return { data, error };
 };
 
-// Eliminar modelo
-export const deleteModelo = async (id) => {
+// =====================================================
+// FUNCIONES PARA PROYECCIONES
+// =====================================================
+
+// Obtener todas las proyecciones
+export const getProyecciones = async () => {
   if (!supabase) return { data: null, error: 'Supabase no configurado' };
 
+  const { data, error } = await supabase
+    .from('proyecciones')
+    .select('*')
+    .order('mes_numero', { ascending: true });
+
+  return { data, error };
+};
+
+// Actualizar una proyección
+export const updateProyeccion = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('proyecciones')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data, error };
+};
+
+// =====================================================
+// FUNCIONES PARA CANALES E-COMMERCE
+// =====================================================
+
+// Obtener todos los canales e-commerce
+export const getCanalesEcommerce = async () => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('canales_ecommerce')
+    .select('*')
+    .eq('activo', true)
+    .order('orden', { ascending: true });
+
+  return { data, error };
+};
+
+// Actualizar un canal e-commerce
+export const updateCanalEcommerce = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('canales_ecommerce')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data, error };
+};
+
+// Crear un nuevo canal e-commerce
+export const createCanalEcommerce = async (canal) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('canales_ecommerce')
+    .insert([canal])
+    .select()
+    .single();
+
+  return { data, error };
+};
+
+// Eliminar un canal e-commerce
+export const deleteCanalEcommerce = async (id) => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+
   const { error } = await supabase
-    .from('modelos')
+    .from('canales_ecommerce')
     .delete()
     .eq('id', id);
 
   return { error };
 };
 
-// Subir imagen
-export const uploadImagen = async (modeloId, file) => {
+// =====================================================
+// FUNCIONES PARA COSTOS DE ENVÍO
+// =====================================================
+
+// Obtener todos los costos de envío
+export const getCostosEnvio = async () => {
   if (!supabase) return { data: null, error: 'Supabase no configurado' };
 
-  const fileExt = file.name.split('.').pop();
-  const fileName = `${modeloId}/${Date.now()}.${fileExt}`;
-
-  // Subir archivo al storage
-  const { data: uploadData, error: uploadError } = await supabase.storage
-    .from('modelo-imagenes')
-    .upload(fileName, file);
-
-  if (uploadError) return { data: null, error: uploadError };
-
-  // Obtener URL pública
-  const { data: { publicUrl } } = supabase.storage
-    .from('modelo-imagenes')
-    .getPublicUrl(fileName);
-
-  // Guardar referencia en la tabla
   const { data, error } = await supabase
-    .from('modelo_imagenes')
-    .insert([{
-      modelo_id: modeloId,
-      url: publicUrl,
-      nombre: file.name
-    }])
+    .from('costos_envio')
+    .select('*')
+    .eq('activo', true)
+    .order('orden', { ascending: true });
+
+  return { data, error };
+};
+
+// Actualizar un costo de envío
+export const updateCostoEnvio = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('costos_envio')
+    .update(updates)
+    .eq('id', id)
     .select()
     .single();
 
   return { data, error };
 };
 
-// Subir PDF
-export const uploadPDF = async (modeloId, file) => {
+// Crear un nuevo costo de envío
+export const createCostoEnvio = async (costo) => {
   if (!supabase) return { data: null, error: 'Supabase no configurado' };
 
-  const fileName = `${modeloId}/${Date.now()}_${file.name}`;
-
-  // Subir archivo al storage
-  const { data: uploadData, error: uploadError } = await supabase.storage
-    .from('modelo-pdfs')
-    .upload(fileName, file);
-
-  if (uploadError) return { data: null, error: uploadError };
-
-  // Obtener URL pública
-  const { data: { publicUrl } } = supabase.storage
-    .from('modelo-pdfs')
-    .getPublicUrl(fileName);
-
-  // Guardar referencia en la tabla
   const { data, error } = await supabase
-    .from('modelo_pdfs')
-    .insert([{
-      modelo_id: modeloId,
-      url: publicUrl,
-      nombre: file.name
-    }])
+    .from('costos_envio')
+    .insert([costo])
     .select()
     .single();
 
   return { data, error };
 };
 
-// Agregar comentario
-export const addComentario = async (modeloId, texto) => {
-  if (!supabase) return { data: null, error: 'Supabase no configurado' };
-
-  const { data, error } = await supabase
-    .from('modelo_comentarios')
-    .insert([{
-      modelo_id: modeloId,
-      texto,
-      fecha: new Date().toISOString()
-    }])
-    .select()
-    .single();
-
-  return { data, error };
-};
-
-// Actualizar stock
-export const updateStock = async (modeloId, cantidad, tipo, nota) => {
-  if (!supabase) return { data: null, error: 'Supabase no configurado' };
-
-  // Registrar movimiento de stock
-  const { data, error } = await supabase
-    .from('modelo_stock')
-    .insert([{
-      modelo_id: modeloId,
-      cantidad,
-      tipo, // 'entrada' o 'salida'
-      nota,
-      fecha: new Date().toISOString()
-    }])
-    .select()
-    .single();
-
-  return { data, error };
-};
-
-// Obtener stock actual de un modelo
-export const getStockActual = async (modeloId) => {
-  if (!supabase) return { data: 0, error: 'Supabase no configurado' };
-
-  const { data, error } = await supabase
-    .from('modelo_stock')
-    .select('cantidad, tipo')
-    .eq('modelo_id', modeloId);
-
-  if (error) return { data: 0, error };
-
-  const total = data.reduce((acc, mov) => {
-    return mov.tipo === 'entrada' ? acc + mov.cantidad : acc - mov.cantidad;
-  }, 0);
-
-  return { data: total, error: null };
-};
-
-// Eliminar imagen
-export const deleteImagen = async (imagenId, url) => {
+// Eliminar un costo de envío
+export const deleteCostoEnvio = async (id) => {
   if (!supabase) return { error: 'Supabase no configurado' };
 
-  // Extraer path del storage
-  const path = url.split('/modelo-imagenes/')[1];
-
-  // Eliminar del storage
-  if (path) {
-    await supabase.storage.from('modelo-imagenes').remove([path]);
-  }
-
-  // Eliminar de la tabla
   const { error } = await supabase
-    .from('modelo_imagenes')
+    .from('costos_envio')
     .delete()
-    .eq('id', imagenId);
+    .eq('id', id);
 
   return { error };
 };
 
-// Eliminar PDF
-export const deletePDF = async (pdfId, url) => {
-  if (!supabase) return { error: 'Supabase no configurado' };
+// =====================================================
+// FUNCIONES PARA PERSONALIZACIÓN
+// =====================================================
 
-  // Extraer path del storage
-  const path = url.split('/modelo-pdfs/')[1];
+// Obtener todas las opciones de personalización
+export const getPersonalizacion = async () => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
 
-  // Eliminar del storage
-  if (path) {
-    await supabase.storage.from('modelo-pdfs').remove([path]);
+  const { data, error } = await supabase
+    .from('personalizacion')
+    .select('*')
+    .eq('activo', true)
+    .order('orden', { ascending: true });
+
+  return { data, error };
+};
+
+// Actualizar una opción de personalización
+export const updatePersonalizacion = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('personalizacion')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data, error };
+};
+
+// =====================================================
+// FUNCIONES PARA TIPOS DE DISEÑO
+// =====================================================
+
+// Obtener todos los tipos de diseño
+export const getTiposDiseno = async () => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('tipos_diseno')
+    .select('*')
+    .eq('activo', true)
+    .order('orden', { ascending: true });
+
+  return { data, error };
+};
+
+// Actualizar un tipo de diseño
+export const updateTipoDiseno = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('tipos_diseno')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data, error };
+};
+
+// =====================================================
+// FUNCIONES PARA COLECCIONES
+// =====================================================
+
+// Obtener todas las colecciones
+export const getColecciones = async () => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('colecciones')
+    .select('*')
+    .eq('activo', true)
+    .order('orden', { ascending: true });
+
+  return { data, error };
+};
+
+// Actualizar una colección
+export const updateColeccion = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('colecciones')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data, error };
+};
+
+// =====================================================
+// FUNCIONES PARA CONFIGURACIÓN
+// =====================================================
+
+// Obtener toda la configuración
+export const getConfiguracion = async () => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('configuracion')
+    .select('*');
+
+  // Convertir array a objeto con claves
+  if (data) {
+    const config = {};
+    data.forEach(item => {
+      config[item.clave] = item.valor;
+    });
+    return { data: config, error: null };
   }
 
-  // Eliminar de la tabla
-  const { error } = await supabase
-    .from('modelo_pdfs')
-    .delete()
-    .eq('id', pdfId);
+  return { data: null, error };
+};
 
-  return { error };
+// Actualizar una configuración
+export const updateConfiguracion = async (clave, valor) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('configuracion')
+    .upsert({ clave, valor, updated_at: new Date().toISOString() })
+    .select()
+    .single();
+
+  return { data, error };
+};
+
+// =====================================================
+// FUNCIONES DE CARGA MASIVA (para Dashboard)
+// =====================================================
+
+// Cargar todos los datos necesarios para el Dashboard
+export const cargarDatosDashboard = async () => {
+  if (!supabase) {
+    return {
+      data: null,
+      error: 'Supabase no configurado',
+      usarDatosLocales: true
+    };
+  }
+
+  try {
+    const [
+      lineasRes,
+      proyeccionesRes,
+      canalesRes,
+      costosRes,
+      personalizacionRes,
+      tiposRes,
+      coleccionesRes,
+      configRes
+    ] = await Promise.all([
+      getLineasProducto(),
+      getProyecciones(),
+      getCanalesEcommerce(),
+      getCostosEnvio(),
+      getPersonalizacion(),
+      getTiposDiseno(),
+      getColecciones(),
+      getConfiguracion()
+    ]);
+
+    // Verificar si hay errores
+    const errores = [
+      lineasRes.error,
+      proyeccionesRes.error,
+      canalesRes.error,
+      costosRes.error,
+      personalizacionRes.error,
+      tiposRes.error,
+      coleccionesRes.error,
+      configRes.error
+    ].filter(Boolean);
+
+    if (errores.length > 0) {
+      console.warn('Algunos datos no pudieron cargarse:', errores);
+    }
+
+    // Transformar líneas de producto a formato esperado por Dashboard
+    const productosFormateados = {};
+    if (lineasRes.data) {
+      lineasRes.data.forEach(linea => {
+        productosFormateados[linea.id] = {
+          nombre: linea.nombre,
+          icon: linea.icon,
+          descripcion: linea.descripcion,
+          material: linea.material,
+          especificaciones: linea.especificaciones,
+          costos: linea.costos,
+          costoTotal: parseFloat(linea.costo_total),
+          precioPublico: parseFloat(linea.precio_publico),
+          precioMayoreo: parseFloat(linea.precio_mayoreo),
+          utilidadPublica: parseFloat(linea.utilidad_publica || 0),
+          utilidadMayoreo: parseFloat(linea.utilidad_mayoreo || 0),
+          margenPublico: parseFloat(linea.margen_publico || 0),
+          margenMayoreo: parseFloat(linea.margen_mayoreo || 0),
+          color: linea.color,
+          colorLight: linea.color_light,
+          target: linea.target,
+          ventajaEspecial: linea.ventaja_especial,
+          escenarios: linea.escenarios,
+          volumenes: linea.volumenes,
+          casos: linea.casos,
+          promociones: linea.promociones,
+          personalizacion: linea.personalizacion
+        };
+      });
+    }
+
+    // Transformar proyecciones al formato esperado
+    const proyeccionesFormateadas = proyeccionesRes.data?.map(p => ({
+      mes: p.mes,
+      ventas: p.ventas,
+      publicitaria: p.publicitaria,
+      eco: p.eco,
+      ecoForro: p.eco_forro,
+      basica: p.basica,
+      estandar: p.estandar,
+      premium: p.premium,
+      ecomm: p.ecomm,
+      directa: p.directa,
+      mayoreo: p.mayoreo,
+      modelos: p.modelos,
+      utilidad: parseFloat(p.utilidad),
+      acumulado: parseFloat(p.acumulado)
+    })) || [];
+
+    // Transformar costos de envío al formato esperado
+    const costosEnvioFormateados = {
+      local: [],
+      nacional: []
+    };
+    if (costosRes.data) {
+      costosRes.data.forEach(costo => {
+        const item = {
+          servicio: costo.servicio,
+          tarifa: parseFloat(costo.tarifa),
+          tiempo: costo.tiempo,
+          nota: costo.nota
+        };
+        if (costo.tipo === 'local') {
+          costosEnvioFormateados.local.push(item);
+        } else {
+          costosEnvioFormateados.nacional.push(item);
+        }
+      });
+    }
+
+    return {
+      data: {
+        productos: productosFormateados,
+        proyecciones: proyeccionesFormateadas,
+        canalesEcommerce: canalesRes.data || [],
+        costosEnvio: costosEnvioFormateados,
+        personalizacion: personalizacionRes.data || [],
+        tiposDiseno: tiposRes.data || [],
+        colecciones: coleccionesRes.data || [],
+        configuracion: configRes.data || {}
+      },
+      error: null,
+      usarDatosLocales: !lineasRes.data || lineasRes.data.length === 0
+    };
+  } catch (error) {
+    console.error('Error cargando datos del dashboard:', error);
+    return {
+      data: null,
+      error: error.message,
+      usarDatosLocales: true
+    };
+  }
 };
 
 // =====================================================

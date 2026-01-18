@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import "./Dashboard.css";
 import { useAuth } from './AuthContext';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart } from 'recharts';
-import ModelosManager from './ModelosManager';
+import { isSupabaseConfigured, cargarDatosDashboard, updateLineaProducto } from './supabaseClient';
 
 // ==================== DATOS ====================
 
@@ -575,7 +575,6 @@ const Sidebar = ({ seccionActiva, setSeccionActiva, menuAbierto, setMenuAbierto,
   const secciones = [
     { id: 'dashboard', nombre: 'Dashboard', icon: '📊' },
     { id: 'productos', nombre: 'Productos', icon: '🛍️' },
-    { id: 'modelos', nombre: 'Modelos', icon: '🎨' },
     { id: 'mayoreo', nombre: 'Mayoreo', icon: '📦' },
     { id: 'ecommerce', nombre: 'E-commerce', icon: '🛒' },
     { id: 'promociones', nombre: 'Promociones', icon: '🎉' },
@@ -2336,439 +2335,22 @@ const CostosView = ({ productosActualizados, condicionesEco, condicionesEcoForro
   );
 };
 
-// Vista Modelos y Diseños
-// Modelos iniciales por línea
-const modelosIniciales = {
-  publicitaria: [
-    { id: 1, nombre: 'Corporativo Simple', tipo: 'Serigrafía 1 tinta', estado: 'activo', descripcion: 'Logo empresa centrado' },
-    { id: 2, nombre: 'Evento Masivo', tipo: 'Serigrafía 2 tintas', estado: 'desarrollo', descripcion: 'Diseño para ferias y expos' },
-  ],
-  eco: [
-    { id: 1, nombre: 'Botanical Garden', tipo: 'Estampado floral', estado: 'activo', descripcion: 'Hojas y flores tropicales' },
-    { id: 2, nombre: 'Geometric Minimal', tipo: 'Geométrico', estado: 'activo', descripcion: 'Líneas y formas simples' },
-    { id: 3, nombre: 'Ocean Waves', tipo: 'Abstracto', estado: 'desarrollo', descripcion: 'Ondas en tonos azules' },
-  ],
-  ecoForro: [
-    { id: 1, nombre: 'Azteca Modern', tipo: 'Étnico', estado: 'activo', descripcion: 'Patrones aztecas contemporáneos' },
-    { id: 2, nombre: 'Sunset Vibes', tipo: 'Degradado', estado: 'activo', descripcion: 'Colores cálidos del atardecer' },
-  ],
-  basica: [
-    { id: 1, nombre: 'Classic Stripes', tipo: 'Rayas', estado: 'activo', descripcion: 'Rayas clásicas marineras' },
-    { id: 2, nombre: 'Polka Dots', tipo: 'Lunares', estado: 'activo', descripcion: 'Lunares vintage' },
-    { id: 3, nombre: 'Chevron', tipo: 'Geométrico', estado: 'desarrollo', descripcion: 'Patrón zigzag moderno' },
-  ],
-  estandar: [
-    { id: 1, nombre: 'Bohemian Dream', tipo: 'Boho', estado: 'activo', descripcion: 'Estilo bohemio con mandalas' },
-    { id: 2, nombre: 'Urban Art', tipo: 'Street art', estado: 'activo', descripcion: 'Graffiti y arte urbano' },
-    { id: 3, nombre: 'Nature Walk', tipo: 'Naturaleza', estado: 'activo', descripcion: 'Bosques y montañas' },
-    { id: 4, nombre: 'Retro 80s', tipo: 'Retro', estado: 'desarrollo', descripcion: 'Colores neón y formas 80s' },
-  ],
-  premium: [
-    { id: 1, nombre: 'Artisan Craft', tipo: 'Artesanal', estado: 'activo', descripcion: 'Bordado tradicional mexicano' },
-    { id: 2, nombre: 'Luxury Marble', tipo: 'Mármol', estado: 'activo', descripcion: 'Textura mármol elegante' },
-    { id: 3, nombre: 'Gold Foliage', tipo: 'Botánico premium', estado: 'activo', descripcion: 'Hojas con detalles dorados' },
-    { id: 4, nombre: 'Abstract Elegance', tipo: 'Arte abstracto', estado: 'desarrollo', descripcion: 'Pinceladas artísticas' },
-    { id: 5, nombre: 'Talavera Classic', tipo: 'Talavera', estado: 'desarrollo', descripcion: 'Azulejo poblano tradicional' },
-  ]
-};
+// ModelosView ha sido removido - la funcionalidad de modelos se eliminó completamente
+// Los datos del dashboard ahora se cargan desde la base de datos Supabase
+// ModelosView y modelosIniciales han sido eliminados completamente
 
-const ModelosView = ({ modelosPorLinea, setModelosPorLinea }) => {
-  const [lineaActiva, setLineaActiva] = useState('estandar');
-  const [mostrarFormulario, setMostrarFormulario] = useState(false);
-  const [nuevoModelo, setNuevoModelo] = useState({ nombre: '', tipo: '', descripcion: '' });
+// Placeholder para mantener compatibilidad (se puede eliminar en futuras versiones)
+const _placeholderModelosRemoved = () => null;
 
-  const modelos = modelosPorLinea || modelosIniciales;
+// ============================================================================
+// La sección de "Modelos" ha sido eliminada del dashboard.
+// Los datos ahora se gestionan desde la base de datos Supabase.
+// ============================================================================
 
-  const totalModelos = Object.values(modelos).reduce((sum, arr) => sum + arr.length, 0);
-  const modelosActivos = Object.values(modelos).reduce((sum, arr) => sum + arr.filter(m => m.estado === 'activo').length, 0);
-  const modelosDesarrollo = Object.values(modelos).reduce((sum, arr) => sum + arr.filter(m => m.estado === 'desarrollo').length, 0);
-
-  const agregarModelo = () => {
-    if (!nuevoModelo.nombre || !nuevoModelo.tipo) return;
-
-    const nuevoId = Math.max(...(modelos[lineaActiva]?.map(m => m.id) || [0])) + 1;
-    const modeloNuevo = {
-      id: nuevoId,
-      nombre: nuevoModelo.nombre,
-      tipo: nuevoModelo.tipo,
-      descripcion: nuevoModelo.descripcion || 'Sin descripción',
-      estado: 'desarrollo'
-    };
-
-    if (setModelosPorLinea) {
-      setModelosPorLinea(prev => ({
-        ...prev,
-        [lineaActiva]: [...(prev[lineaActiva] || []), modeloNuevo]
-      }));
-    }
-
-    setNuevoModelo({ nombre: '', tipo: '', descripcion: '' });
-    setMostrarFormulario(false);
-  };
-
-  const eliminarModelo = (lineaKey, modeloId) => {
-    if (setModelosPorLinea) {
-      setModelosPorLinea(prev => ({
-        ...prev,
-        [lineaKey]: prev[lineaKey].filter(m => m.id !== modeloId)
-      }));
-    }
-  };
-
-  const cambiarEstado = (lineaKey, modeloId) => {
-    if (setModelosPorLinea) {
-      setModelosPorLinea(prev => ({
-        ...prev,
-        [lineaKey]: prev[lineaKey].map(m =>
-          m.id === modeloId
-            ? { ...m, estado: m.estado === 'activo' ? 'desarrollo' : 'activo' }
-            : m
-        )
-      }));
-    }
-  };
-
-  return (
-    <div>
-      <h2 style={{ margin: '0 0 25px', fontSize: '24px', fontWeight: '300', letterSpacing: '2px', color: colors.espresso }}>
-        Gestión de Modelos por Línea
-      </h2>
-
-      {/* KPIs de modelos */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '15px', marginBottom: '30px' }}>
-        {[
-          { label: 'Total Modelos', value: totalModelos, sub: 'en catálogo', color: colors.gold, icon: '📦' },
-          { label: 'Modelos Activos', value: modelosActivos, sub: 'disponibles', color: colors.olive, icon: '✅' },
-          { label: 'En Desarrollo', value: modelosDesarrollo, sub: 'próximamente', color: colors.terracotta, icon: '🔧' },
-          { label: 'Líneas', value: 6, sub: 'de productos', color: colors.sage, icon: '🏷️' },
-        ].map((kpi, i) => (
-          <div key={i} style={{
-            background: colors.cotton,
-            border: `1px solid ${colors.sand}`,
-            padding: '20px',
-            textAlign: 'center'
-          }}>
-            <span style={{ fontSize: '28px' }}>{kpi.icon}</span>
-            <div style={{ fontSize: '32px', fontWeight: '600', color: kpi.color, marginTop: '5px' }}>{kpi.value}</div>
-            <div style={{ fontSize: '11px', color: colors.espresso, marginTop: '5px' }}>{kpi.label}</div>
-            <div style={{ fontSize: '10px', color: colors.camel }}>{kpi.sub}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Selector de líneas */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px', marginBottom: '25px' }}>
-        {Object.entries(productos).map(([key, p]) => (
-          <div
-            key={key}
-            onClick={() => setLineaActiva(key)}
-            style={{
-              background: lineaActiva === key ? p.colorLight : colors.cotton,
-              border: `2px solid ${lineaActiva === key ? p.color : colors.sand}`,
-              padding: '15px',
-              textAlign: 'center',
-              cursor: 'pointer',
-              transition: 'all 0.3s',
-              borderRadius: '8px'
-            }}
-          >
-            <span style={{ fontSize: '28px' }}>{p.icon}</span>
-            <div style={{ fontSize: '12px', fontWeight: '600', color: p.color, marginTop: '5px' }}>{p.nombre}</div>
-            <div style={{
-              fontSize: '18px',
-              fontWeight: '700',
-              color: colors.espresso,
-              marginTop: '5px'
-            }}>
-              {modelos[key]?.length || 0}
-            </div>
-            <div style={{ fontSize: '9px', color: colors.camel }}>modelos</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Panel de modelos de la línea seleccionada */}
-      <div style={{
-        background: colors.cotton,
-        border: `2px solid ${productos[lineaActiva]?.color || colors.sand}`,
-        padding: '25px',
-        borderRadius: '8px',
-        marginBottom: '25px'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <span style={{ fontSize: '48px' }}>{productos[lineaActiva]?.icon}</span>
-            <div>
-              <h3 style={{ margin: 0, fontSize: '22px', color: productos[lineaActiva]?.color }}>
-                Modelos — Línea {productos[lineaActiva]?.nombre}
-              </h3>
-              <p style={{ margin: '5px 0 0', color: colors.camel, fontSize: '13px' }}>
-                {productos[lineaActiva]?.descripcion}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => setMostrarFormulario(!mostrarFormulario)}
-            style={{
-              padding: '12px 25px',
-              background: productos[lineaActiva]?.color || colors.olive,
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '13px',
-              fontWeight: '600',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
-          >
-            {mostrarFormulario ? '✕ Cancelar' : '+ Agregar Modelo'}
-          </button>
-        </div>
-
-        {/* Formulario para agregar modelo */}
-        {mostrarFormulario && (
-          <div style={{
-            background: `${productos[lineaActiva]?.color}15`,
-            padding: '20px',
-            borderRadius: '8px',
-            marginBottom: '20px',
-            border: `1px dashed ${productos[lineaActiva]?.color}`
-          }}>
-            <div style={{ fontSize: '14px', fontWeight: '600', color: colors.espresso, marginBottom: '15px' }}>
-              ✨ Nuevo Modelo para {productos[lineaActiva]?.nombre}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: '15px', marginBottom: '15px' }}>
-              <div>
-                <label style={{ fontSize: '11px', color: colors.camel, display: 'block', marginBottom: '5px' }}>
-                  NOMBRE DEL MODELO *
-                </label>
-                <input
-                  type="text"
-                  value={nuevoModelo.nombre}
-                  onChange={(e) => setNuevoModelo(prev => ({ ...prev, nombre: e.target.value }))}
-                  placeholder="Ej: Tropical Paradise"
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    border: `1px solid ${colors.sand}`,
-                    borderRadius: '4px',
-                    fontSize: '13px'
-                  }}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: '11px', color: colors.camel, display: 'block', marginBottom: '5px' }}>
-                  TIPO DE DISEÑO *
-                </label>
-                <select
-                  value={nuevoModelo.tipo}
-                  onChange={(e) => setNuevoModelo(prev => ({ ...prev, tipo: e.target.value }))}
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    border: `1px solid ${colors.sand}`,
-                    borderRadius: '4px',
-                    fontSize: '13px',
-                    background: 'white'
-                  }}
-                >
-                  <option value="">Seleccionar tipo...</option>
-                  {tiposDiseno.map(t => (
-                    <option key={t.id} value={t.nombre}>{t.icon} {t.nombre}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: '11px', color: colors.camel, display: 'block', marginBottom: '5px' }}>
-                  DESCRIPCIÓN
-                </label>
-                <input
-                  type="text"
-                  value={nuevoModelo.descripcion}
-                  onChange={(e) => setNuevoModelo(prev => ({ ...prev, descripcion: e.target.value }))}
-                  placeholder="Breve descripción del diseño..."
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    border: `1px solid ${colors.sand}`,
-                    borderRadius: '4px',
-                    fontSize: '13px'
-                  }}
-                />
-              </div>
-            </div>
-            <button
-              onClick={agregarModelo}
-              disabled={!nuevoModelo.nombre || !nuevoModelo.tipo}
-              style={{
-                padding: '10px 30px',
-                background: nuevoModelo.nombre && nuevoModelo.tipo ? colors.olive : colors.sand,
-                color: nuevoModelo.nombre && nuevoModelo.tipo ? 'white' : colors.camel,
-                border: 'none',
-                borderRadius: '4px',
-                cursor: nuevoModelo.nombre && nuevoModelo.tipo ? 'pointer' : 'not-allowed',
-                fontSize: '13px',
-                fontWeight: '600'
-              }}
-            >
-              ✓ Guardar Modelo
-            </button>
-          </div>
-        )}
-
-        {/* Lista de modelos */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px' }}>
-          {(modelos[lineaActiva] || []).map((modelo, idx) => (
-            <div
-              key={modelo.id}
-              style={{
-                background: modelo.estado === 'activo' ? colors.cream : `${colors.terracotta}10`,
-                border: `1px solid ${modelo.estado === 'activo' ? colors.olive : colors.terracotta}`,
-                padding: '15px',
-                borderRadius: '8px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}
-            >
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px' }}>
-                  <span style={{
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    color: 'white',
-                    background: modelo.estado === 'activo' ? colors.olive : colors.terracotta,
-                    padding: '3px 8px',
-                    borderRadius: '10px'
-                  }}>
-                    {modelo.estado === 'activo' ? '✓ Activo' : '⚙ Desarrollo'}
-                  </span>
-                  <span style={{ fontSize: '11px', color: colors.camel }}>{modelo.tipo}</span>
-                </div>
-                <div style={{ fontSize: '16px', fontWeight: '600', color: colors.espresso }}>{modelo.nombre}</div>
-                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '3px' }}>{modelo.descripcion}</div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  onClick={() => cambiarEstado(lineaActiva, modelo.id)}
-                  style={{
-                    padding: '8px 12px',
-                    background: colors.cotton,
-                    border: `1px solid ${colors.sand}`,
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '11px'
-                  }}
-                  title={modelo.estado === 'activo' ? 'Pasar a desarrollo' : 'Activar modelo'}
-                >
-                  {modelo.estado === 'activo' ? '⏸️' : '▶️'}
-                </button>
-                <button
-                  onClick={() => eliminarModelo(lineaActiva, modelo.id)}
-                  style={{
-                    padding: '8px 12px',
-                    background: '#FDEDEC',
-                    border: `1px solid #E74C3C`,
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '11px',
-                    color: '#E74C3C'
-                  }}
-                  title="Eliminar modelo"
-                >
-                  🗑️
-                </button>
-              </div>
-            </div>
-          ))}
-
-          {(!modelos[lineaActiva] || modelos[lineaActiva].length === 0) && (
-            <div style={{
-              gridColumn: '1 / -1',
-              textAlign: 'center',
-              padding: '40px',
-              color: colors.camel,
-              background: colors.cream,
-              borderRadius: '8px'
-            }}>
-              <span style={{ fontSize: '48px' }}>📭</span>
-              <div style={{ marginTop: '15px', fontSize: '14px' }}>
-                No hay modelos en esta línea todavía
-              </div>
-              <div style={{ fontSize: '12px', marginTop: '5px' }}>
-                Haz clic en "Agregar Modelo" para crear el primero
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Resumen por línea */}
-      <div style={{ background: colors.cotton, padding: '20px', border: `1px solid ${colors.sand}`, borderRadius: '8px' }}>
-        <h3 style={{ margin: '0 0 15px', fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>
-          📊 RESUMEN DE MODELOS POR LÍNEA
-        </h3>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-          <thead>
-            <tr style={{ background: colors.cream }}>
-              {['Línea', 'Total', 'Activos', 'Desarrollo', 'Próximo'].map(h => (
-                <th key={h} style={{ padding: '12px', textAlign: 'center', borderBottom: `2px solid ${colors.camel}`, fontSize: '11px' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {Object.entries(productos).map(([key, prod], i) => {
-              const lineaModelos = modelos[key] || [];
-              const activos = lineaModelos.filter(m => m.estado === 'activo').length;
-              const desarrollo = lineaModelos.filter(m => m.estado === 'desarrollo').length;
-              return (
-                <tr key={key} style={{ background: i % 2 === 0 ? colors.cotton : colors.cream }}>
-                  <td style={{ padding: '12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ fontSize: '20px' }}>{prod.icon}</span>
-                      <span style={{ fontWeight: '600', color: prod.color }}>{prod.nombre}</span>
-                    </div>
-                  </td>
-                  <td style={{ padding: '12px', textAlign: 'center', fontWeight: '700', fontSize: '16px', color: colors.espresso }}>
-                    {lineaModelos.length}
-                  </td>
-                  <td style={{ padding: '12px', textAlign: 'center' }}>
-                    <span style={{
-                      padding: '4px 12px',
-                      background: `${colors.olive}20`,
-                      color: colors.olive,
-                      borderRadius: '10px',
-                      fontWeight: '600'
-                    }}>
-                      {activos}
-                    </span>
-                  </td>
-                  <td style={{ padding: '12px', textAlign: 'center' }}>
-                    <span style={{
-                      padding: '4px 12px',
-                      background: `${colors.terracotta}20`,
-                      color: colors.terracotta,
-                      borderRadius: '10px',
-                      fontWeight: '600'
-                    }}>
-                      {desarrollo}
-                    </span>
-                  </td>
-                  <td style={{ padding: '12px', textAlign: 'center', fontSize: '11px', color: colors.camel }}>
-                    {desarrollo > 0 ? `${desarrollo} por lanzar` : '-'}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-};
+// Mantenemos solo el comentario para referencia histórica:
+// - modelosIniciales: Objeto con modelos por línea (publicitaria, eco, ecoForro, basica, estandar, premium)
+// - ModelosView: Componente que mostraba la gestión de modelos por línea
+// - ModelosManager: Componente importado para gestión avanzada de modelos (también eliminado)
 
 // ==================== CALCULADORA DE ENVÍO Y RENTABILIDAD ====================
 
@@ -3024,8 +2606,44 @@ export default function DashboardToteBag() {
     premium: { precioPublico: 250, precioMayoreo: 165 }
   });
 
-  // Estado global para modelos por línea
-  const [modelosPorLinea, setModelosPorLinea] = useState(modelosIniciales);
+  // Estado para datos cargados desde BD
+  const [datosDB, setDatosDB] = useState(null);
+  const [cargandoDatos, setCargandoDatos] = useState(true);
+
+  // Cargar datos desde Supabase al montar
+  useEffect(() => {
+    const cargarDatos = async () => {
+      if (!isSupabaseConfigured) {
+        setCargandoDatos(false);
+        return;
+      }
+
+      try {
+        const resultado = await cargarDatosDashboard();
+        if (resultado.data && !resultado.usarDatosLocales) {
+          setDatosDB(resultado.data);
+          // Actualizar precios globales desde BD si hay datos
+          if (resultado.data.productos && Object.keys(resultado.data.productos).length > 0) {
+            const nuevosPrecios = {};
+            Object.keys(resultado.data.productos).forEach(key => {
+              const prod = resultado.data.productos[key];
+              nuevosPrecios[key] = {
+                precioPublico: prod.precioPublico,
+                precioMayoreo: prod.precioMayoreo
+              };
+            });
+            setPreciosGlobales(prev => ({ ...prev, ...nuevosPrecios }));
+          }
+        }
+      } catch (error) {
+        console.error('Error cargando datos:', error);
+      } finally {
+        setCargandoDatos(false);
+      }
+    };
+
+    cargarDatos();
+  }, []);
 
   // Calcular condiciones de envío para TODAS las líneas
   const condicionesPublicitaria = calcularCondicionesEnvio(
@@ -3116,21 +2734,30 @@ export default function DashboardToteBag() {
   const proyeccionActualizada = calcularProyeccionDinamica();
 
   const renderSeccion = () => {
+    if (cargandoDatos) {
+      return (
+        <div style={{ textAlign: 'center', padding: '50px' }}>
+          <div style={{ fontSize: '24px', marginBottom: '10px' }}>🛍️</div>
+          <div style={{ color: colors.camel }}>Cargando datos...</div>
+        </div>
+      );
+    }
+
     switch (seccionActiva) {
-      case 'dashboard': return <DashboardView productosActualizados={productosActualizados} proyeccionActualizada={proyeccionActualizada} todasCondiciones={todasCondiciones} />;
+      case 'dashboard': return <DashboardView productosActualizados={productosActualizados} proyeccionActualizada={proyeccionActualizada} todasCondiciones={todasCondiciones} datosDB={datosDB} />;
       case 'productos': return (
         <ProductosView
           productosActualizados={productosActualizados}
           preciosGlobales={preciosGlobales}
           setPreciosGlobales={setPreciosGlobales}
           todasCondiciones={todasCondiciones}
+          datosDB={datosDB}
         />
       );
-      case 'modelos': return <ModelosManager modelosPorLinea={modelosPorLinea} setModelosPorLinea={setModelosPorLinea} isAdmin={isAdmin} />;
       case 'mayoreo': return <MayoreoView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} />;
-      case 'ecommerce': return <EcommerceView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} />;
+      case 'ecommerce': return <EcommerceView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} datosDB={datosDB} />;
       case 'promociones': return <PromocionesView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} />;
-      case 'costos': return <CostosView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} />;
+      case 'costos': return <CostosView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} datosDB={datosDB} />;
       default: return <DashboardView productosActualizados={productosActualizados} />;
     }
   };
