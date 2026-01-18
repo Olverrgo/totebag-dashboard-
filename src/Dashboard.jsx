@@ -11,6 +11,7 @@ import {
   getConfigEnvio,
   updateConfigEnvio,
   createProducto,
+  updateProducto,
   getProductos
 } from './supabaseClient';
 
