@@ -841,33 +841,62 @@ const ProductosView = () => {
   const [hoverAgregar, setHoverAgregar] = useState(false);
   const [mostrarPopup, setMostrarPopup] = useState(false);
   const [lineasProducto, setLineasProducto] = useState([
-    {
-      id: 'publicitaria-sencilla',
-      nombre: 'Publicitaria Sencilla',
-      medidas: '35 x 40',
-      modelos: []
-    },
-    {
-      id: 'publicitaria-bolsa-lateral',
-      nombre: 'Publicitaria Bolsa Lateral',
-      medidas: '35 x 40',
-      modelos: []
-    }
+    { id: 'publicitaria-sencilla', nombre: 'Publicitaria Sencilla', medidas: '35 x 40', modelos: [] },
+    { id: 'publicitaria-bolsa-lateral', nombre: 'Publicitaria Bolsa Lateral', medidas: '35 x 40', modelos: [] }
   ]);
   const [lineaSeleccionada, setLineaSeleccionada] = useState(null);
   const [mostrarAgregarLinea, setMostrarAgregarLinea] = useState(false);
   const [nuevaLinea, setNuevaLinea] = useState({ nombre: '', medidas: '' });
   const [hoverItems, setHoverItems] = useState({});
 
+  // Estado para anchos de tela disponibles (editables)
+  const [anchosTela, setAnchosTela] = useState([
+    { id: 1, nombre: 'Manta cruda (básica)', ancho: 1.80, precio: 25.00 },
+    { id: 2, nombre: 'Manta teñida (forro)', ancho: 1.60, precio: 42.00 },
+    { id: 3, nombre: 'Loneta estampada', ancho: 1.60, precio: 69.00 },
+    { id: 4, nombre: 'Loneta estampada (ancha)', ancho: 2.50, precio: 69.00 }
+  ]);
+  const [editandoAnchos, setEditandoAnchos] = useState(false);
+
+  // Estado del formulario de producto
+  const [formProducto, setFormProducto] = useState({
+    descripcion: '',
+    telaSeleccionada: null,
+    cantidadTela: 0,
+    piezasPorCorte: 1,
+    costoMaquila: 0,
+    insumos: 0,
+    merma: 5,
+    serigrafia1: 0,
+    serigrafia2: 0,
+    serigrafia3: 0,
+    empaqueLogistica: 0
+  });
+
+  // Cálculos automáticos
+  const calcularCostos = () => {
+    const tela = anchosTela.find(t => t.id === formProducto.telaSeleccionada);
+    const costoTela = tela ? (tela.precio * formProducto.cantidadTela) / formProducto.piezasPorCorte : 0;
+    const subtotal = costoTela + formProducto.costoMaquila + formProducto.insumos;
+    const conMerma = subtotal * (1 + formProducto.merma / 100);
+    const base = conMerma + formProducto.empaqueLogistica;
+
+    return {
+      costoTela: costoTela.toFixed(2),
+      subtotal: subtotal.toFixed(2),
+      conMerma: conMerma.toFixed(2),
+      total1Tinta: (base + formProducto.serigrafia1).toFixed(2),
+      total2Tintas: (base + formProducto.serigrafia2).toFixed(2),
+      total3Tintas: (base + formProducto.serigrafia3).toFixed(2)
+    };
+  };
+
+  const costos = calcularCostos();
+
   const agregarLineaProducto = () => {
     if (nuevaLinea.nombre.trim()) {
       const id = nuevaLinea.nombre.toLowerCase().replace(/\s+/g, '-');
-      setLineasProducto([...lineasProducto, {
-        id,
-        nombre: nuevaLinea.nombre,
-        medidas: nuevaLinea.medidas,
-        modelos: []
-      }]);
+      setLineasProducto([...lineasProducto, { id, nombre: nuevaLinea.nombre, medidas: nuevaLinea.medidas, modelos: [] }]);
       setNuevaLinea({ nombre: '', medidas: '' });
       setMostrarAgregarLinea(false);
     }
@@ -876,7 +905,45 @@ const ProductosView = () => {
   const seleccionarLinea = (linea) => {
     setLineaSeleccionada(linea);
     setMostrarPopup(false);
-    // Aquí después agregaremos los campos del formulario
+    setFormProducto({
+      descripcion: '',
+      telaSeleccionada: anchosTela[0]?.id || null,
+      cantidadTela: 0,
+      piezasPorCorte: 1,
+      costoMaquila: 0,
+      insumos: 0,
+      merma: 5,
+      serigrafia1: 0,
+      serigrafia2: 0,
+      serigrafia3: 0,
+      empaqueLogistica: 0
+    });
+  };
+
+  const inputStyle = {
+    width: '100%',
+    padding: '10px 12px',
+    border: `1px solid ${colors.sand}`,
+    borderRadius: '6px',
+    fontSize: '14px',
+    boxSizing: 'border-box',
+    background: colors.cream
+  };
+
+  const labelStyle = {
+    display: 'block',
+    marginBottom: '6px',
+    fontSize: '13px',
+    fontWeight: '500',
+    color: colors.espresso
+  };
+
+  const sectionStyle = {
+    background: colors.cream,
+    border: `1px solid ${colors.sand}`,
+    borderRadius: '8px',
+    padding: '20px',
+    marginBottom: '20px'
   };
 
   return (
@@ -910,53 +977,29 @@ const ProductosView = () => {
       {/* Popup para seleccionar línea de producto */}
       {mostrarPopup && (
         <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           background: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
           zIndex: 1000
         }}>
           <div style={{
-            background: colors.cotton,
-            borderRadius: '12px',
-            padding: '30px',
-            maxWidth: '500px',
-            width: '90%',
-            maxHeight: '80vh',
-            overflowY: 'auto',
+            background: colors.cotton, borderRadius: '12px', padding: '30px',
+            maxWidth: '500px', width: '90%', maxHeight: '80vh', overflowY: 'auto',
             boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
           }}>
-            {/* Header del popup */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
               <h3 style={{ margin: 0, color: colors.espresso, fontSize: '20px', fontWeight: '500' }}>
                 Seleccionar Línea de Producto
               </h3>
-              <button
-                onClick={() => setMostrarPopup(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '24px',
-                  cursor: 'pointer',
-                  color: colors.camel,
-                  padding: '5px'
-                }}
-              >
+              <button onClick={() => setMostrarPopup(false)}
+                style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: colors.camel, padding: '5px' }}>
                 ×
               </button>
             </div>
 
-            {/* Lista de líneas de producto */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
               {lineasProducto.map((linea) => (
-                <div
-                  key={linea.id}
-                  onClick={() => seleccionarLinea(linea)}
+                <div key={linea.id} onClick={() => seleccionarLinea(linea)}
                   onMouseEnter={() => setHoverItems({ ...hoverItems, [linea.id]: true })}
                   onMouseLeave={() => setHoverItems({ ...hoverItems, [linea.id]: false })}
                   style={{
@@ -964,21 +1007,12 @@ const ProductosView = () => {
                     background: hoverItems[linea.id] ? colors.sidebarBg : colors.cream,
                     color: hoverItems[linea.id] ? colors.sidebarText : colors.espresso,
                     border: `2px solid ${hoverItems[linea.id] ? colors.sidebarBg : colors.sand}`,
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}
-                >
+                    borderRadius: '8px', cursor: 'pointer', transition: 'all 0.3s ease',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                  }}>
                   <div>
                     <div style={{ fontWeight: '600', fontSize: '16px' }}>{linea.nombre}</div>
-                    <div style={{
-                      fontSize: '13px',
-                      marginTop: '4px',
-                      color: hoverItems[linea.id] ? 'rgba(171,213,94,0.8)' : colors.camel
-                    }}>
+                    <div style={{ fontSize: '13px', marginTop: '4px', color: hoverItems[linea.id] ? 'rgba(171,213,94,0.8)' : colors.camel }}>
                       {linea.medidas}
                     </div>
                   </div>
@@ -987,93 +1021,29 @@ const ProductosView = () => {
               ))}
             </div>
 
-            {/* Sección para agregar nueva línea */}
             {!mostrarAgregarLinea ? (
-              <button
-                onClick={() => setMostrarAgregarLinea(true)}
-                style={{
-                  width: '100%',
-                  padding: '15px',
-                  background: 'transparent',
-                  border: `2px dashed ${colors.camel}`,
-                  borderRadius: '8px',
-                  color: colors.camel,
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease'
-                }}
-              >
+              <button onClick={() => setMostrarAgregarLinea(true)}
+                style={{ width: '100%', padding: '15px', background: 'transparent', border: `2px dashed ${colors.camel}`,
+                  borderRadius: '8px', color: colors.camel, fontSize: '14px', cursor: 'pointer' }}>
                 + Agregar Nueva Línea de Producto
               </button>
             ) : (
-              <div style={{
-                padding: '20px',
-                background: colors.cream,
-                borderRadius: '8px',
-                border: `2px solid ${colors.sand}`
-              }}>
-                <input
-                  type="text"
-                  placeholder="Nombre de la línea"
-                  value={nuevaLinea.nombre}
+              <div style={{ padding: '20px', background: colors.cream, borderRadius: '8px', border: `2px solid ${colors.sand}` }}>
+                <input type="text" placeholder="Nombre de la línea" value={nuevaLinea.nombre}
                   onChange={(e) => setNuevaLinea({ ...nuevaLinea, nombre: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: `1px solid ${colors.sand}`,
-                    borderRadius: '6px',
-                    marginBottom: '10px',
-                    fontSize: '14px',
-                    boxSizing: 'border-box'
-                  }}
-                />
-                <input
-                  type="text"
-                  placeholder="Medidas (ej: 35 x 40)"
-                  value={nuevaLinea.medidas}
+                  style={{ ...inputStyle, marginBottom: '10px' }} />
+                <input type="text" placeholder="Medidas (ej: 35 x 40)" value={nuevaLinea.medidas}
                   onChange={(e) => setNuevaLinea({ ...nuevaLinea, medidas: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: `1px solid ${colors.sand}`,
-                    borderRadius: '6px',
-                    marginBottom: '15px',
-                    fontSize: '14px',
-                    boxSizing: 'border-box'
-                  }}
-                />
+                  style={{ ...inputStyle, marginBottom: '15px' }} />
                 <div style={{ display: 'flex', gap: '10px' }}>
-                  <button
-                    onClick={agregarLineaProducto}
-                    style={{
-                      flex: 1,
-                      padding: '12px',
-                      background: colors.sidebarBg,
-                      color: colors.sidebarText,
-                      border: 'none',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      fontWeight: '500'
-                    }}
-                  >
+                  <button onClick={agregarLineaProducto}
+                    style={{ flex: 1, padding: '12px', background: colors.sidebarBg, color: colors.sidebarText,
+                      border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}>
                     Guardar
                   </button>
-                  <button
-                    onClick={() => {
-                      setMostrarAgregarLinea(false);
-                      setNuevaLinea({ nombre: '', medidas: '' });
-                    }}
-                    style={{
-                      flex: 1,
-                      padding: '12px',
-                      background: colors.sand,
-                      color: colors.espresso,
-                      border: 'none',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      fontWeight: '500'
-                    }}
-                  >
+                  <button onClick={() => { setMostrarAgregarLinea(false); setNuevaLinea({ nombre: '', medidas: '' }); }}
+                    style={{ flex: 1, padding: '12px', background: colors.sand, color: colors.espresso,
+                      border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}>
                     Cancelar
                   </button>
                 </div>
@@ -1083,55 +1053,226 @@ const ProductosView = () => {
         </div>
       )}
 
-      {/* Contenido - muestra línea seleccionada o mensaje vacío */}
+      {/* Formulario de producto */}
       {lineaSeleccionada ? (
-        <div style={{
-          background: colors.cotton,
-          border: `1px solid ${colors.sand}`,
-          padding: '30px',
-          borderRadius: '8px'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div style={{ background: colors.cotton, border: `1px solid ${colors.sand}`, padding: '30px', borderRadius: '8px' }}>
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
             <div>
-              <h3 style={{ margin: 0, color: colors.espresso, fontSize: '18px' }}>
-                {lineaSeleccionada.nombre}
-              </h3>
-              <p style={{ margin: '5px 0 0', color: colors.camel, fontSize: '14px' }}>
-                {lineaSeleccionada.medidas}
-              </p>
+              <h3 style={{ margin: 0, color: colors.espresso, fontSize: '20px' }}>{lineaSeleccionada.nombre}</h3>
+              <p style={{ margin: '5px 0 0', color: colors.camel, fontSize: '14px' }}>{lineaSeleccionada.medidas}</p>
             </div>
-            <button
-              onClick={() => setLineaSeleccionada(null)}
-              style={{
-                padding: '8px 16px',
-                background: colors.sand,
-                color: colors.espresso,
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '13px'
-              }}
-            >
+            <button onClick={() => setLineaSeleccionada(null)}
+              style={{ padding: '8px 16px', background: colors.sand, color: colors.espresso,
+                border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}>
               Cancelar
             </button>
           </div>
-          <p style={{ color: colors.camel, fontSize: '14px', textAlign: 'center', padding: '20px 0' }}>
-            Próximamente: campos del formulario para agregar modelo
-          </p>
+
+          {/* 1. Descripción */}
+          <div style={sectionStyle}>
+            <label style={labelStyle}>1. Descripción del Producto</label>
+            <textarea value={formProducto.descripcion}
+              onChange={(e) => setFormProducto({ ...formProducto, descripcion: e.target.value })}
+              placeholder="Describe las características del producto..."
+              style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }} />
+          </div>
+
+          {/* 2. Parámetros de Producción */}
+          <div style={sectionStyle}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+              <label style={{ ...labelStyle, margin: 0, fontSize: '15px' }}>2. Parámetros de Producción</label>
+              <button onClick={() => setEditandoAnchos(!editandoAnchos)}
+                style={{ padding: '6px 12px', background: editandoAnchos ? colors.sidebarBg : colors.sand,
+                  color: editandoAnchos ? colors.sidebarText : colors.espresso,
+                  border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>
+                {editandoAnchos ? 'Cerrar Editor' : 'Editar Telas'}
+              </button>
+            </div>
+
+            {/* Editor de anchos de tela */}
+            {editandoAnchos && (
+              <div style={{ background: colors.cotton, border: `1px dashed ${colors.camel}`, borderRadius: '6px', padding: '15px', marginBottom: '15px' }}>
+                <div style={{ fontSize: '13px', fontWeight: '600', color: colors.espresso, marginBottom: '10px' }}>
+                  Anchos de Tela Disponibles
+                </div>
+                {anchosTela.map((tela, idx) => (
+                  <div key={tela.id} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px', gap: '8px', marginBottom: '8px' }}>
+                    <input type="text" value={tela.nombre}
+                      onChange={(e) => {
+                        const nuevo = [...anchosTela];
+                        nuevo[idx].nombre = e.target.value;
+                        setAnchosTela(nuevo);
+                      }}
+                      style={{ ...inputStyle, padding: '8px' }} />
+                    <input type="number" value={tela.ancho} step="0.1"
+                      onChange={(e) => {
+                        const nuevo = [...anchosTela];
+                        nuevo[idx].ancho = parseFloat(e.target.value) || 0;
+                        setAnchosTela(nuevo);
+                      }}
+                      style={{ ...inputStyle, padding: '8px', textAlign: 'center' }} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ color: colors.camel }}>$</span>
+                      <input type="number" value={tela.precio} step="0.5"
+                        onChange={(e) => {
+                          const nuevo = [...anchosTela];
+                          nuevo[idx].precio = parseFloat(e.target.value) || 0;
+                          setAnchosTela(nuevo);
+                        }}
+                        style={{ ...inputStyle, padding: '8px', flex: 1 }} />
+                    </div>
+                  </div>
+                ))}
+                <div style={{ fontSize: '11px', color: colors.camel, marginTop: '5px' }}>
+                  Nombre | Ancho (m) | Precio/m
+                </div>
+              </div>
+            )}
+
+            {/* Selector de tela */}
+            <div style={{ marginBottom: '15px' }}>
+              <label style={labelStyle}>Tipo de Tela (base de precio)</label>
+              <select value={formProducto.telaSeleccionada || ''}
+                onChange={(e) => setFormProducto({ ...formProducto, telaSeleccionada: parseInt(e.target.value) })}
+                style={{ ...inputStyle, cursor: 'pointer' }}>
+                <option value="">Seleccionar tela...</option>
+                {anchosTela.map(tela => (
+                  <option key={tela.id} value={tela.id}>
+                    {tela.nombre} — {tela.ancho}m — ${tela.precio.toFixed(2)}/m
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Grid de campos */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
+              <div>
+                <label style={labelStyle}>Cantidad de Tela (m)</label>
+                <input type="number" value={formProducto.cantidadTela} step="0.1"
+                  onChange={(e) => setFormProducto({ ...formProducto, cantidadTela: parseFloat(e.target.value) || 0 })}
+                  style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Piezas por Corte</label>
+                <input type="number" value={formProducto.piezasPorCorte} min="1"
+                  onChange={(e) => setFormProducto({ ...formProducto, piezasPorCorte: parseInt(e.target.value) || 1 })}
+                  style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Costo Maquila (Corte + Confección)</label>
+                <input type="number" value={formProducto.costoMaquila} step="0.5"
+                  onChange={(e) => setFormProducto({ ...formProducto, costoMaquila: parseFloat(e.target.value) || 0 })}
+                  style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Insumos (Hilo + Etiqueta)</label>
+                <input type="number" value={formProducto.insumos} step="0.1"
+                  onChange={(e) => setFormProducto({ ...formProducto, insumos: parseFloat(e.target.value) || 0 })}
+                  style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Merma (%)</label>
+                <input type="number" value={formProducto.merma} min="0" max="100"
+                  onChange={(e) => setFormProducto({ ...formProducto, merma: parseFloat(e.target.value) || 0 })}
+                  style={inputStyle} />
+              </div>
+            </div>
+          </div>
+
+          {/* 3. Serigrafía */}
+          <div style={sectionStyle}>
+            <label style={{ ...labelStyle, fontSize: '15px', marginBottom: '15px' }}>3. Serigrafía</label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' }}>
+              <div>
+                <label style={labelStyle}>1 Tinta ($)</label>
+                <input type="number" value={formProducto.serigrafia1} step="0.5"
+                  onChange={(e) => setFormProducto({ ...formProducto, serigrafia1: parseFloat(e.target.value) || 0 })}
+                  style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>2 Tintas ($)</label>
+                <input type="number" value={formProducto.serigrafia2} step="0.5"
+                  onChange={(e) => setFormProducto({ ...formProducto, serigrafia2: parseFloat(e.target.value) || 0 })}
+                  style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>3 Tintas ($)</label>
+                <input type="number" value={formProducto.serigrafia3} step="0.5"
+                  onChange={(e) => setFormProducto({ ...formProducto, serigrafia3: parseFloat(e.target.value) || 0 })}
+                  style={inputStyle} />
+              </div>
+            </div>
+          </div>
+
+          {/* 4. Empaque + Logística */}
+          <div style={sectionStyle}>
+            <label style={{ ...labelStyle, fontSize: '15px', marginBottom: '15px' }}>4. Empaque + Logística</label>
+            <div style={{ maxWidth: '250px' }}>
+              <label style={labelStyle}>Costo ($)</label>
+              <input type="number" value={formProducto.empaqueLogistica} step="0.5"
+                onChange={(e) => setFormProducto({ ...formProducto, empaqueLogistica: parseFloat(e.target.value) || 0 })}
+                style={inputStyle} />
+            </div>
+          </div>
+
+          {/* Resumen de Costos */}
+          <div style={{ background: colors.sidebarBg, borderRadius: '8px', padding: '25px', color: colors.sidebarText }}>
+            <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '20px', letterSpacing: '1px' }}>
+              RESUMEN DE COSTOS
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '20px' }}>
+              <div style={{ background: 'rgba(255,255,255,0.1)', padding: '12px', borderRadius: '6px' }}>
+                <div style={{ fontSize: '11px', opacity: 0.8 }}>Costo Tela</div>
+                <div style={{ fontSize: '18px', fontWeight: '600' }}>${costos.costoTela}</div>
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.1)', padding: '12px', borderRadius: '6px' }}>
+                <div style={{ fontSize: '11px', opacity: 0.8 }}>Subtotal (sin merma)</div>
+                <div style={{ fontSize: '18px', fontWeight: '600' }}>${costos.subtotal}</div>
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.1)', padding: '12px', borderRadius: '6px' }}>
+                <div style={{ fontSize: '11px', opacity: 0.8 }}>Con Merma ({formProducto.merma}%)</div>
+                <div style={{ fontSize: '18px', fontWeight: '600' }}>${costos.conMerma}</div>
+              </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '20px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' }}>
+                <div style={{ background: 'rgba(171,213,94,0.2)', padding: '15px', borderRadius: '6px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', opacity: 0.9 }}>COSTO TOTAL (1 TINTA)</div>
+                  <div style={{ fontSize: '24px', fontWeight: '700', marginTop: '5px' }}>${costos.total1Tinta}</div>
+                </div>
+                <div style={{ background: 'rgba(171,213,94,0.3)', padding: '15px', borderRadius: '6px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', opacity: 0.9 }}>COSTO TOTAL (2 TINTAS)</div>
+                  <div style={{ fontSize: '24px', fontWeight: '700', marginTop: '5px' }}>${costos.total2Tintas}</div>
+                </div>
+                <div style={{ background: 'rgba(171,213,94,0.4)', padding: '15px', borderRadius: '6px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', opacity: 0.9 }}>COSTO TOTAL (3 TINTAS)</div>
+                  <div style={{ fontSize: '24px', fontWeight: '700', marginTop: '5px' }}>${costos.total3Tintas}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Botón Guardar */}
+          <div style={{ marginTop: '25px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            <button onClick={() => setLineaSeleccionada(null)}
+              style={{ padding: '12px 25px', background: colors.sand, color: colors.espresso,
+                border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}>
+              Cancelar
+            </button>
+            <button style={{ padding: '12px 25px', background: colors.sidebarBg, color: colors.sidebarText,
+              border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}>
+              Guardar Producto
+            </button>
+          </div>
         </div>
       ) : (
-        <div style={{
-          background: colors.cotton,
-          border: `1px solid ${colors.sand}`,
-          padding: '40px',
-          textAlign: 'center',
-          borderRadius: '8px'
-        }}>
+        <div style={{ background: colors.cotton, border: `1px solid ${colors.sand}`, padding: '40px', textAlign: 'center', borderRadius: '8px' }}>
           <span style={{ fontSize: '48px' }}>🛍️</span>
           <h3 style={{ margin: '20px 0 10px', color: colors.espresso }}>Sin productos registrados</h3>
-          <p style={{ color: colors.camel, fontSize: '14px' }}>
-            Haz clic en "+ Agregar" para crear tu primer producto
-          </p>
+          <p style={{ color: colors.camel, fontSize: '14px' }}>Haz clic en "+ Agregar" para crear tu primer producto</p>
         </div>
       )}
     </div>
