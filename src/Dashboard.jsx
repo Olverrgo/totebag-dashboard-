@@ -870,7 +870,9 @@ const ProductosView = () => {
     serigrafia1: 0,
     serigrafia2: 0,
     serigrafia3: 0,
-    empaqueLogistica: 0
+    empaque: 0,
+    envio: 0,
+    minPiezasEnvio: 20
   });
 
   // Cálculos automáticos
@@ -879,12 +881,16 @@ const ProductosView = () => {
     const costoTela = tela ? (tela.precio * formProducto.cantidadTela) / formProducto.piezasPorCorte : 0;
     const subtotal = costoTela + formProducto.costoMaquila + formProducto.insumos;
     const conMerma = subtotal * (1 + formProducto.merma / 100);
-    const base = conMerma + formProducto.empaqueLogistica;
+    // Envío por pieza = costo total envío / mínimo de piezas
+    const envioPorPieza = formProducto.minPiezasEnvio > 0 ? formProducto.envio / formProducto.minPiezasEnvio : 0;
+    const base = conMerma + formProducto.empaque + envioPorPieza;
 
     return {
       costoTela: costoTela.toFixed(2),
       subtotal: subtotal.toFixed(2),
       conMerma: conMerma.toFixed(2),
+      empaque: formProducto.empaque.toFixed(2),
+      envioPorPieza: envioPorPieza.toFixed(2),
       total1Tinta: (base + formProducto.serigrafia1).toFixed(2),
       total2Tintas: (base + formProducto.serigrafia2).toFixed(2),
       total3Tintas: (base + formProducto.serigrafia3).toFixed(2)
@@ -916,7 +922,9 @@ const ProductosView = () => {
       serigrafia1: 0,
       serigrafia2: 0,
       serigrafia3: 0,
-      empaqueLogistica: 0
+      empaque: 0,
+      envio: 0,
+      minPiezasEnvio: 20
     });
   };
 
@@ -1205,14 +1213,57 @@ const ProductosView = () => {
             </div>
           </div>
 
-          {/* 4. Empaque + Logística */}
+          {/* 4. Empaque */}
           <div style={sectionStyle}>
-            <label style={{ ...labelStyle, fontSize: '15px', marginBottom: '15px' }}>4. Empaque + Logística</label>
+            <label style={{ ...labelStyle, fontSize: '15px', marginBottom: '15px' }}>4. Empaque</label>
             <div style={{ maxWidth: '250px' }}>
-              <label style={labelStyle}>Costo ($)</label>
-              <input type="number" value={formProducto.empaqueLogistica} step="0.5"
-                onChange={(e) => setFormProducto({ ...formProducto, empaqueLogistica: parseFloat(e.target.value) || 0 })}
+              <label style={labelStyle}>Costo por pieza ($)</label>
+              <input type="number" value={formProducto.empaque} step="0.5"
+                onChange={(e) => setFormProducto({ ...formProducto, empaque: parseFloat(e.target.value) || 0 })}
                 style={inputStyle} />
+            </div>
+          </div>
+
+          {/* 5. Envío */}
+          <div style={sectionStyle}>
+            <label style={{ ...labelStyle, fontSize: '15px', marginBottom: '15px' }}>5. Envío (Zona Conurbada Puebla)</label>
+            <div style={{
+              background: colors.cotton,
+              border: `1px solid ${colors.camel}`,
+              borderRadius: '6px',
+              padding: '12px',
+              marginBottom: '15px',
+              fontSize: '13px',
+              color: colors.espresso
+            }}>
+              <strong>Condición:</strong> Mínimo de piezas por envío para garantizar rentabilidad.
+              <br />
+              <span style={{ color: colors.camel }}>El costo de envío se divide entre las piezas mínimas.</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
+              <div>
+                <label style={labelStyle}>Costo Total Envío ($)</label>
+                <input type="number" value={formProducto.envio} step="1"
+                  onChange={(e) => setFormProducto({ ...formProducto, envio: parseFloat(e.target.value) || 0 })}
+                  style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Mínimo de Piezas</label>
+                <input type="number" value={formProducto.minPiezasEnvio} min="1"
+                  onChange={(e) => setFormProducto({ ...formProducto, minPiezasEnvio: parseInt(e.target.value) || 1 })}
+                  style={inputStyle} />
+              </div>
+              <div style={{
+                background: colors.sidebarBg,
+                padding: '12px',
+                borderRadius: '6px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center'
+              }}>
+                <div style={{ fontSize: '11px', color: colors.sidebarText, opacity: 0.8 }}>Envío por Pieza</div>
+                <div style={{ fontSize: '20px', fontWeight: '600', color: colors.sidebarText }}>${costos.envioPorPieza}</div>
+              </div>
             </div>
           </div>
 
@@ -1222,7 +1273,7 @@ const ProductosView = () => {
               RESUMEN DE COSTOS
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', marginBottom: '20px' }}>
               <div style={{ background: 'rgba(255,255,255,0.1)', padding: '12px', borderRadius: '6px' }}>
                 <div style={{ fontSize: '11px', opacity: 0.8 }}>Costo Tela</div>
                 <div style={{ fontSize: '18px', fontWeight: '600' }}>${costos.costoTela}</div>
@@ -1234,6 +1285,14 @@ const ProductosView = () => {
               <div style={{ background: 'rgba(255,255,255,0.1)', padding: '12px', borderRadius: '6px' }}>
                 <div style={{ fontSize: '11px', opacity: 0.8 }}>Con Merma ({formProducto.merma}%)</div>
                 <div style={{ fontSize: '18px', fontWeight: '600' }}>${costos.conMerma}</div>
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.1)', padding: '12px', borderRadius: '6px' }}>
+                <div style={{ fontSize: '11px', opacity: 0.8 }}>Empaque</div>
+                <div style={{ fontSize: '18px', fontWeight: '600' }}>${costos.empaque}</div>
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.1)', padding: '12px', borderRadius: '6px' }}>
+                <div style={{ fontSize: '11px', opacity: 0.8 }}>Envío/pieza (mín {formProducto.minPiezasEnvio} pzas)</div>
+                <div style={{ fontSize: '18px', fontWeight: '600' }}>${costos.envioPorPieza}</div>
               </div>
             </div>
 
