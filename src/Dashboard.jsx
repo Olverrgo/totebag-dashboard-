@@ -1716,7 +1716,7 @@ const ProductosView = ({ isAdmin }) => {
                 {productosGuardados.map((prod) => (
                   <div key={prod.id} style={{
                     background: colors.cotton,
-                    border: `1px solid ${colors.sand}`,
+                    border: '2px solid #F7E836',
                     padding: '20px',
                     borderRadius: '8px'
                   }}>
