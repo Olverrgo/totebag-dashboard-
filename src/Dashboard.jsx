@@ -922,7 +922,9 @@ const ProductosView = ({ isAdmin }) => {
     serigrafia1: 0,
     serigrafia2: 0,
     serigrafia3: 0,
+    serigrafia4: 0,
     empaque: 0,
+    tipoEntrega: 'envio', // 'envio' o 'recolecta'
     envio: 0,
     minPiezasEnvio: 20
   });
@@ -933,19 +935,36 @@ const ProductosView = ({ isAdmin }) => {
     const costoTela = tela ? (tela.precio * formProducto.cantidadTela) / formProducto.piezasPorCorte : 0;
     const subtotal = costoTela + formProducto.costoMaquila + formProducto.insumos;
     const conMerma = subtotal * (1 + formProducto.merma / 100);
-    // Envío por pieza = costo total envío / mínimo de piezas
-    const envioPorPieza = formProducto.minPiezasEnvio > 0 ? formProducto.envio / formProducto.minPiezasEnvio : 0;
-    const base = conMerma + formProducto.empaque + envioPorPieza;
+
+    // Costo base (producción + empaque, SIN envío, SIN serigrafía)
+    const costoBase = conMerma + formProducto.empaque;
+
+    // Envío por pieza (solo si es envío, no recolecta)
+    const envioPorPieza = formProducto.tipoEntrega === 'envio' && formProducto.minPiezasEnvio > 0
+      ? formProducto.envio / formProducto.minPiezasEnvio
+      : 0;
+
+    // Base con envío (si aplica)
+    const baseConEnvio = costoBase + envioPorPieza;
 
     return {
       costoTela: costoTela.toFixed(2),
       subtotal: subtotal.toFixed(2),
       conMerma: conMerma.toFixed(2),
       empaque: formProducto.empaque.toFixed(2),
+      costoBase: costoBase.toFixed(2), // SIN envío, SIN serigrafía
       envioPorPieza: envioPorPieza.toFixed(2),
-      total1Tinta: (base + formProducto.serigrafia1).toFixed(2),
-      total2Tintas: (base + formProducto.serigrafia2).toFixed(2),
-      total3Tintas: (base + formProducto.serigrafia3).toFixed(2)
+      baseConEnvio: baseConEnvio.toFixed(2),
+      // Totales con serigrafía (usando base según tipo de entrega)
+      total1Tinta: (baseConEnvio + formProducto.serigrafia1).toFixed(2),
+      total2Tintas: (baseConEnvio + formProducto.serigrafia2).toFixed(2),
+      total3Tintas: (baseConEnvio + formProducto.serigrafia3).toFixed(2),
+      total4Tintas: (baseConEnvio + formProducto.serigrafia4).toFixed(2),
+      // Totales SIN envío (recolecta local)
+      total1TintaSinEnvio: (costoBase + formProducto.serigrafia1).toFixed(2),
+      total2TintasSinEnvio: (costoBase + formProducto.serigrafia2).toFixed(2),
+      total3TintasSinEnvio: (costoBase + formProducto.serigrafia3).toFixed(2),
+      total4TintasSinEnvio: (costoBase + formProducto.serigrafia4).toFixed(2)
     };
   };
 
@@ -975,7 +994,9 @@ const ProductosView = ({ isAdmin }) => {
       serigrafia1: 0,
       serigrafia2: 0,
       serigrafia3: 0,
+      serigrafia4: 0,
       empaque: 0,
+      tipoEntrega: 'envio',
       envio: formProducto.envio || 0,
       minPiezasEnvio: formProducto.minPiezasEnvio || 20
     });
@@ -1330,8 +1351,8 @@ const ProductosView = ({ isAdmin }) => {
 
           {/* 3. Serigrafía */}
           <div style={sectionStyle}>
-            <label style={{ ...labelStyle, fontSize: '15px', marginBottom: '15px' }}>3. Serigrafía</label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' }}>
+            <label style={{ ...labelStyle, fontSize: '15px', marginBottom: '15px' }}>3. Serigrafía (costo por pieza)</label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '15px' }}>
               <div>
                 <label style={labelStyle}>1 Tinta ($)</label>
                 <input type="number" value={formProducto.serigrafia1} step="0.5"
@@ -1350,6 +1371,12 @@ const ProductosView = ({ isAdmin }) => {
                   onChange={(e) => setFormProducto({ ...formProducto, serigrafia3: parseFloat(e.target.value) || 0 })}
                   style={inputStyle} />
               </div>
+              <div>
+                <label style={labelStyle}>4 Tintas ($)</label>
+                <input type="number" value={formProducto.serigrafia4} step="0.5"
+                  onChange={(e) => setFormProducto({ ...formProducto, serigrafia4: parseFloat(e.target.value) || 0 })}
+                  style={inputStyle} />
+              </div>
             </div>
           </div>
 
@@ -1364,103 +1391,162 @@ const ProductosView = ({ isAdmin }) => {
             </div>
           </div>
 
-          {/* 5. Envío */}
-          <div style={{ ...sectionStyle, border: isAdmin ? `2px solid ${colors.terracotta}` : `1px solid ${colors.sand}` }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-              <label style={{ ...labelStyle, margin: 0, fontSize: '15px' }}>5. Envío (Zona Conurbada Puebla)</label>
-              {isAdmin && (
-                <button onClick={guardarConfigEnvio}
-                  style={{ padding: '6px 12px', background: colors.terracotta, color: 'white',
-                    border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: '500' }}>
-                  Guardar Config (Admin)
-                </button>
-              )}
-            </div>
-            <div style={{
-              background: isAdmin ? 'rgba(196, 120, 74, 0.1)' : colors.cotton,
-              border: `1px solid ${isAdmin ? colors.terracotta : colors.camel}`,
-              borderRadius: '6px',
-              padding: '12px',
-              marginBottom: '15px',
-              fontSize: '13px',
-              color: colors.espresso
-            }}>
-              <strong>Condición:</strong> Mínimo de piezas por envío para garantizar rentabilidad.
-              <br />
-              <span style={{ color: colors.camel }}>El costo de envío se divide entre las piezas mínimas.</span>
-              {isAdmin && <span style={{ color: colors.terracotta, fontWeight: '600' }}> (Solo Admin puede modificar)</span>}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
-              <div>
-                <label style={labelStyle}>Costo Total Envío ($) {isAdmin && <span style={{ color: colors.terracotta, fontSize: '10px' }}>(Admin)</span>}</label>
-                <input type="number" value={formProducto.envio} step="1"
-                  onChange={(e) => setFormProducto({ ...formProducto, envio: parseFloat(e.target.value) || 0 })}
-                  disabled={!isAdmin}
-                  style={{ ...inputStyle, background: isAdmin ? colors.cream : colors.sand, cursor: isAdmin ? 'text' : 'not-allowed' }} />
-              </div>
-              <div>
-                <label style={labelStyle}>Mínimo de Piezas {isAdmin && <span style={{ color: colors.terracotta, fontSize: '10px' }}>(Admin)</span>}</label>
-                <input type="number" value={formProducto.minPiezasEnvio} min="1"
-                  onChange={(e) => setFormProducto({ ...formProducto, minPiezasEnvio: parseInt(e.target.value) || 1 })}
-                  disabled={!isAdmin}
-                  style={{ ...inputStyle, background: isAdmin ? colors.cream : colors.sand, cursor: isAdmin ? 'text' : 'not-allowed' }} />
-              </div>
-              <div style={{
-                background: colors.sidebarBg,
-                padding: '12px',
-                borderRadius: '6px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center'
+          {/* 5. Tipo de Entrega */}
+          <div style={sectionStyle}>
+            <label style={{ ...labelStyle, fontSize: '15px', marginBottom: '15px' }}>5. Tipo de Entrega</label>
+            <div style={{ display: 'flex', gap: '15px', marginBottom: '15px' }}>
+              <label style={{
+                flex: 1,
+                padding: '15px',
+                background: formProducto.tipoEntrega === 'recolecta' ? colors.sidebarBg : colors.cream,
+                color: formProducto.tipoEntrega === 'recolecta' ? colors.sidebarText : colors.espresso,
+                border: `2px solid ${formProducto.tipoEntrega === 'recolecta' ? colors.sidebarBg : colors.sand}`,
+                borderRadius: '8px',
+                cursor: 'pointer',
+                textAlign: 'center',
+                transition: 'all 0.3s ease'
               }}>
-                <div style={{ fontSize: '11px', color: colors.sidebarText, opacity: 0.8 }}>Envío por Pieza</div>
-                <div style={{ fontSize: '20px', fontWeight: '600', color: colors.sidebarText }}>${costos.envioPorPieza}</div>
-              </div>
+                <input type="radio" name="tipoEntrega" value="recolecta"
+                  checked={formProducto.tipoEntrega === 'recolecta'}
+                  onChange={() => setFormProducto({ ...formProducto, tipoEntrega: 'recolecta' })}
+                  style={{ display: 'none' }} />
+                <div style={{ fontWeight: '600', fontSize: '14px' }}>Recolecta Local</div>
+                <div style={{ fontSize: '12px', marginTop: '5px', opacity: 0.8 }}>Blacksheep (Sin costo de envío)</div>
+              </label>
+              <label style={{
+                flex: 1,
+                padding: '15px',
+                background: formProducto.tipoEntrega === 'envio' ? colors.sidebarBg : colors.cream,
+                color: formProducto.tipoEntrega === 'envio' ? colors.sidebarText : colors.espresso,
+                border: `2px solid ${formProducto.tipoEntrega === 'envio' ? colors.sidebarBg : colors.sand}`,
+                borderRadius: '8px',
+                cursor: 'pointer',
+                textAlign: 'center',
+                transition: 'all 0.3s ease'
+              }}>
+                <input type="radio" name="tipoEntrega" value="envio"
+                  checked={formProducto.tipoEntrega === 'envio'}
+                  onChange={() => setFormProducto({ ...formProducto, tipoEntrega: 'envio' })}
+                  style={{ display: 'none' }} />
+                <div style={{ fontWeight: '600', fontSize: '14px' }}>Envío</div>
+                <div style={{ fontSize: '12px', marginTop: '5px', opacity: 0.8 }}>Zona Conurbada Puebla</div>
+              </label>
             </div>
+
+            {/* Configuración de envío (solo visible si es envío) */}
+            {formProducto.tipoEntrega === 'envio' && (
+              <div style={{
+                background: isAdmin ? 'rgba(196, 120, 74, 0.1)' : colors.cotton,
+                border: `1px solid ${isAdmin ? colors.terracotta : colors.sand}`,
+                borderRadius: '8px',
+                padding: '15px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <div style={{ fontSize: '13px', color: colors.espresso }}>
+                    <strong>Condición:</strong> Mínimo de piezas por envío para garantizar rentabilidad.
+                  </div>
+                  {isAdmin && (
+                    <button onClick={guardarConfigEnvio}
+                      style={{ padding: '6px 12px', background: colors.terracotta, color: 'white',
+                        border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: '500' }}>
+                      Guardar Config
+                    </button>
+                  )}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' }}>
+                  <div>
+                    <label style={labelStyle}>Costo Total Envío ($) {isAdmin && <span style={{ color: colors.terracotta, fontSize: '10px' }}>(Admin)</span>}</label>
+                    <input type="number" value={formProducto.envio} step="1"
+                      onChange={(e) => setFormProducto({ ...formProducto, envio: parseFloat(e.target.value) || 0 })}
+                      disabled={!isAdmin}
+                      style={{ ...inputStyle, background: isAdmin ? colors.cream : colors.sand, cursor: isAdmin ? 'text' : 'not-allowed' }} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Mínimo Piezas {isAdmin && <span style={{ color: colors.terracotta, fontSize: '10px' }}>(Admin)</span>}</label>
+                    <input type="number" value={formProducto.minPiezasEnvio} min="1"
+                      onChange={(e) => setFormProducto({ ...formProducto, minPiezasEnvio: parseInt(e.target.value) || 1 })}
+                      disabled={!isAdmin}
+                      style={{ ...inputStyle, background: isAdmin ? colors.cream : colors.sand, cursor: isAdmin ? 'text' : 'not-allowed' }} />
+                  </div>
+                  <div style={{
+                    background: colors.sidebarBg,
+                    padding: '12px',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center'
+                  }}>
+                    <div style={{ fontSize: '11px', color: colors.sidebarText, opacity: 0.8 }}>Envío por Pieza</div>
+                    <div style={{ fontSize: '20px', fontWeight: '600', color: colors.sidebarText }}>${costos.envioPorPieza}</div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Resumen de Costos */}
           <div style={{ background: colors.sidebarBg, borderRadius: '8px', padding: '25px', color: colors.sidebarText }}>
             <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '20px', letterSpacing: '1px' }}>
-              RESUMEN DE COSTOS
+              RESUMEN DE COSTOS {formProducto.tipoEntrega === 'recolecta' ? '(Recolecta Local)' : '(Con Envío)'}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', marginBottom: '20px' }}>
-              <div style={{ background: 'rgba(255,255,255,0.1)', padding: '12px', borderRadius: '6px' }}>
-                <div style={{ fontSize: '11px', opacity: 0.8 }}>Costo Tela</div>
-                <div style={{ fontSize: '18px', fontWeight: '600' }}>${costos.costoTela}</div>
+            {/* Desglose de costos */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', marginBottom: '20px' }}>
+              <div style={{ background: 'rgba(255,255,255,0.1)', padding: '10px', borderRadius: '6px' }}>
+                <div style={{ fontSize: '10px', opacity: 0.8 }}>Costo Tela</div>
+                <div style={{ fontSize: '16px', fontWeight: '600' }}>${costos.costoTela}</div>
               </div>
-              <div style={{ background: 'rgba(255,255,255,0.1)', padding: '12px', borderRadius: '6px' }}>
-                <div style={{ fontSize: '11px', opacity: 0.8 }}>Subtotal (sin merma)</div>
-                <div style={{ fontSize: '18px', fontWeight: '600' }}>${costos.subtotal}</div>
+              <div style={{ background: 'rgba(255,255,255,0.1)', padding: '10px', borderRadius: '6px' }}>
+                <div style={{ fontSize: '10px', opacity: 0.8 }}>Subtotal</div>
+                <div style={{ fontSize: '16px', fontWeight: '600' }}>${costos.subtotal}</div>
               </div>
-              <div style={{ background: 'rgba(255,255,255,0.1)', padding: '12px', borderRadius: '6px' }}>
-                <div style={{ fontSize: '11px', opacity: 0.8 }}>Con Merma ({formProducto.merma}%)</div>
-                <div style={{ fontSize: '18px', fontWeight: '600' }}>${costos.conMerma}</div>
+              <div style={{ background: 'rgba(255,255,255,0.1)', padding: '10px', borderRadius: '6px' }}>
+                <div style={{ fontSize: '10px', opacity: 0.8 }}>Con Merma ({formProducto.merma}%)</div>
+                <div style={{ fontSize: '16px', fontWeight: '600' }}>${costos.conMerma}</div>
               </div>
-              <div style={{ background: 'rgba(255,255,255,0.1)', padding: '12px', borderRadius: '6px' }}>
-                <div style={{ fontSize: '11px', opacity: 0.8 }}>Empaque</div>
-                <div style={{ fontSize: '18px', fontWeight: '600' }}>${costos.empaque}</div>
+              <div style={{ background: 'rgba(255,255,255,0.1)', padding: '10px', borderRadius: '6px' }}>
+                <div style={{ fontSize: '10px', opacity: 0.8 }}>Empaque</div>
+                <div style={{ fontSize: '16px', fontWeight: '600' }}>${costos.empaque}</div>
               </div>
-              <div style={{ background: 'rgba(255,255,255,0.1)', padding: '12px', borderRadius: '6px' }}>
-                <div style={{ fontSize: '11px', opacity: 0.8 }}>Envío/pieza (mín {formProducto.minPiezasEnvio} pzas)</div>
-                <div style={{ fontSize: '18px', fontWeight: '600' }}>${costos.envioPorPieza}</div>
+              {formProducto.tipoEntrega === 'envio' && (
+                <div style={{ background: 'rgba(255,255,255,0.1)', padding: '10px', borderRadius: '6px' }}>
+                  <div style={{ fontSize: '10px', opacity: 0.8 }}>Envío/pza (mín {formProducto.minPiezasEnvio})</div>
+                  <div style={{ fontSize: '16px', fontWeight: '600' }}>${costos.envioPorPieza}</div>
+                </div>
+              )}
+            </div>
+
+            {/* Costo Base (SIN serigrafía) */}
+            <div style={{ background: 'rgba(255,255,255,0.15)', padding: '15px', borderRadius: '6px', marginBottom: '20px', textAlign: 'center' }}>
+              <div style={{ fontSize: '12px', opacity: 0.9, marginBottom: '5px' }}>
+                COSTO BASE (Sin Serigrafía, {formProducto.tipoEntrega === 'recolecta' ? 'Sin Envío' : 'Con Envío'})
+              </div>
+              <div style={{ fontSize: '28px', fontWeight: '700' }}>
+                ${formProducto.tipoEntrega === 'recolecta' ? costos.costoBase : costos.baseConEnvio}
               </div>
             </div>
 
+            {/* Totales con Serigrafía */}
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '20px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' }}>
-                <div style={{ background: 'rgba(171,213,94,0.2)', padding: '15px', borderRadius: '6px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '12px', opacity: 0.9 }}>COSTO TOTAL (1 TINTA)</div>
-                  <div style={{ fontSize: '24px', fontWeight: '700', marginTop: '5px' }}>${costos.total1Tinta}</div>
+              <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '15px', textAlign: 'center' }}>
+                COSTOS TOTALES CON SERIGRAFÍA
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '10px' }}>
+                <div style={{ background: 'rgba(171,213,94,0.2)', padding: '12px', borderRadius: '6px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', opacity: 0.9 }}>1 TINTA</div>
+                  <div style={{ fontSize: '20px', fontWeight: '700', marginTop: '5px' }}>${costos.total1Tinta}</div>
                 </div>
-                <div style={{ background: 'rgba(171,213,94,0.3)', padding: '15px', borderRadius: '6px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '12px', opacity: 0.9 }}>COSTO TOTAL (2 TINTAS)</div>
-                  <div style={{ fontSize: '24px', fontWeight: '700', marginTop: '5px' }}>${costos.total2Tintas}</div>
+                <div style={{ background: 'rgba(171,213,94,0.3)', padding: '12px', borderRadius: '6px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', opacity: 0.9 }}>2 TINTAS</div>
+                  <div style={{ fontSize: '20px', fontWeight: '700', marginTop: '5px' }}>${costos.total2Tintas}</div>
                 </div>
-                <div style={{ background: 'rgba(171,213,94,0.4)', padding: '15px', borderRadius: '6px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '12px', opacity: 0.9 }}>COSTO TOTAL (3 TINTAS)</div>
-                  <div style={{ fontSize: '24px', fontWeight: '700', marginTop: '5px' }}>${costos.total3Tintas}</div>
+                <div style={{ background: 'rgba(171,213,94,0.4)', padding: '12px', borderRadius: '6px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', opacity: 0.9 }}>3 TINTAS</div>
+                  <div style={{ fontSize: '20px', fontWeight: '700', marginTop: '5px' }}>${costos.total3Tintas}</div>
+                </div>
+                <div style={{ background: 'rgba(171,213,94,0.5)', padding: '12px', borderRadius: '6px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', opacity: 0.9 }}>4 TINTAS</div>
+                  <div style={{ fontSize: '20px', fontWeight: '700', marginTop: '5px' }}>${costos.total4Tintas}</div>
                 </div>
               </div>
             </div>
