@@ -836,14 +836,40 @@ const DashboardView = ({ productosActualizados }) => {
   );
 };
 
-// Vista Productos (simplificada - lista para nuevas funcionalidades)
+// Vista Productos
 const ProductosView = () => {
+  const [hoverAgregar, setHoverAgregar] = useState(false);
+  const [mostrarFormulario, setMostrarFormulario] = useState(false);
+
   return (
     <div>
-      <h2 style={{ margin: '0 0 25px', fontSize: '24px', fontWeight: '300', letterSpacing: '2px', color: colors.espresso }}>
-        Productos
-      </h2>
+      {/* Header con título y botón agregar */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px' }}>
+        <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '300', letterSpacing: '2px', color: colors.espresso }}>
+          Productos
+        </h2>
+        <button
+          onClick={() => setMostrarFormulario(true)}
+          onMouseEnter={() => setHoverAgregar(true)}
+          onMouseLeave={() => setHoverAgregar(false)}
+          style={{
+            padding: '10px 20px',
+            fontSize: '14px',
+            fontWeight: '500',
+            background: hoverAgregar ? colors.sidebarText : colors.sidebarBg,
+            color: hoverAgregar ? colors.sidebarBg : colors.sidebarText,
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            transition: 'all 0.3s ease',
+            letterSpacing: '1px'
+          }}
+        >
+          + Agregar
+        </button>
+      </div>
 
+      {/* Contenido */}
       <div style={{
         background: colors.cotton,
         border: `1px solid ${colors.sand}`,
@@ -852,9 +878,9 @@ const ProductosView = () => {
         borderRadius: '8px'
       }}>
         <span style={{ fontSize: '48px' }}>🛍️</span>
-        <h3 style={{ margin: '20px 0 10px', color: colors.espresso }}>Sección en Construcción</h3>
+        <h3 style={{ margin: '20px 0 10px', color: colors.espresso }}>Sin productos registrados</h3>
         <p style={{ color: colors.camel, fontSize: '14px' }}>
-          Próximamente: Gestión de líneas de producto desde la base de datos
+          Haz clic en "+ Agregar" para crear tu primer producto
         </p>
       </div>
     </div>
