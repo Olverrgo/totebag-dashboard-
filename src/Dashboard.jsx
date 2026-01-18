@@ -2824,8 +2824,11 @@ export default function DashboardToteBag() {
           </div>
         )}
 
-        {/* Header desktop */}
+        {/* Header desktop - Sticky */}
         <div style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 100,
           marginBottom: isMobile ? '20px' : '30px',
           padding: isMobile ? '15px' : '20px 25px',
           background: colors.cotton,
@@ -2835,7 +2838,8 @@ export default function DashboardToteBag() {
           justifyContent: 'space-between',
           alignItems: isMobile ? 'flex-start' : 'center',
           gap: isMobile ? '10px' : '0',
-          borderRadius: isMobile ? '8px' : '0'
+          borderRadius: isMobile ? '8px' : '0',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '10px' : '15px' }}>
             <img
