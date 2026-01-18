@@ -56,12 +56,14 @@ export const AuthProvider = ({ children }) => {
   };
 
   const handleLogout = async () => {
-        setUser(null);
+    setUser(null);
     setProfile(null);
     setLoading(false);
     try {
       await signOut();
-          } catch (err) {
+      // Limpiar localStorage para asegurar que se requiera login al volver
+      localStorage.clear();
+    } catch (err) {
       console.error('signOut error:', err);
     }
   };
