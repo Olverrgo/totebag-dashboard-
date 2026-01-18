@@ -474,6 +474,141 @@ export const cargarDatosDashboard = async () => {
 };
 
 // =====================================================
+// FUNCIONES PARA TIPOS DE TELA (ADMIN)
+// =====================================================
+
+// Obtener todos los tipos de tela
+export const getTiposTela = async () => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('tipos_tela')
+    .select('*')
+    .eq('activo', true)
+    .order('orden', { ascending: true });
+
+  return { data, error };
+};
+
+// Actualizar tipo de tela (solo admin)
+export const updateTipoTela = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('tipos_tela')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data, error };
+};
+
+// Crear tipo de tela (solo admin)
+export const createTipoTela = async (tela) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('tipos_tela')
+    .insert([tela])
+    .select()
+    .single();
+
+  return { data, error };
+};
+
+// =====================================================
+// FUNCIONES PARA CONFIGURACIÓN DE ENVÍO (ADMIN)
+// =====================================================
+
+// Obtener configuración de envío
+export const getConfigEnvio = async () => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('config_envio')
+    .select('*')
+    .eq('activo', true)
+    .order('id', { ascending: true });
+
+  return { data, error };
+};
+
+// Actualizar configuración de envío (solo admin)
+export const updateConfigEnvio = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('config_envio')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data, error };
+};
+
+// =====================================================
+// FUNCIONES PARA PRODUCTOS
+// =====================================================
+
+// Obtener todos los productos
+export const getProductos = async () => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('productos')
+    .select(`
+      *,
+      tipo_tela:tipos_tela(*),
+      config_envio:config_envio(*)
+    `)
+    .eq('activo', true)
+    .order('created_at', { ascending: false });
+
+  return { data, error };
+};
+
+// Crear producto
+export const createProducto = async (producto) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('productos')
+    .insert([producto])
+    .select()
+    .single();
+
+  return { data, error };
+};
+
+// Actualizar producto
+export const updateProducto = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('productos')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data, error };
+};
+
+// Eliminar producto (soft delete)
+export const deleteProducto = async (id) => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+
+  const { error } = await supabase
+    .from('productos')
+    .update({ activo: false })
+    .eq('id', id);
+
+  return { error };
+};
+
+// =====================================================
 // FUNCIONES DE AUTENTICACIÓN
 // =====================================================
 

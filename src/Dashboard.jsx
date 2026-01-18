@@ -2,7 +2,17 @@ import { useState, useEffect } from 'react';
 import "./Dashboard.css";
 import { useAuth } from './AuthContext';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart } from 'recharts';
-import { isSupabaseConfigured, cargarDatosDashboard, updateLineaProducto } from './supabaseClient';
+import {
+  isSupabaseConfigured,
+  cargarDatosDashboard,
+  updateLineaProducto,
+  getTiposTela,
+  updateTipoTela,
+  getConfigEnvio,
+  updateConfigEnvio,
+  createProducto,
+  getProductos
+} from './supabaseClient';
 
 // ==================== DATOS ====================
 
@@ -837,7 +847,7 @@ const DashboardView = ({ productosActualizados }) => {
 };
 
 // Vista Productos
-const ProductosView = () => {
+const ProductosView = ({ isAdmin }) => {
   const [hoverAgregar, setHoverAgregar] = useState(false);
   const [mostrarPopup, setMostrarPopup] = useState(false);
   const [lineasProducto, setLineasProducto] = useState([
@@ -848,8 +858,50 @@ const ProductosView = () => {
   const [mostrarAgregarLinea, setMostrarAgregarLinea] = useState(false);
   const [nuevaLinea, setNuevaLinea] = useState({ nombre: '', medidas: '' });
   const [hoverItems, setHoverItems] = useState({});
+  const [guardando, setGuardando] = useState(false);
+  const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
+  const [productosGuardados, setProductosGuardados] = useState([]);
+  const [configEnvioId, setConfigEnvioId] = useState(null);
 
-  // Estado para anchos de tela disponibles (editables)
+  // Cargar datos de Supabase al montar
+  useEffect(() => {
+    const cargarDatos = async () => {
+      // Cargar tipos de tela
+      const { data: telasData } = await getTiposTela();
+      if (telasData && telasData.length > 0) {
+        setAnchosTela(telasData.map(t => ({
+          id: t.id,
+          nombre: t.nombre,
+          ancho: parseFloat(t.ancho),
+          precio: parseFloat(t.precio_metro)
+        })));
+      }
+
+      // Cargar configuración de envío
+      const { data: envioData } = await getConfigEnvio();
+      if (envioData && envioData.length > 0) {
+        const config = envioData[0];
+        setConfigEnvioId(config.id);
+        setFormProducto(prev => ({
+          ...prev,
+          envio: parseFloat(config.costo_envio),
+          minPiezasEnvio: config.min_piezas
+        }));
+      }
+
+      // Cargar productos guardados
+      const { data: productosData } = await getProductos();
+      if (productosData) {
+        setProductosGuardados(productosData);
+      }
+    };
+
+    if (isSupabaseConfigured) {
+      cargarDatos();
+    }
+  }, []);
+
+  // Estado para anchos de tela disponibles (editables por admin)
   const [anchosTela, setAnchosTela] = useState([
     { id: 1, nombre: 'Manta cruda (básica)', ancho: 1.80, precio: 25.00 },
     { id: 2, nombre: 'Manta teñida (forro)', ancho: 1.60, precio: 42.00 },
@@ -911,6 +963,7 @@ const ProductosView = () => {
   const seleccionarLinea = (linea) => {
     setLineaSeleccionada(linea);
     setMostrarPopup(false);
+    setMensaje({ tipo: '', texto: '' });
     setFormProducto({
       descripcion: '',
       telaSeleccionada: anchosTela[0]?.id || null,
@@ -923,9 +976,87 @@ const ProductosView = () => {
       serigrafia2: 0,
       serigrafia3: 0,
       empaque: 0,
-      envio: 0,
-      minPiezasEnvio: 20
+      envio: formProducto.envio || 0,
+      minPiezasEnvio: formProducto.minPiezasEnvio || 20
     });
+  };
+
+  // Guardar producto en Supabase
+  const guardarProducto = async () => {
+    if (!lineaSeleccionada) return;
+
+    setGuardando(true);
+    setMensaje({ tipo: '', texto: '' });
+
+    try {
+      const costosCalculados = calcularCostos();
+
+      const productoData = {
+        linea_id: lineaSeleccionada.id,
+        linea_nombre: lineaSeleccionada.nombre,
+        linea_medidas: lineaSeleccionada.medidas,
+        descripcion: formProducto.descripcion,
+        tipo_tela_id: formProducto.telaSeleccionada,
+        cantidad_tela: formProducto.cantidadTela,
+        piezas_por_corte: formProducto.piezasPorCorte,
+        costo_maquila: formProducto.costoMaquila,
+        insumos: formProducto.insumos,
+        merma: formProducto.merma,
+        serigrafia_1_tinta: formProducto.serigrafia1,
+        serigrafia_2_tintas: formProducto.serigrafia2,
+        serigrafia_3_tintas: formProducto.serigrafia3,
+        empaque: formProducto.empaque,
+        envio_id: configEnvioId,
+        costo_total_1_tinta: parseFloat(costosCalculados.total1Tinta),
+        costo_total_2_tintas: parseFloat(costosCalculados.total2Tintas),
+        costo_total_3_tintas: parseFloat(costosCalculados.total3Tintas)
+      };
+
+      const { data, error } = await createProducto(productoData);
+
+      if (error) {
+        setMensaje({ tipo: 'error', texto: 'Error al guardar: ' + error.message });
+      } else {
+        setMensaje({ tipo: 'exito', texto: 'Producto guardado correctamente' });
+        setProductosGuardados([data, ...productosGuardados]);
+        // Limpiar formulario después de 2 segundos
+        setTimeout(() => {
+          setLineaSeleccionada(null);
+          setMensaje({ tipo: '', texto: '' });
+        }, 2000);
+      }
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: 'Error inesperado: ' + err.message });
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  // Guardar tipos de tela (solo admin)
+  const guardarTiposTela = async () => {
+    if (!isAdmin) return;
+
+    for (const tela of anchosTela) {
+      await updateTipoTela(tela.id, {
+        nombre: tela.nombre,
+        ancho: tela.ancho,
+        precio_metro: tela.precio
+      });
+    }
+    setMensaje({ tipo: 'exito', texto: 'Tipos de tela actualizados' });
+    setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+  };
+
+  // Guardar configuración de envío (solo admin)
+  const guardarConfigEnvio = async () => {
+    if (!isAdmin || !configEnvioId) return;
+
+    await updateConfigEnvio(configEnvioId, {
+      costo_envio: formProducto.envio,
+      min_piezas: formProducto.minPiezasEnvio
+    });
+    setMensaje({ tipo: 'exito', texto: 'Configuración de envío actualizada' });
+    setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
   };
 
   const inputStyle = {
@@ -1090,19 +1221,28 @@ const ProductosView = () => {
           <div style={sectionStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
               <label style={{ ...labelStyle, margin: 0, fontSize: '15px' }}>2. Parámetros de Producción</label>
-              <button onClick={() => setEditandoAnchos(!editandoAnchos)}
-                style={{ padding: '6px 12px', background: editandoAnchos ? colors.sidebarBg : colors.sand,
-                  color: editandoAnchos ? colors.sidebarText : colors.espresso,
-                  border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>
-                {editandoAnchos ? 'Cerrar Editor' : 'Editar Telas'}
-              </button>
+              {isAdmin && (
+                <button onClick={() => setEditandoAnchos(!editandoAnchos)}
+                  style={{ padding: '6px 12px', background: editandoAnchos ? colors.sidebarBg : colors.sand,
+                    color: editandoAnchos ? colors.sidebarText : colors.espresso,
+                    border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>
+                  {editandoAnchos ? 'Cerrar Editor' : 'Editar Telas (Admin)'}
+                </button>
+              )}
             </div>
 
-            {/* Editor de anchos de tela */}
-            {editandoAnchos && (
-              <div style={{ background: colors.cotton, border: `1px dashed ${colors.camel}`, borderRadius: '6px', padding: '15px', marginBottom: '15px' }}>
-                <div style={{ fontSize: '13px', fontWeight: '600', color: colors.espresso, marginBottom: '10px' }}>
-                  Anchos de Tela Disponibles
+            {/* Editor de anchos de tela - SOLO ADMIN */}
+            {editandoAnchos && isAdmin && (
+              <div style={{ background: colors.cotton, border: `2px solid ${colors.terracotta}`, borderRadius: '6px', padding: '15px', marginBottom: '15px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: '600', color: colors.terracotta }}>
+                    Anchos de Tela Disponibles (Solo Admin)
+                  </div>
+                  <button onClick={guardarTiposTela}
+                    style={{ padding: '6px 12px', background: colors.terracotta, color: 'white',
+                      border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: '500' }}>
+                    Guardar Cambios
+                  </button>
                 </div>
                 {anchosTela.map((tela, idx) => (
                   <div key={tela.id} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px', gap: '8px', marginBottom: '8px' }}>
@@ -1225,11 +1365,20 @@ const ProductosView = () => {
           </div>
 
           {/* 5. Envío */}
-          <div style={sectionStyle}>
-            <label style={{ ...labelStyle, fontSize: '15px', marginBottom: '15px' }}>5. Envío (Zona Conurbada Puebla)</label>
+          <div style={{ ...sectionStyle, border: isAdmin ? `2px solid ${colors.terracotta}` : `1px solid ${colors.sand}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+              <label style={{ ...labelStyle, margin: 0, fontSize: '15px' }}>5. Envío (Zona Conurbada Puebla)</label>
+              {isAdmin && (
+                <button onClick={guardarConfigEnvio}
+                  style={{ padding: '6px 12px', background: colors.terracotta, color: 'white',
+                    border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: '500' }}>
+                  Guardar Config (Admin)
+                </button>
+              )}
+            </div>
             <div style={{
-              background: colors.cotton,
-              border: `1px solid ${colors.camel}`,
+              background: isAdmin ? 'rgba(196, 120, 74, 0.1)' : colors.cotton,
+              border: `1px solid ${isAdmin ? colors.terracotta : colors.camel}`,
               borderRadius: '6px',
               padding: '12px',
               marginBottom: '15px',
@@ -1239,19 +1388,22 @@ const ProductosView = () => {
               <strong>Condición:</strong> Mínimo de piezas por envío para garantizar rentabilidad.
               <br />
               <span style={{ color: colors.camel }}>El costo de envío se divide entre las piezas mínimas.</span>
+              {isAdmin && <span style={{ color: colors.terracotta, fontWeight: '600' }}> (Solo Admin puede modificar)</span>}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
               <div>
-                <label style={labelStyle}>Costo Total Envío ($)</label>
+                <label style={labelStyle}>Costo Total Envío ($) {isAdmin && <span style={{ color: colors.terracotta, fontSize: '10px' }}>(Admin)</span>}</label>
                 <input type="number" value={formProducto.envio} step="1"
                   onChange={(e) => setFormProducto({ ...formProducto, envio: parseFloat(e.target.value) || 0 })}
-                  style={inputStyle} />
+                  disabled={!isAdmin}
+                  style={{ ...inputStyle, background: isAdmin ? colors.cream : colors.sand, cursor: isAdmin ? 'text' : 'not-allowed' }} />
               </div>
               <div>
-                <label style={labelStyle}>Mínimo de Piezas</label>
+                <label style={labelStyle}>Mínimo de Piezas {isAdmin && <span style={{ color: colors.terracotta, fontSize: '10px' }}>(Admin)</span>}</label>
                 <input type="number" value={formProducto.minPiezasEnvio} min="1"
                   onChange={(e) => setFormProducto({ ...formProducto, minPiezasEnvio: parseInt(e.target.value) || 1 })}
-                  style={inputStyle} />
+                  disabled={!isAdmin}
+                  style={{ ...inputStyle, background: isAdmin ? colors.cream : colors.sand, cursor: isAdmin ? 'text' : 'not-allowed' }} />
               </div>
               <div style={{
                 background: colors.sidebarBg,
@@ -1314,24 +1466,79 @@ const ProductosView = () => {
             </div>
           </div>
 
+          {/* Mensaje de estado */}
+          {mensaje.texto && (
+            <div style={{
+              marginTop: '20px',
+              padding: '15px',
+              borderRadius: '6px',
+              background: mensaje.tipo === 'exito' ? 'rgba(171,213,94,0.2)' : 'rgba(196,120,74,0.2)',
+              border: `1px solid ${mensaje.tipo === 'exito' ? colors.sidebarText : colors.terracotta}`,
+              color: mensaje.tipo === 'exito' ? colors.olive : colors.terracotta,
+              textAlign: 'center',
+              fontWeight: '500'
+            }}>
+              {mensaje.texto}
+            </div>
+          )}
+
           {/* Botón Guardar */}
           <div style={{ marginTop: '25px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
             <button onClick={() => setLineaSeleccionada(null)}
+              disabled={guardando}
               style={{ padding: '12px 25px', background: colors.sand, color: colors.espresso,
-                border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}>
+                border: 'none', borderRadius: '6px', cursor: guardando ? 'not-allowed' : 'pointer', fontSize: '14px',
+                opacity: guardando ? 0.6 : 1 }}>
               Cancelar
             </button>
-            <button style={{ padding: '12px 25px', background: colors.sidebarBg, color: colors.sidebarText,
-              border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}>
-              Guardar Producto
+            <button onClick={guardarProducto}
+              disabled={guardando}
+              style={{ padding: '12px 25px', background: guardando ? colors.camel : colors.sidebarBg, color: colors.sidebarText,
+                border: 'none', borderRadius: '6px', cursor: guardando ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: '500',
+                opacity: guardando ? 0.8 : 1 }}>
+              {guardando ? 'Guardando...' : 'Guardar Producto'}
             </button>
           </div>
         </div>
       ) : (
-        <div style={{ background: colors.cotton, border: `1px solid ${colors.sand}`, padding: '40px', textAlign: 'center', borderRadius: '8px' }}>
-          <span style={{ fontSize: '48px' }}>🛍️</span>
-          <h3 style={{ margin: '20px 0 10px', color: colors.espresso }}>Sin productos registrados</h3>
-          <p style={{ color: colors.camel, fontSize: '14px' }}>Haz clic en "+ Agregar" para crear tu primer producto</p>
+        <div>
+          {/* Lista de productos guardados */}
+          {productosGuardados.length > 0 ? (
+            <div>
+              <div style={{ display: 'grid', gap: '15px' }}>
+                {productosGuardados.map((prod) => (
+                  <div key={prod.id} style={{
+                    background: colors.cotton,
+                    border: `1px solid ${colors.sand}`,
+                    padding: '20px',
+                    borderRadius: '8px'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <h4 style={{ margin: 0, color: colors.espresso, fontSize: '16px' }}>{prod.linea_nombre}</h4>
+                        <p style={{ margin: '5px 0', color: colors.camel, fontSize: '13px' }}>{prod.linea_medidas}</p>
+                        {prod.descripcion && <p style={{ margin: '5px 0', color: colors.espresso, fontSize: '13px' }}>{prod.descripcion}</p>}
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '11px', color: colors.camel }}>Costo Total (1 tinta)</div>
+                        <div style={{ fontSize: '20px', fontWeight: '600', color: colors.sidebarBg }}>${prod.costo_total_1_tinta?.toFixed(2)}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '15px', marginTop: '10px', fontSize: '12px', color: colors.camel }}>
+                      <span>2 tintas: ${prod.costo_total_2_tintas?.toFixed(2)}</span>
+                      <span>3 tintas: ${prod.costo_total_3_tintas?.toFixed(2)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div style={{ background: colors.cotton, border: `1px solid ${colors.sand}`, padding: '40px', textAlign: 'center', borderRadius: '8px' }}>
+              <span style={{ fontSize: '48px' }}>🛍️</span>
+              <h3 style={{ margin: '20px 0 10px', color: colors.espresso }}>Sin productos registrados</h3>
+              <p style={{ color: colors.camel, fontSize: '14px' }}>Haz clic en "+ Agregar" para crear tu primer producto</p>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -2331,6 +2538,7 @@ export default function DashboardToteBag() {
           setPreciosGlobales={setPreciosGlobales}
           todasCondiciones={todasCondiciones}
           datosDB={datosDB}
+          isAdmin={isAdmin}
         />
       );
       case 'mayoreo': return <MayoreoView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} />;
