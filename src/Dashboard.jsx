@@ -1716,7 +1716,7 @@ const ProductosView = ({ isAdmin }) => {
                 {productosGuardados.map((prod) => (
                   <div key={prod.id} style={{
                     background: colors.cotton,
-                    border: '2px solid #F7E836',
+                    border: '2px solid #DA9F17',
                     padding: '20px',
                     borderRadius: '8px'
                   }}>
@@ -1757,7 +1757,7 @@ const ProductosView = ({ isAdmin }) => {
               </div>
             </div>
           ) : (
-            <div style={{ background: colors.cotton, border: '2px solid #F7E836', padding: '40px', textAlign: 'center', borderRadius: '8px' }}>
+            <div style={{ background: colors.cotton, border: '2px solid #DA9F17', padding: '40px', textAlign: 'center', borderRadius: '8px' }}>
               <span style={{ fontSize: '48px' }}>🛍️</span>
               <h3 style={{ margin: '20px 0 10px', color: colors.espresso }}>Sin productos registrados</h3>
               <p style={{ color: colors.camel, fontSize: '14px' }}>Haz clic en "+ Agregar" para crear tu primer producto</p>
@@ -2836,7 +2836,7 @@ export default function DashboardToteBag() {
             marginBottom: isMobile ? '20px' : '30px',
             padding: isMobile ? '15px' : '20px 25px',
             background: hoverHeader ? colors.sidebarBg : colors.cotton,
-            border: '2px solid #F7E836',
+            border: '2px solid #DA9F17',
             display: 'flex',
             flexDirection: isMobile ? 'column' : 'row',
             justifyContent: 'space-between',
