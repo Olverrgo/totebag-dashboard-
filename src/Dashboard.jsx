@@ -12,7 +12,11 @@ import {
   updateConfigEnvio,
   createProducto,
   updateProducto,
-  getProductos
+  getProductos,
+  getClientes,
+  createCliente,
+  getMovimientosStock,
+  createMovimientoStock
 } from './supabaseClient';
 
 // ==================== DATOS ====================
@@ -587,6 +591,7 @@ const Sidebar = ({ seccionActiva, setSeccionActiva, menuAbierto, setMenuAbierto,
     { id: 'dashboard', nombre: 'Dashboard', icon: '📊' },
     { id: 'productos', nombre: 'Productos', icon: '🛍️' },
     { id: 'stocks', nombre: 'Stocks', icon: '📋' },
+    { id: 'salidas', nombre: 'Salidas', icon: '📤' },
     { id: 'mayoreo', nombre: 'Mayoreo', icon: '📦' },
     { id: 'ecommerce', nombre: 'E-commerce', icon: '🛒' },
     { id: 'promociones', nombre: 'Promociones', icon: '🎉' },
@@ -2008,6 +2013,474 @@ const StocksView = ({ isAdmin }) => {
 };
 
 
+// Vista Salidas (Consignación y Pedidos Directos)
+const SalidasView = ({ isAdmin }) => {
+  const [productos, setProductos] = useState([]);
+  const [clientes, setClientes] = useState([]);
+  const [movimientos, setMovimientos] = useState([]);
+  const [mostrarFormulario, setMostrarFormulario] = useState(false);
+  const [mostrarNuevoCliente, setMostrarNuevoCliente] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
+  const [hoverBtn, setHoverBtn] = useState({});
+
+  // Formulario de nueva salida
+  const [formSalida, setFormSalida] = useState({
+    productoId: '',
+    clienteId: '',
+    tipoMovimiento: 'consignacion',
+    cantidad: 0,
+    notas: ''
+  });
+
+  // Formulario de nuevo cliente
+  const [formCliente, setFormCliente] = useState({
+    nombre: '',
+    tipo: 'directo',
+    contacto: '',
+    notas: ''
+  });
+
+  // Cargar datos al montar
+  useEffect(() => {
+    const cargarDatos = async () => {
+      if (isSupabaseConfigured) {
+        const [prodRes, cliRes, movRes] = await Promise.all([
+          getProductos(),
+          getClientes(),
+          getMovimientosStock()
+        ]);
+        if (prodRes.data) setProductos(prodRes.data);
+        if (cliRes.data) setClientes(cliRes.data);
+        if (movRes.data) setMovimientos(movRes.data);
+      }
+    };
+    cargarDatos();
+  }, []);
+
+  // Calcular resumen por producto
+  const calcularResumen = (productoId) => {
+    const movsProd = movimientos.filter(m => m.producto_id === productoId);
+    let enConsignacion = 0;
+    let vendidoDirecto = 0;
+    let vendidoConsignacion = 0;
+    let devuelto = 0;
+
+    movsProd.forEach(mov => {
+      switch (mov.tipo_movimiento) {
+        case 'consignacion':
+          enConsignacion += mov.cantidad;
+          break;
+        case 'venta_directa':
+          vendidoDirecto += mov.cantidad;
+          break;
+        case 'venta_consignacion':
+          vendidoConsignacion += mov.cantidad;
+          enConsignacion -= mov.cantidad;
+          break;
+        case 'devolucion':
+          devuelto += mov.cantidad;
+          enConsignacion -= mov.cantidad;
+          break;
+      }
+    });
+
+    return { enConsignacion, vendidoDirecto, vendidoConsignacion, devuelto };
+  };
+
+  // Registrar salida
+  const registrarSalida = async () => {
+    if (!isAdmin) {
+      setMensaje({ tipo: 'error', texto: 'Solo admin puede registrar salidas' });
+      return;
+    }
+
+    if (!formSalida.productoId || !formSalida.clienteId || !formSalida.cantidad) {
+      setMensaje({ tipo: 'error', texto: 'Completa todos los campos requeridos' });
+      return;
+    }
+
+    const cantidad = parseInt(formSalida.cantidad);
+    if (cantidad <= 0) {
+      setMensaje({ tipo: 'error', texto: 'La cantidad debe ser mayor a 0' });
+      return;
+    }
+
+    // Verificar stock disponible
+    const producto = productos.find(p => p.id === parseInt(formSalida.productoId));
+    const resumen = calcularResumen(parseInt(formSalida.productoId));
+    const stockDisponible = (producto?.stock || 0) - resumen.enConsignacion - resumen.vendidoDirecto;
+
+    if (cantidad > stockDisponible && (formSalida.tipoMovimiento === 'consignacion' || formSalida.tipoMovimiento === 'venta_directa')) {
+      setMensaje({ tipo: 'error', texto: `Stock insuficiente. Disponible: ${stockDisponible}` });
+      return;
+    }
+
+    setGuardando(true);
+    try {
+      const movimiento = {
+        producto_id: parseInt(formSalida.productoId),
+        cliente_id: parseInt(formSalida.clienteId),
+        tipo_movimiento: formSalida.tipoMovimiento,
+        cantidad: cantidad,
+        notas: formSalida.notas
+      };
+
+      const { data, error } = await createMovimientoStock(movimiento);
+
+      if (error) {
+        setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
+      } else {
+        // Actualizar stock del producto si es venta directa
+        if (formSalida.tipoMovimiento === 'venta_directa') {
+          await updateProducto(parseInt(formSalida.productoId), {
+            stock: (producto?.stock || 0) - cantidad
+          });
+          setProductos(productos.map(p =>
+            p.id === parseInt(formSalida.productoId) ? { ...p, stock: (p.stock || 0) - cantidad } : p
+          ));
+        }
+
+        setMensaje({ tipo: 'exito', texto: 'Salida registrada correctamente' });
+
+        // Recargar movimientos
+        const { data: newMovs } = await getMovimientosStock();
+        if (newMovs) setMovimientos(newMovs);
+
+        // Resetear formulario
+        setFormSalida({ productoId: '', clienteId: '', tipoMovimiento: 'consignacion', cantidad: 0, notas: '' });
+        setMostrarFormulario(false);
+        setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+      }
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: 'Error: ' + err.message });
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  // Crear nuevo cliente
+  const crearCliente = async () => {
+    if (!formCliente.nombre.trim()) {
+      setMensaje({ tipo: 'error', texto: 'El nombre es requerido' });
+      return;
+    }
+
+    setGuardando(true);
+    try {
+      const { data, error } = await createCliente(formCliente);
+      if (error) {
+        setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
+      } else {
+        setClientes([...clientes, data]);
+        setFormCliente({ nombre: '', tipo: 'directo', contacto: '', notas: '' });
+        setMostrarNuevoCliente(false);
+        setMensaje({ tipo: 'exito', texto: 'Cliente agregado' });
+        setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+      }
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: 'Error: ' + err.message });
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const tiposMovimiento = [
+    { id: 'consignacion', nombre: 'Consignación', desc: 'Entrega a negocio (siguen siendo tuyas)' },
+    { id: 'venta_directa', nombre: 'Venta Directa', desc: 'Venta al cliente (descuenta stock)' },
+    { id: 'venta_consignacion', nombre: 'Venta en Consignación', desc: 'El negocio vendió piezas' },
+    { id: 'devolucion', nombre: 'Devolución', desc: 'Regreso de piezas en consignación' }
+  ];
+
+  const inputStyle = {
+    width: '100%',
+    padding: '10px 12px',
+    border: '2px solid #DA9F17',
+    borderRadius: '6px',
+    fontSize: '14px',
+    boxSizing: 'border-box',
+    background: colors.cream
+  };
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px', flexWrap: 'wrap', gap: '10px' }}>
+        <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '300', letterSpacing: '2px', color: colors.espresso }}>
+          Salidas
+        </h2>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            onClick={() => setMostrarNuevoCliente(true)}
+            onMouseEnter={() => setHoverBtn({ ...hoverBtn, cliente: true })}
+            onMouseLeave={() => setHoverBtn({ ...hoverBtn, cliente: false })}
+            style={{
+              padding: '10px 20px',
+              background: hoverBtn.cliente ? colors.sidebarText : 'transparent',
+              color: hoverBtn.cliente ? colors.sidebarBg : colors.sidebarBg,
+              border: `2px solid ${colors.sidebarBg}`,
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: '500',
+              transition: 'all 0.3s ease'
+            }}
+          >
+            + Cliente
+          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setMostrarFormulario(true)}
+              onMouseEnter={() => setHoverBtn({ ...hoverBtn, salida: true })}
+              onMouseLeave={() => setHoverBtn({ ...hoverBtn, salida: false })}
+              style={{
+                padding: '10px 20px',
+                background: hoverBtn.salida ? colors.sidebarText : colors.sidebarBg,
+                color: hoverBtn.salida ? colors.sidebarBg : colors.sidebarText,
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: '500',
+                transition: 'all 0.3s ease'
+              }}
+            >
+              + Nueva Salida
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Mensaje */}
+      {mensaje.texto && (
+        <div style={{
+          marginBottom: '20px',
+          padding: '15px',
+          borderRadius: '6px',
+          background: mensaje.tipo === 'exito' ? 'rgba(171,213,94,0.2)' : 'rgba(196,120,74,0.2)',
+          border: `1px solid ${mensaje.tipo === 'exito' ? colors.olive : colors.terracotta}`,
+          color: mensaje.tipo === 'exito' ? colors.olive : colors.terracotta,
+          textAlign: 'center',
+          fontWeight: '500'
+        }}>
+          {mensaje.texto}
+        </div>
+      )}
+
+      {/* Resumen de Stock */}
+      <div style={{ marginBottom: '25px' }}>
+        <h3 style={{ margin: '0 0 15px', fontSize: '16px', color: colors.sidebarBg }}>Resumen de Inventario</h3>
+        <div style={{ display: 'grid', gap: '10px' }}>
+          {productos.map(prod => {
+            const resumen = calcularResumen(prod.id);
+            const stockTotal = prod.stock || 0;
+            const disponible = stockTotal - resumen.enConsignacion - resumen.vendidoDirecto;
+            return (
+              <div key={prod.id} style={{
+                background: colors.cotton,
+                border: '2px solid #DA9F17',
+                padding: '15px 20px',
+                borderRadius: '8px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '10px'
+              }}>
+                <div>
+                  <div style={{ fontWeight: '600', color: colors.sidebarBg }}>{prod.linea_nombre}</div>
+                  <div style={{ fontSize: '12px', color: colors.camel }}>{prod.linea_medidas}</div>
+                </div>
+                <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '10px', color: colors.camel }}>STOCK</div>
+                    <div style={{ fontSize: '18px', fontWeight: '700', color: colors.espresso }}>{stockTotal}</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '10px', color: colors.camel }}>CONSIGNACIÓN</div>
+                    <div style={{ fontSize: '18px', fontWeight: '700', color: '#F39C12' }}>{resumen.enConsignacion}</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '10px', color: colors.camel }}>VENDIDO</div>
+                    <div style={{ fontSize: '18px', fontWeight: '700', color: colors.olive }}>{resumen.vendidoDirecto + resumen.vendidoConsignacion}</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '10px', color: colors.camel }}>DISPONIBLE</div>
+                    <div style={{ fontSize: '18px', fontWeight: '700', color: disponible > 0 ? colors.sidebarBg : colors.terracotta }}>{disponible}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Modal Nueva Salida */}
+      {mostrarFormulario && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: colors.cotton, borderRadius: '12px', padding: '30px', maxWidth: '500px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, color: colors.sidebarBg }}>Nueva Salida</h3>
+              <button onClick={() => setMostrarFormulario(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: colors.camel }}>×</button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', color: colors.sidebarBg, marginBottom: '5px' }}>Producto *</label>
+                <select value={formSalida.productoId} onChange={(e) => setFormSalida({ ...formSalida, productoId: e.target.value })} style={inputStyle}>
+                  <option value="">Seleccionar producto...</option>
+                  {productos.map(p => <option key={p.id} value={p.id}>{p.linea_nombre} ({p.stock || 0} en stock)</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', color: colors.sidebarBg, marginBottom: '5px' }}>Cliente/Negocio *</label>
+                <select value={formSalida.clienteId} onChange={(e) => setFormSalida({ ...formSalida, clienteId: e.target.value })} style={inputStyle}>
+                  <option value="">Seleccionar cliente...</option>
+                  {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre} ({c.tipo})</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', color: colors.sidebarBg, marginBottom: '5px' }}>Tipo de Movimiento *</label>
+                <select value={formSalida.tipoMovimiento} onChange={(e) => setFormSalida({ ...formSalida, tipoMovimiento: e.target.value })} style={inputStyle}>
+                  {tiposMovimiento.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+                </select>
+                <div style={{ fontSize: '11px', color: colors.camel, marginTop: '5px' }}>
+                  {tiposMovimiento.find(t => t.id === formSalida.tipoMovimiento)?.desc}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', color: colors.sidebarBg, marginBottom: '5px' }}>Cantidad *</label>
+                <input type="number" min="1" value={formSalida.cantidad} onChange={(e) => setFormSalida({ ...formSalida, cantidad: e.target.value })} style={inputStyle} />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', color: colors.sidebarBg, marginBottom: '5px' }}>Notas</label>
+                <textarea value={formSalida.notas} onChange={(e) => setFormSalida({ ...formSalida, notas: e.target.value })} style={{ ...inputStyle, minHeight: '60px' }} placeholder="Observaciones..." />
+              </div>
+
+              <button onClick={registrarSalida} disabled={guardando} style={{
+                padding: '12px',
+                background: colors.sidebarBg,
+                color: colors.sidebarText,
+                border: 'none',
+                borderRadius: '6px',
+                cursor: guardando ? 'not-allowed' : 'pointer',
+                fontSize: '14px',
+                fontWeight: '500',
+                opacity: guardando ? 0.7 : 1
+              }}>
+                {guardando ? 'Guardando...' : 'Registrar Salida'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Nuevo Cliente */}
+      {mostrarNuevoCliente && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: colors.cotton, borderRadius: '12px', padding: '30px', maxWidth: '400px', width: '90%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, color: colors.sidebarBg }}>Nuevo Cliente</h3>
+              <button onClick={() => setMostrarNuevoCliente(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: colors.camel }}>×</button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', color: colors.sidebarBg, marginBottom: '5px' }}>Nombre *</label>
+                <input type="text" value={formCliente.nombre} onChange={(e) => setFormCliente({ ...formCliente, nombre: e.target.value })} style={inputStyle} placeholder="Nombre del negocio/cliente" />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', color: colors.sidebarBg, marginBottom: '5px' }}>Tipo</label>
+                <select value={formCliente.tipo} onChange={(e) => setFormCliente({ ...formCliente, tipo: e.target.value })} style={inputStyle}>
+                  <option value="directo">Pedido Directo</option>
+                  <option value="consignacion">Consignación</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', color: colors.sidebarBg, marginBottom: '5px' }}>Contacto</label>
+                <input type="text" value={formCliente.contacto} onChange={(e) => setFormCliente({ ...formCliente, contacto: e.target.value })} style={inputStyle} placeholder="Teléfono, email, etc." />
+              </div>
+
+              <button onClick={crearCliente} disabled={guardando} style={{
+                padding: '12px',
+                background: colors.sidebarBg,
+                color: colors.sidebarText,
+                border: 'none',
+                borderRadius: '6px',
+                cursor: guardando ? 'not-allowed' : 'pointer',
+                fontSize: '14px',
+                fontWeight: '500'
+              }}>
+                {guardando ? 'Guardando...' : 'Agregar Cliente'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Historial de Movimientos */}
+      <div>
+        <h3 style={{ margin: '0 0 15px', fontSize: '16px', color: colors.sidebarBg }}>Historial de Movimientos</h3>
+        {movimientos.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {movimientos.slice(0, 20).map(mov => (
+              <div key={mov.id} style={{
+                background: colors.cream,
+                border: `1px solid ${colors.sand}`,
+                padding: '12px 15px',
+                borderRadius: '6px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '10px'
+              }}>
+                <div>
+                  <div style={{ fontWeight: '500', color: colors.espresso }}>{mov.producto?.linea_nombre}</div>
+                  <div style={{ fontSize: '12px', color: colors.camel }}>
+                    {mov.cliente?.nombre} • {new Date(mov.fecha).toLocaleDateString('es-MX')}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  <span style={{
+                    padding: '4px 10px',
+                    borderRadius: '12px',
+                    fontSize: '11px',
+                    fontWeight: '500',
+                    background: mov.tipo_movimiento === 'consignacion' ? '#FEF3E2' :
+                               mov.tipo_movimiento === 'venta_directa' ? '#E8F5E9' :
+                               mov.tipo_movimiento === 'venta_consignacion' ? '#E3F2FD' : '#FFEBEE',
+                    color: mov.tipo_movimiento === 'consignacion' ? '#F39C12' :
+                           mov.tipo_movimiento === 'venta_directa' ? colors.olive :
+                           mov.tipo_movimiento === 'venta_consignacion' ? '#1976D2' : colors.terracotta
+                  }}>
+                    {tiposMovimiento.find(t => t.id === mov.tipo_movimiento)?.nombre || mov.tipo_movimiento}
+                  </span>
+                  <span style={{ fontWeight: '700', fontSize: '16px', color: colors.sidebarBg }}>
+                    {mov.tipo_movimiento === 'devolucion' ? '+' : '-'}{mov.cantidad}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ background: colors.cotton, border: '2px solid #DA9F17', padding: '30px', textAlign: 'center', borderRadius: '8px' }}>
+            <span style={{ fontSize: '36px' }}>📤</span>
+            <p style={{ margin: '15px 0 0', color: colors.camel }}>No hay movimientos registrados</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+
 // Vista Mayoreo
 const MayoreoView = ({ productosActualizados, condicionesEco, condicionesEcoForro }) => {
   const [lineaActiva, setLineaActiva] = useState('estandar');
@@ -3005,6 +3478,7 @@ export default function DashboardToteBag() {
         />
       );
       case 'stocks': return <StocksView isAdmin={isAdmin} />;
+      case 'salidas': return <SalidasView isAdmin={isAdmin} />;
       case 'mayoreo': return <MayoreoView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} />;
       case 'ecommerce': return <EcommerceView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} datosDB={datosDB} />;
       case 'promociones': return <PromocionesView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} />;

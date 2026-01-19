@@ -609,6 +609,125 @@ export const deleteProducto = async (id) => {
 };
 
 // =====================================================
+// FUNCIONES PARA CLIENTES
+// =====================================================
+
+// Obtener todos los clientes
+export const getClientes = async () => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('clientes')
+    .select('*')
+    .eq('activo', true)
+    .order('nombre', { ascending: true });
+
+  return { data, error };
+};
+
+// Crear cliente
+export const createCliente = async (cliente) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('clientes')
+    .insert([cliente])
+    .select()
+    .single();
+
+  return { data, error };
+};
+
+// Actualizar cliente
+export const updateCliente = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('clientes')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data, error };
+};
+
+// =====================================================
+// FUNCIONES PARA MOVIMIENTOS DE STOCK
+// =====================================================
+
+// Obtener movimientos de stock
+export const getMovimientosStock = async () => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('movimientos_stock')
+    .select(`
+      *,
+      producto:productos(id, linea_nombre, linea_medidas),
+      cliente:clientes(id, nombre, tipo)
+    `)
+    .order('fecha', { ascending: false });
+
+  return { data, error };
+};
+
+// Crear movimiento de stock
+export const createMovimientoStock = async (movimiento) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('movimientos_stock')
+    .insert([movimiento])
+    .select()
+    .single();
+
+  return { data, error };
+};
+
+// Obtener resumen de stock por producto
+export const getResumenStock = async (productoId) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('movimientos_stock')
+    .select('tipo_movimiento, cantidad')
+    .eq('producto_id', productoId);
+
+  if (data) {
+    const resumen = {
+      enConsignacion: 0,
+      vendidoDirecto: 0,
+      vendidoConsignacion: 0,
+      devuelto: 0
+    };
+
+    data.forEach(mov => {
+      switch (mov.tipo_movimiento) {
+        case 'consignacion':
+          resumen.enConsignacion += mov.cantidad;
+          break;
+        case 'venta_directa':
+          resumen.vendidoDirecto += mov.cantidad;
+          break;
+        case 'venta_consignacion':
+          resumen.vendidoConsignacion += mov.cantidad;
+          resumen.enConsignacion -= mov.cantidad;
+          break;
+        case 'devolucion':
+          resumen.devuelto += mov.cantidad;
+          resumen.enConsignacion -= mov.cantidad;
+          break;
+      }
+    });
+
+    return { data: resumen, error: null };
+  }
+
+  return { data: null, error };
+};
+
+// =====================================================
 // FUNCIONES DE AUTENTICACIÓN
 // =====================================================
 
