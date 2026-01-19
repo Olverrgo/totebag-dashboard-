@@ -586,6 +586,7 @@ const Sidebar = ({ seccionActiva, setSeccionActiva, menuAbierto, setMenuAbierto,
   const secciones = [
     { id: 'dashboard', nombre: 'Dashboard', icon: '📊' },
     { id: 'productos', nombre: 'Productos', icon: '🛍️' },
+    { id: 'stocks', nombre: 'Stocks', icon: '📋' },
     { id: 'mayoreo', nombre: 'Mayoreo', icon: '📦' },
     { id: 'ecommerce', nombre: 'E-commerce', icon: '🛒' },
     { id: 'promociones', nombre: 'Promociones', icon: '🎉' },
@@ -1774,6 +1775,198 @@ const ProductosView = ({ isAdmin }) => {
 };
 
 
+// Vista Stocks
+const StocksView = ({ isAdmin }) => {
+  const [productosGuardados, setProductosGuardados] = useState([]);
+  const [stockEditando, setStockEditando] = useState({});
+  const [guardando, setGuardando] = useState(false);
+  const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
+  const [hoverGuardar, setHoverGuardar] = useState({});
+
+  // Cargar productos al montar
+  useEffect(() => {
+    const cargarProductos = async () => {
+      if (isSupabaseConfigured) {
+        const { data } = await getProductos();
+        if (data) {
+          setProductosGuardados(data);
+          // Inicializar stock editando con valores actuales
+          const stockInicial = {};
+          data.forEach(prod => {
+            stockInicial[prod.id] = prod.stock || 0;
+          });
+          setStockEditando(stockInicial);
+        }
+      }
+    };
+    cargarProductos();
+  }, []);
+
+  // Guardar stock de un producto
+  const guardarStock = async (productoId) => {
+    if (!isAdmin) {
+      setMensaje({ tipo: 'error', texto: 'Solo administradores pueden modificar el stock' });
+      return;
+    }
+
+    setGuardando(true);
+    try {
+      const { error } = await updateProducto(productoId, {
+        stock: parseInt(stockEditando[productoId]) || 0
+      });
+
+      if (error) {
+        setMensaje({ tipo: 'error', texto: 'Error al guardar: ' + error.message });
+      } else {
+        setMensaje({ tipo: 'exito', texto: 'Stock actualizado correctamente' });
+        // Actualizar lista local
+        setProductosGuardados(productosGuardados.map(p =>
+          p.id === productoId ? { ...p, stock: parseInt(stockEditando[productoId]) || 0 } : p
+        ));
+        setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+      }
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: 'Error: ' + err.message });
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const inputStyle = {
+    width: '80px',
+    padding: '8px 12px',
+    border: '2px solid #DA9F17',
+    borderRadius: '6px',
+    fontSize: '14px',
+    textAlign: 'center',
+    background: colors.cream
+  };
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px' }}>
+        <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '300', letterSpacing: '2px', color: colors.espresso }}>
+          Stocks
+        </h2>
+        {!isAdmin && (
+          <span style={{ fontSize: '12px', color: colors.terracotta, background: 'rgba(196,120,74,0.1)', padding: '6px 12px', borderRadius: '4px' }}>
+            Solo lectura (Admin requerido)
+          </span>
+        )}
+      </div>
+
+      {/* Mensaje de estado */}
+      {mensaje.texto && (
+        <div style={{
+          marginBottom: '20px',
+          padding: '15px',
+          borderRadius: '6px',
+          background: mensaje.tipo === 'exito' ? 'rgba(171,213,94,0.2)' : 'rgba(196,120,74,0.2)',
+          border: `1px solid ${mensaje.tipo === 'exito' ? colors.olive : colors.terracotta}`,
+          color: mensaje.tipo === 'exito' ? colors.olive : colors.terracotta,
+          textAlign: 'center',
+          fontWeight: '500'
+        }}>
+          {mensaje.texto}
+        </div>
+      )}
+
+      {/* Lista de productos con stock */}
+      {productosGuardados.length > 0 ? (
+        <div style={{ display: 'grid', gap: '15px' }}>
+          {productosGuardados.map((prod) => (
+            <div key={prod.id} style={{
+              background: colors.cotton,
+              border: '2px solid #DA9F17',
+              padding: '20px',
+              borderRadius: '8px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '15px'
+            }}>
+              {/* Info del producto */}
+              <div style={{ flex: '1', minWidth: '200px' }}>
+                <h4 style={{ margin: 0, color: colors.sidebarBg, fontSize: '16px', fontWeight: '600' }}>
+                  {prod.linea_nombre}
+                </h4>
+                <p style={{ margin: '5px 0 0', color: colors.camel, fontSize: '13px' }}>
+                  {prod.linea_medidas} {prod.descripcion && `• ${prod.descripcion}`}
+                </p>
+              </div>
+
+              {/* Control de stock */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <label style={{ display: 'block', fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>
+                    STOCK ACTUAL
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={stockEditando[prod.id] || 0}
+                    onChange={(e) => setStockEditando({ ...stockEditando, [prod.id]: e.target.value })}
+                    disabled={!isAdmin}
+                    style={{
+                      ...inputStyle,
+                      background: isAdmin ? colors.cream : colors.sand,
+                      cursor: isAdmin ? 'text' : 'not-allowed'
+                    }}
+                  />
+                </div>
+
+                {isAdmin && (
+                  <button
+                    onClick={() => guardarStock(prod.id)}
+                    onMouseEnter={() => setHoverGuardar({ ...hoverGuardar, [prod.id]: true })}
+                    onMouseLeave={() => setHoverGuardar({ ...hoverGuardar, [prod.id]: false })}
+                    disabled={guardando}
+                    style={{
+                      padding: '10px 20px',
+                      background: hoverGuardar[prod.id] ? colors.sidebarText : colors.sidebarBg,
+                      color: hoverGuardar[prod.id] ? colors.sidebarBg : colors.sidebarText,
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: guardando ? 'not-allowed' : 'pointer',
+                      fontSize: '13px',
+                      fontWeight: '500',
+                      transition: 'all 0.3s ease',
+                      opacity: guardando ? 0.7 : 1
+                    }}
+                  >
+                    Guardar
+                  </button>
+                )}
+
+                {/* Indicador visual de stock */}
+                <div style={{
+                  width: '12px',
+                  height: '12px',
+                  borderRadius: '50%',
+                  background: (stockEditando[prod.id] || 0) > 10 ? colors.olive :
+                              (stockEditando[prod.id] || 0) > 0 ? '#F7B731' : colors.terracotta
+                }} title={
+                  (stockEditando[prod.id] || 0) > 10 ? 'Stock OK' :
+                  (stockEditando[prod.id] || 0) > 0 ? 'Stock bajo' : 'Sin stock'
+                } />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ background: colors.cotton, border: '2px solid #DA9F17', padding: '40px', textAlign: 'center', borderRadius: '8px' }}>
+          <span style={{ fontSize: '48px' }}>📋</span>
+          <h3 style={{ margin: '20px 0 10px', color: colors.espresso }}>Sin productos definidos</h3>
+          <p style={{ color: colors.camel, fontSize: '14px' }}>Primero define productos en la sección "Productos"</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 // Vista Mayoreo
 const MayoreoView = ({ productosActualizados, condicionesEco, condicionesEcoForro }) => {
   const [lineaActiva, setLineaActiva] = useState('estandar');
@@ -2770,6 +2963,7 @@ export default function DashboardToteBag() {
           isAdmin={isAdmin}
         />
       );
+      case 'stocks': return <StocksView isAdmin={isAdmin} />;
       case 'mayoreo': return <MayoreoView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} />;
       case 'ecommerce': return <EcommerceView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} datosDB={datosDB} />;
       case 'promociones': return <PromocionesView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} />;
