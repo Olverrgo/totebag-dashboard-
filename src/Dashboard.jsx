@@ -1778,7 +1778,7 @@ const ProductosView = ({ isAdmin }) => {
 // Vista Stocks
 const StocksView = ({ isAdmin }) => {
   const [productosGuardados, setProductosGuardados] = useState([]);
-  const [stockEditando, setStockEditando] = useState({});
+  const [cantidadAgregar, setCantidadAgregar] = useState({});
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
   const [hoverGuardar, setHoverGuardar] = useState({});
@@ -1790,40 +1790,62 @@ const StocksView = ({ isAdmin }) => {
         const { data } = await getProductos();
         if (data) {
           setProductosGuardados(data);
-          // Inicializar stock editando con valores actuales
-          const stockInicial = {};
+          // Inicializar cantidad a agregar en 0 para todos
+          const cantidadInicial = {};
           data.forEach(prod => {
-            stockInicial[prod.id] = prod.stock || 0;
+            cantidadInicial[prod.id] = 0;
           });
-          setStockEditando(stockInicial);
+          setCantidadAgregar(cantidadInicial);
         }
       }
     };
     cargarProductos();
   }, []);
 
-  // Guardar stock de un producto
+  // Guardar stock de un producto (suma al stock actual)
   const guardarStock = async (productoId) => {
     if (!isAdmin) {
       setMensaje({ tipo: 'error', texto: 'Solo administradores pueden modificar el stock' });
       return;
     }
 
+    const cantidad = parseInt(cantidadAgregar[productoId]) || 0;
+
+    // Validar si hay cambios
+    if (cantidad === 0) {
+      setMensaje({ tipo: 'info', texto: 'No hay cambios' });
+      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+      return;
+    }
+
     setGuardando(true);
     try {
+      const producto = productosGuardados.find(p => p.id === productoId);
+      const stockActual = producto?.stock || 0;
+      const nuevoStock = stockActual + cantidad;
+
+      // No permitir stock negativo
+      if (nuevoStock < 0) {
+        setMensaje({ tipo: 'error', texto: 'El stock no puede ser negativo' });
+        setGuardando(false);
+        return;
+      }
+
       const { error } = await updateProducto(productoId, {
-        stock: parseInt(stockEditando[productoId]) || 0
+        stock: nuevoStock
       });
 
       if (error) {
         setMensaje({ tipo: 'error', texto: 'Error al guardar: ' + error.message });
       } else {
-        setMensaje({ tipo: 'exito', texto: 'Stock actualizado correctamente' });
+        setMensaje({ tipo: 'exito', texto: `Stock actualizado: ${stockActual} + ${cantidad} = ${nuevoStock}` });
         // Actualizar lista local
         setProductosGuardados(productosGuardados.map(p =>
-          p.id === productoId ? { ...p, stock: parseInt(stockEditando[productoId]) || 0 } : p
+          p.id === productoId ? { ...p, stock: nuevoStock } : p
         ));
-        setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+        // Resetear campo de cantidad a 0
+        setCantidadAgregar({ ...cantidadAgregar, [productoId]: 0 });
+        setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
       }
     } catch (err) {
       setMensaje({ tipo: 'error', texto: 'Error: ' + err.message });
@@ -1862,9 +1884,12 @@ const StocksView = ({ isAdmin }) => {
           marginBottom: '20px',
           padding: '15px',
           borderRadius: '6px',
-          background: mensaje.tipo === 'exito' ? 'rgba(171,213,94,0.2)' : 'rgba(196,120,74,0.2)',
-          border: `1px solid ${mensaje.tipo === 'exito' ? colors.olive : colors.terracotta}`,
-          color: mensaje.tipo === 'exito' ? colors.olive : colors.terracotta,
+          background: mensaje.tipo === 'exito' ? 'rgba(171,213,94,0.2)' :
+                      mensaje.tipo === 'info' ? 'rgba(50,205,50,0.15)' : 'rgba(196,120,74,0.2)',
+          border: `1px solid ${mensaje.tipo === 'exito' ? colors.olive :
+                              mensaje.tipo === 'info' ? '#32CD32' : colors.terracotta}`,
+          color: mensaje.tipo === 'exito' ? colors.olive :
+                 mensaje.tipo === 'info' ? '#32CD32' : colors.terracotta,
           textAlign: 'center',
           fontWeight: '500'
         }}>
@@ -1899,23 +1924,39 @@ const StocksView = ({ isAdmin }) => {
 
               {/* Control de stock */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                {/* Stock actual (solo lectura) */}
                 <div style={{ textAlign: 'center' }}>
                   <label style={{ display: 'block', fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>
                     STOCK ACTUAL
                   </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={stockEditando[prod.id] || 0}
-                    onChange={(e) => setStockEditando({ ...stockEditando, [prod.id]: e.target.value })}
-                    disabled={!isAdmin}
-                    style={{
-                      ...inputStyle,
-                      background: isAdmin ? colors.cream : colors.sand,
-                      cursor: isAdmin ? 'text' : 'not-allowed'
-                    }}
-                  />
+                  <div style={{
+                    padding: '8px 12px',
+                    background: colors.sand,
+                    borderRadius: '6px',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    color: colors.sidebarBg,
+                    minWidth: '60px'
+                  }}>
+                    {prod.stock || 0}
+                  </div>
                 </div>
+
+                {/* Campo para agregar/restar */}
+                {isAdmin && (
+                  <div style={{ textAlign: 'center' }}>
+                    <label style={{ display: 'block', fontSize: '11px', color: colors.sidebarBg, marginBottom: '5px' }}>
+                      AGREGAR (+/-)
+                    </label>
+                    <input
+                      type="number"
+                      value={cantidadAgregar[prod.id] || 0}
+                      onChange={(e) => setCantidadAgregar({ ...cantidadAgregar, [prod.id]: e.target.value })}
+                      style={inputStyle}
+                      placeholder="0"
+                    />
+                  </div>
+                )}
 
                 {isAdmin && (
                   <button
@@ -1945,11 +1986,11 @@ const StocksView = ({ isAdmin }) => {
                   width: '12px',
                   height: '12px',
                   borderRadius: '50%',
-                  background: (stockEditando[prod.id] || 0) > 10 ? colors.olive :
-                              (stockEditando[prod.id] || 0) > 0 ? '#F7B731' : colors.terracotta
+                  background: (prod.stock || 0) > 10 ? colors.olive :
+                              (prod.stock || 0) > 0 ? '#F7B731' : colors.terracotta
                 }} title={
-                  (stockEditando[prod.id] || 0) > 10 ? 'Stock OK' :
-                  (stockEditando[prod.id] || 0) > 0 ? 'Stock bajo' : 'Sin stock'
+                  (prod.stock || 0) > 10 ? 'Stock OK' :
+                  (prod.stock || 0) > 0 ? 'Stock bajo' : 'Sin stock'
                 } />
               </div>
             </div>
