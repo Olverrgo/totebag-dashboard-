@@ -1738,6 +1738,73 @@ const ProductosView = ({ isAdmin }) => {
                         <div style={{ fontSize: '20px', fontWeight: '600', color: colors.sidebarBg }}>${prod.costo_total_1_tinta?.toFixed(2)}</div>
                       </div>
                     </div>
+
+                    {/* Indicadores de Stock */}
+                    <div style={{
+                      display: 'flex',
+                      gap: '12px',
+                      marginTop: '15px',
+                      padding: '12px',
+                      background: colors.cream,
+                      borderRadius: '6px',
+                      border: `1px solid ${colors.sand}`
+                    }}>
+                      <div style={{
+                        flex: 1,
+                        textAlign: 'center',
+                        padding: '8px',
+                        background: colors.cotton,
+                        borderRadius: '4px',
+                        border: `1px solid ${(prod.stock || 0) > 0 ? colors.olive : colors.sand}`
+                      }}>
+                        <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '4px' }}>Stock Taller</div>
+                        <div style={{
+                          fontSize: '22px',
+                          fontWeight: '700',
+                          color: (prod.stock || 0) > 0 ? colors.olive : colors.camel
+                        }}>
+                          {prod.stock || 0}
+                        </div>
+                        <div style={{ fontSize: '10px', color: colors.camel }}>unidades</div>
+                      </div>
+                      <div style={{
+                        flex: 1,
+                        textAlign: 'center',
+                        padding: '8px',
+                        background: colors.cotton,
+                        borderRadius: '4px',
+                        border: `1px solid ${(prod.stock_consignacion || 0) > 0 ? colors.terracotta : colors.sand}`
+                      }}>
+                        <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '4px' }}>Consignacion</div>
+                        <div style={{
+                          fontSize: '22px',
+                          fontWeight: '700',
+                          color: (prod.stock_consignacion || 0) > 0 ? colors.terracotta : colors.camel
+                        }}>
+                          {prod.stock_consignacion || 0}
+                        </div>
+                        <div style={{ fontSize: '10px', color: colors.camel }}>unidades</div>
+                      </div>
+                      <div style={{
+                        flex: 1,
+                        textAlign: 'center',
+                        padding: '8px',
+                        background: (prod.stock || 0) + (prod.stock_consignacion || 0) > 0 ? 'rgba(171,213,94,0.15)' : colors.cotton,
+                        borderRadius: '4px',
+                        border: `1px solid ${colors.sidebarBg}`
+                      }}>
+                        <div style={{ fontSize: '11px', color: colors.sidebarBg, marginBottom: '4px' }}>Total</div>
+                        <div style={{
+                          fontSize: '22px',
+                          fontWeight: '700',
+                          color: colors.sidebarBg
+                        }}>
+                          {(prod.stock || 0) + (prod.stock_consignacion || 0)}
+                        </div>
+                        <div style={{ fontSize: '10px', color: colors.sidebarBg }}>disponible</div>
+                      </div>
+                    </div>
+
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
                       <div style={{ display: 'flex', gap: '15px', fontSize: '12px', color: colors.camel }}>
                         <span>2 tintas: ${prod.costo_total_2_tintas?.toFixed(2)}</span>

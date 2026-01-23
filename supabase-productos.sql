@@ -48,6 +48,10 @@ CREATE TABLE IF NOT EXISTS productos (
   costo_total_1_tinta DECIMAL(10,2) DEFAULT 0,
   costo_total_2_tintas DECIMAL(10,2) DEFAULT 0,
   costo_total_3_tintas DECIMAL(10,2) DEFAULT 0,
+  costo_total_4_tintas DECIMAL(10,2) DEFAULT 0,
+  tipo_entrega VARCHAR(20) DEFAULT 'envio',
+  stock INTEGER DEFAULT 0,
+  stock_consignacion INTEGER DEFAULT 0,
   activo BOOLEAN DEFAULT true,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
