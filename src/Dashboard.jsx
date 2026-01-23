@@ -1382,8 +1382,9 @@ const ProductosView = ({ isAdmin }) => {
               src={imagenPopup.url}
               alt={imagenPopup.nombre}
               style={{
-                maxWidth: '80vw',
-                maxHeight: '70vh',
+                maxWidth: '95vw',
+                maxHeight: '85vh',
+                minWidth: '600px',
                 objectFit: 'contain',
                 borderRadius: '8px',
                 border: `2px solid ${colors.sand}`
