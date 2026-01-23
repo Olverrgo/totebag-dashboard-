@@ -877,6 +877,7 @@ const ProductosView = ({ isAdmin }) => {
   const [subiendoArchivo, setSubiendoArchivo] = useState({});
   const [expandirArchivos, setExpandirArchivos] = useState({});
   const [imagenPopup, setImagenPopup] = useState(null); // { url, nombre } para mostrar en popup
+  const [hoverVerBtn, setHoverVerBtn] = useState({}); // Estado para hover de botones "Ver"
 
   // Cargar datos de Supabase al montar
   useEffect(() => {
@@ -2077,15 +2078,18 @@ const ProductosView = ({ isAdmin }) => {
                               {prod.imagen_url && (
                                 <button
                                   onClick={() => setImagenPopup({ url: prod.imagen_url, nombre: prod.linea_nombre })}
+                                  onMouseEnter={() => setHoverVerBtn({ ...hoverVerBtn, [`img-${prod.id}`]: true })}
+                                  onMouseLeave={() => setHoverVerBtn({ ...hoverVerBtn, [`img-${prod.id}`]: false })}
                                   style={{
                                     padding: '6px 10px',
-                                    background: colors.olive,
-                                    color: 'white',
+                                    background: hoverVerBtn[`img-${prod.id}`] ? colors.sidebarBg : '#DA9F17',
+                                    color: hoverVerBtn[`img-${prod.id}`] ? '#DA9F17' : colors.sidebarBg,
                                     border: 'none',
                                     borderRadius: '4px',
                                     fontSize: '11px',
                                     cursor: 'pointer',
-                                    fontWeight: '500'
+                                    fontWeight: '500',
+                                    transition: 'all 0.3s ease'
                                   }}
                                 >
                                   Ver
@@ -2148,14 +2152,18 @@ const ProductosView = ({ isAdmin }) => {
                               {prod.pdf_patron_url && (
                                 <button
                                   onClick={() => abrirPdf(prod.pdf_patron_url)}
+                                  onMouseEnter={() => setHoverVerBtn({ ...hoverVerBtn, [`patron-${prod.id}`]: true })}
+                                  onMouseLeave={() => setHoverVerBtn({ ...hoverVerBtn, [`patron-${prod.id}`]: false })}
                                   style={{
                                     padding: '6px 10px',
-                                    background: colors.terracotta,
-                                    color: 'white',
+                                    background: hoverVerBtn[`patron-${prod.id}`] ? colors.sidebarBg : '#DA9F17',
+                                    color: hoverVerBtn[`patron-${prod.id}`] ? '#DA9F17' : colors.sidebarBg,
                                     border: 'none',
                                     borderRadius: '4px',
                                     fontSize: '11px',
-                                    cursor: 'pointer'
+                                    cursor: 'pointer',
+                                    fontWeight: '500',
+                                    transition: 'all 0.3s ease'
                                   }}
                                 >
                                   Ver
@@ -2218,14 +2226,18 @@ const ProductosView = ({ isAdmin }) => {
                               {prod.pdf_instrucciones_url && (
                                 <button
                                   onClick={() => abrirPdf(prod.pdf_instrucciones_url)}
+                                  onMouseEnter={() => setHoverVerBtn({ ...hoverVerBtn, [`instr-${prod.id}`]: true })}
+                                  onMouseLeave={() => setHoverVerBtn({ ...hoverVerBtn, [`instr-${prod.id}`]: false })}
                                   style={{
                                     padding: '6px 10px',
-                                    background: colors.sidebarBg,
-                                    color: colors.sidebarText,
+                                    background: hoverVerBtn[`instr-${prod.id}`] ? colors.sidebarBg : '#DA9F17',
+                                    color: hoverVerBtn[`instr-${prod.id}`] ? '#DA9F17' : colors.sidebarBg,
                                     border: 'none',
                                     borderRadius: '4px',
                                     fontSize: '11px',
-                                    cursor: 'pointer'
+                                    cursor: 'pointer',
+                                    fontWeight: '500',
+                                    transition: 'all 0.3s ease'
                                   }}
                                 >
                                   Ver
