@@ -2173,14 +2173,24 @@ const SalidasView = ({ isAdmin }) => {
       return;
     }
 
-    // Verificar stock disponible
+    // Verificar stock disponible segun tipo de movimiento
     const producto = productos.find(p => p.id === parseInt(formSalida.productoId));
-    const resumen = calcularResumen(parseInt(formSalida.productoId));
-    const stockDisponible = (producto?.stock || 0) - resumen.enConsignacion - resumen.vendidoDirecto;
+    const stockTaller = producto?.stock || 0;
+    const stockConsignacion = producto?.stock_consignacion || 0;
 
-    if (cantidad > stockDisponible && (formSalida.tipoMovimiento === 'consignacion' || formSalida.tipoMovimiento === 'venta_directa')) {
-      setMensaje({ tipo: 'error', texto: `Stock insuficiente. Disponible: ${stockDisponible}` });
-      return;
+    // Validar segun tipo de movimiento
+    if (formSalida.tipoMovimiento === 'consignacion' || formSalida.tipoMovimiento === 'venta_directa') {
+      // Necesita stock en taller
+      if (cantidad > stockTaller) {
+        setMensaje({ tipo: 'error', texto: `Stock en taller insuficiente. Disponible: ${stockTaller}` });
+        return;
+      }
+    } else if (formSalida.tipoMovimiento === 'venta_consignacion' || formSalida.tipoMovimiento === 'devolucion') {
+      // Necesita stock en consignacion
+      if (cantidad > stockConsignacion) {
+        setMensaje({ tipo: 'error', texto: `Stock en consignacion insuficiente. Disponible: ${stockConsignacion}` });
+        return;
+      }
     }
 
     setGuardando(true);
@@ -2198,13 +2208,52 @@ const SalidasView = ({ isAdmin }) => {
       if (error) {
         setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
       } else {
-        // Actualizar stock del producto si es venta directa
+        // Actualizar stock del producto segun tipo de movimiento
+        const productoId = parseInt(formSalida.productoId);
+        const stockActual = producto?.stock || 0;
+        const consignacionActual = producto?.stock_consignacion || 0;
+
         if (formSalida.tipoMovimiento === 'venta_directa') {
-          await updateProducto(parseInt(formSalida.productoId), {
-            stock: (producto?.stock || 0) - cantidad
+          // Venta directa: resta del stock en taller
+          await updateProducto(productoId, {
+            stock: stockActual - cantidad
           });
           setProductos(productos.map(p =>
-            p.id === parseInt(formSalida.productoId) ? { ...p, stock: (p.stock || 0) - cantidad } : p
+            p.id === productoId ? { ...p, stock: stockActual - cantidad } : p
+          ));
+        } else if (formSalida.tipoMovimiento === 'consignacion') {
+          // Consignacion: mueve de stock taller a stock consignacion
+          await updateProducto(productoId, {
+            stock: stockActual - cantidad,
+            stock_consignacion: consignacionActual + cantidad
+          });
+          setProductos(productos.map(p =>
+            p.id === productoId ? {
+              ...p,
+              stock: stockActual - cantidad,
+              stock_consignacion: consignacionActual + cantidad
+            } : p
+          ));
+        } else if (formSalida.tipoMovimiento === 'venta_consignacion') {
+          // Venta en consignacion: resta del stock consignacion
+          await updateProducto(productoId, {
+            stock_consignacion: consignacionActual - cantidad
+          });
+          setProductos(productos.map(p =>
+            p.id === productoId ? { ...p, stock_consignacion: consignacionActual - cantidad } : p
+          ));
+        } else if (formSalida.tipoMovimiento === 'devolucion') {
+          // Devolucion: regresa de consignacion a taller
+          await updateProducto(productoId, {
+            stock: stockActual + cantidad,
+            stock_consignacion: consignacionActual - cantidad
+          });
+          setProductos(productos.map(p =>
+            p.id === productoId ? {
+              ...p,
+              stock: stockActual + cantidad,
+              stock_consignacion: consignacionActual - cantidad
+            } : p
           ));
         }
 
