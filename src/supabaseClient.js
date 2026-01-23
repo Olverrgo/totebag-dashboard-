@@ -787,4 +787,93 @@ export const onAuthStateChange = (callback) => {
   return supabase.auth.onAuthStateChange(callback);
 };
 
+// =====================================================
+// FUNCIONES PARA STORAGE (Imagenes y PDFs)
+// =====================================================
+
+// Subir imagen de producto
+export const uploadImagenProducto = async (productoId, file) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${productoId}-${Date.now()}.${fileExt}`;
+  const filePath = `productos/${fileName}`;
+
+  const { data, error } = await supabase.storage
+    .from('producto-imagenes')
+    .upload(filePath, file, {
+      cacheControl: '3600',
+      upsert: true
+    });
+
+  if (error) return { data: null, error };
+
+  // Obtener URL publica
+  const { data: { publicUrl } } = supabase.storage
+    .from('producto-imagenes')
+    .getPublicUrl(filePath);
+
+  return {
+    data: {
+      url: publicUrl,
+      nombre: file.name,
+      path: filePath
+    },
+    error: null
+  };
+};
+
+// Subir PDF (patron o instrucciones)
+export const uploadPdfProducto = async (productoId, file, tipo) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const fileName = `${productoId}-${tipo}-${Date.now()}.pdf`;
+  const filePath = `productos/${fileName}`;
+
+  const { data, error } = await supabase.storage
+    .from('producto-documentos')
+    .upload(filePath, file, {
+      cacheControl: '3600',
+      upsert: true
+    });
+
+  if (error) return { data: null, error };
+
+  // Obtener URL firmada (documentos privados)
+  const { data: signedData, error: signError } = await supabase.storage
+    .from('producto-documentos')
+    .createSignedUrl(filePath, 3600); // 1 hora de validez
+
+  return {
+    data: {
+      url: signedData?.signedUrl || filePath,
+      nombre: file.name,
+      path: filePath
+    },
+    error: signError
+  };
+};
+
+// Obtener URL firmada para PDF (renovar acceso)
+export const getSignedPdfUrl = async (filePath) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase.storage
+    .from('producto-documentos')
+    .createSignedUrl(filePath, 3600);
+
+  return { data: data?.signedUrl, error };
+};
+
+// Eliminar archivo de storage
+export const deleteStorageFile = async (bucket, filePath) => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+
+  const { error } = await supabase.storage
+    .from(bucket)
+    .remove([filePath]);
+
+  return { error };
+};
+
 export default supabase;

@@ -16,7 +16,10 @@ import {
   getClientes,
   createCliente,
   getMovimientosStock,
-  createMovimientoStock
+  createMovimientoStock,
+  uploadImagenProducto,
+  uploadPdfProducto,
+  getSignedPdfUrl
 } from './supabaseClient';
 
 // ==================== DATOS ====================
@@ -871,6 +874,8 @@ const ProductosView = ({ isAdmin }) => {
   const [productosGuardados, setProductosGuardados] = useState([]);
   const [configEnvioId, setConfigEnvioId] = useState(null);
   const [productoEditandoId, setProductoEditandoId] = useState(null); // ID del producto que se está editando
+  const [subiendoArchivo, setSubiendoArchivo] = useState({});
+  const [expandirArchivos, setExpandirArchivos] = useState({});
 
   // Cargar datos de Supabase al montar
   useEffect(() => {
@@ -1187,6 +1192,109 @@ const ProductosView = ({ isAdmin }) => {
     });
     setMensaje({ tipo: 'exito', texto: 'Configuración de envío actualizada' });
     setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+  };
+
+  // Manejar subida de imagen
+  const handleImagenUpload = async (productoId, event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validar tipo de archivo
+    if (!file.type.startsWith('image/')) {
+      setMensaje({ tipo: 'error', texto: 'Solo se permiten imágenes (JPG, PNG, WEBP)' });
+      return;
+    }
+
+    // Validar tamaño (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      setMensaje({ tipo: 'error', texto: 'La imagen no debe superar 5MB' });
+      return;
+    }
+
+    setSubiendoArchivo({ ...subiendoArchivo, [`img-${productoId}`]: true });
+
+    try {
+      const { data, error } = await uploadImagenProducto(productoId, file);
+
+      if (error) {
+        setMensaje({ tipo: 'error', texto: 'Error subiendo imagen: ' + error.message });
+      } else {
+        // Actualizar producto con URL de imagen
+        await updateProducto(productoId, {
+          imagen_url: data.url,
+          imagen_nombre: data.nombre
+        });
+
+        // Actualizar estado local
+        setProductosGuardados(productosGuardados.map(p =>
+          p.id === productoId ? { ...p, imagen_url: data.url, imagen_nombre: data.nombre } : p
+        ));
+
+        setMensaje({ tipo: 'exito', texto: 'Imagen subida correctamente' });
+      }
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: 'Error: ' + err.message });
+    } finally {
+      setSubiendoArchivo({ ...subiendoArchivo, [`img-${productoId}`]: false });
+      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+    }
+  };
+
+  // Manejar subida de PDF
+  const handlePdfUpload = async (productoId, tipo, event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validar tipo de archivo
+    if (file.type !== 'application/pdf') {
+      setMensaje({ tipo: 'error', texto: 'Solo se permiten archivos PDF' });
+      return;
+    }
+
+    // Validar tamaño (10MB max)
+    if (file.size > 10 * 1024 * 1024) {
+      setMensaje({ tipo: 'error', texto: 'El PDF no debe superar 10MB' });
+      return;
+    }
+
+    setSubiendoArchivo({ ...subiendoArchivo, [`${tipo}-${productoId}`]: true });
+
+    try {
+      const { data, error } = await uploadPdfProducto(productoId, file, tipo);
+
+      if (error) {
+        setMensaje({ tipo: 'error', texto: 'Error subiendo PDF: ' + error.message });
+      } else {
+        // Campos a actualizar segun tipo
+        const updateFields = tipo === 'patron'
+          ? { pdf_patron_url: data.path, pdf_patron_nombre: data.nombre }
+          : { pdf_instrucciones_url: data.path, pdf_instrucciones_nombre: data.nombre };
+
+        await updateProducto(productoId, updateFields);
+
+        // Actualizar estado local
+        setProductosGuardados(productosGuardados.map(p =>
+          p.id === productoId ? { ...p, ...updateFields } : p
+        ));
+
+        setMensaje({ tipo: 'exito', texto: `PDF de ${tipo === 'patron' ? 'patrón' : 'instrucciones'} subido correctamente` });
+      }
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: 'Error: ' + err.message });
+    } finally {
+      setSubiendoArchivo({ ...subiendoArchivo, [`${tipo}-${productoId}`]: false });
+      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+    }
+  };
+
+  // Abrir PDF con URL firmada
+  const abrirPdf = async (filePath) => {
+    const { data, error } = await getSignedPdfUrl(filePath);
+    if (data) {
+      window.open(data, '_blank');
+    } else {
+      setMensaje({ tipo: 'error', texto: 'Error abriendo PDF' });
+    }
   };
 
   const inputStyle = {
@@ -1803,6 +1911,247 @@ const ProductosView = ({ isAdmin }) => {
                         </div>
                         <div style={{ fontSize: '10px', color: colors.sidebarBg }}>disponible</div>
                       </div>
+                    </div>
+
+                    {/* Seccion de Archivos (Imagen y PDFs) */}
+                    <div style={{
+                      marginTop: '15px',
+                      padding: '12px',
+                      background: colors.cream,
+                      borderRadius: '6px',
+                      border: `1px solid ${colors.sand}`
+                    }}>
+                      <div
+                        onClick={() => setExpandirArchivos({ ...expandirArchivos, [prod.id]: !expandirArchivos[prod.id] })}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <span style={{ fontSize: '12px', fontWeight: '600', color: colors.espresso }}>
+                          Archivos del Producto
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {prod.imagen_url && <span style={{ fontSize: '14px' }}>🖼️</span>}
+                          {prod.pdf_patron_url && <span style={{ fontSize: '14px' }}>📐</span>}
+                          {prod.pdf_instrucciones_url && <span style={{ fontSize: '14px' }}>📋</span>}
+                          <span style={{ fontSize: '16px', color: colors.camel }}>
+                            {expandirArchivos[prod.id] ? '▲' : '▼'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {expandirArchivos[prod.id] && (
+                        <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          {/* Imagen del producto */}
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            padding: '10px',
+                            background: colors.cotton,
+                            borderRadius: '4px',
+                            border: `1px solid ${prod.imagen_url ? colors.olive : colors.sand}`
+                          }}>
+                            {prod.imagen_url ? (
+                              <img
+                                src={prod.imagen_url}
+                                alt={prod.linea_nombre}
+                                style={{
+                                  width: '60px',
+                                  height: '60px',
+                                  objectFit: 'cover',
+                                  borderRadius: '4px',
+                                  border: `1px solid ${colors.sand}`
+                                }}
+                              />
+                            ) : (
+                              <div style={{
+                                width: '60px',
+                                height: '60px',
+                                background: colors.sand,
+                                borderRadius: '4px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '24px'
+                              }}>
+                                🖼️
+                              </div>
+                            )}
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: '12px', fontWeight: '500', color: colors.espresso }}>
+                                Imagen del Producto
+                              </div>
+                              <div style={{ fontSize: '11px', color: colors.camel }}>
+                                {prod.imagen_nombre || 'Sin imagen'}
+                              </div>
+                            </div>
+                            {isAdmin && (
+                              <label style={{
+                                padding: '6px 12px',
+                                background: subiendoArchivo[`img-${prod.id}`] ? colors.sand : colors.sidebarBg,
+                                color: colors.sidebarText,
+                                borderRadius: '4px',
+                                fontSize: '11px',
+                                cursor: subiendoArchivo[`img-${prod.id}`] ? 'wait' : 'pointer',
+                                fontWeight: '500'
+                              }}>
+                                {subiendoArchivo[`img-${prod.id}`] ? 'Subiendo...' : (prod.imagen_url ? 'Cambiar' : 'Subir')}
+                                <input
+                                  type="file"
+                                  accept="image/jpeg,image/png,image/webp"
+                                  onChange={(e) => handleImagenUpload(prod.id, e)}
+                                  style={{ display: 'none' }}
+                                  disabled={subiendoArchivo[`img-${prod.id}`]}
+                                />
+                              </label>
+                            )}
+                          </div>
+
+                          {/* PDF Patron de corte */}
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            padding: '10px',
+                            background: colors.cotton,
+                            borderRadius: '4px',
+                            border: `1px solid ${prod.pdf_patron_url ? colors.terracotta : colors.sand}`
+                          }}>
+                            <div style={{
+                              width: '40px',
+                              height: '40px',
+                              background: prod.pdf_patron_url ? 'rgba(196,120,74,0.15)' : colors.sand,
+                              borderRadius: '4px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '20px'
+                            }}>
+                              📐
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: '12px', fontWeight: '500', color: colors.espresso }}>
+                                Patron de Corte
+                              </div>
+                              <div style={{ fontSize: '11px', color: colors.camel }}>
+                                {prod.pdf_patron_nombre || 'Sin archivo'}
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              {prod.pdf_patron_url && (
+                                <button
+                                  onClick={() => abrirPdf(prod.pdf_patron_url)}
+                                  style={{
+                                    padding: '6px 10px',
+                                    background: colors.terracotta,
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    fontSize: '11px',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  Ver
+                                </button>
+                              )}
+                              {isAdmin && (
+                                <label style={{
+                                  padding: '6px 10px',
+                                  background: subiendoArchivo[`patron-${prod.id}`] ? colors.sand : colors.sidebarBg,
+                                  color: colors.sidebarText,
+                                  borderRadius: '4px',
+                                  fontSize: '11px',
+                                  cursor: subiendoArchivo[`patron-${prod.id}`] ? 'wait' : 'pointer',
+                                  fontWeight: '500'
+                                }}>
+                                  {subiendoArchivo[`patron-${prod.id}`] ? '...' : (prod.pdf_patron_url ? 'Cambiar' : 'Subir')}
+                                  <input
+                                    type="file"
+                                    accept="application/pdf"
+                                    onChange={(e) => handlePdfUpload(prod.id, 'patron', e)}
+                                    style={{ display: 'none' }}
+                                    disabled={subiendoArchivo[`patron-${prod.id}`]}
+                                  />
+                                </label>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* PDF Instrucciones de confeccion */}
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            padding: '10px',
+                            background: colors.cotton,
+                            borderRadius: '4px',
+                            border: `1px solid ${prod.pdf_instrucciones_url ? colors.sidebarBg : colors.sand}`
+                          }}>
+                            <div style={{
+                              width: '40px',
+                              height: '40px',
+                              background: prod.pdf_instrucciones_url ? 'rgba(0,95,132,0.15)' : colors.sand,
+                              borderRadius: '4px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '20px'
+                            }}>
+                              📋
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: '12px', fontWeight: '500', color: colors.espresso }}>
+                                Instrucciones de Confeccion
+                              </div>
+                              <div style={{ fontSize: '11px', color: colors.camel }}>
+                                {prod.pdf_instrucciones_nombre || 'Sin archivo'}
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              {prod.pdf_instrucciones_url && (
+                                <button
+                                  onClick={() => abrirPdf(prod.pdf_instrucciones_url)}
+                                  style={{
+                                    padding: '6px 10px',
+                                    background: colors.sidebarBg,
+                                    color: colors.sidebarText,
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    fontSize: '11px',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  Ver
+                                </button>
+                              )}
+                              {isAdmin && (
+                                <label style={{
+                                  padding: '6px 10px',
+                                  background: subiendoArchivo[`instrucciones-${prod.id}`] ? colors.sand : colors.olive,
+                                  color: 'white',
+                                  borderRadius: '4px',
+                                  fontSize: '11px',
+                                  cursor: subiendoArchivo[`instrucciones-${prod.id}`] ? 'wait' : 'pointer',
+                                  fontWeight: '500'
+                                }}>
+                                  {subiendoArchivo[`instrucciones-${prod.id}`] ? '...' : (prod.pdf_instrucciones_url ? 'Cambiar' : 'Subir')}
+                                  <input
+                                    type="file"
+                                    accept="application/pdf"
+                                    onChange={(e) => handlePdfUpload(prod.id, 'instrucciones', e)}
+                                    style={{ display: 'none' }}
+                                    disabled={subiendoArchivo[`instrucciones-${prod.id}`]}
+                                  />
+                                </label>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
