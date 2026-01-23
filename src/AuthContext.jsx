@@ -73,15 +73,15 @@ export const AuthProvider = ({ children }) => {
     let isInitialized = false;
 
     const initializeAuth = async () => {
-            
+
       try {
         // Get current session
         const { data: { session }, error } = await supabase.auth.getSession();
-        
+
         if (!mountedRef.current) return;
 
         if (session?.user) {
-                    setUser(session.user);
+          setUser(session.user);
 
           // Wait a bit for auth to be fully ready
           await new Promise(r => setTimeout(r, 800));
@@ -89,16 +89,15 @@ export const AuthProvider = ({ children }) => {
           if (!mountedRef.current) return;
 
           const profileData = await loadProfile(session.user.id);
-          
+
           if (mountedRef.current) {
             if (profileData) {
-                            setProfile(profileData);
+              setProfile(profileData);
             } else {
-                            setAuthError('No se pudo cargar el perfil');
+              setAuthError('No se pudo cargar el perfil');
             }
           }
-        } else {
-                  }
+        }
       } catch (err) {
         console.error('initializeAuth error:', err);
         if (mountedRef.current) {
@@ -115,36 +114,80 @@ export const AuthProvider = ({ children }) => {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        
+
         if (!mountedRef.current) return;
+
+        // Handle token refresh - keep user logged in
+        if (event === 'TOKEN_REFRESHED' && session?.user) {
+          setUser(session.user);
+          // No need to reload profile, just ensure user state is updated
+          if (!profile && isInitialized) {
+            const profileData = await loadProfile(session.user.id);
+            if (mountedRef.current && profileData) {
+              setProfile(profileData);
+            }
+          }
+          return;
+        }
 
         // Only handle SIGNED_IN after initialization (new logins)
         if (event === 'SIGNED_IN' && isInitialized && session?.user) {
-                    setUser(session.user);
+          setUser(session.user);
           setLoading(true);
-          
+
           await new Promise(r => setTimeout(r, 500));
-          
+
           const profileData = await loadProfile(session.user.id);
           if (mountedRef.current) {
             setProfile(profileData);
             setLoading(false);
           }
         } else if (event === 'SIGNED_OUT') {
-                    setUser(null);
+          setUser(null);
           setProfile(null);
           setLoading(false);
         }
       }
     );
 
+    // Handle visibility change (when user returns to tab/app)
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && isInitialized && mountedRef.current) {
+        // Verify session is still valid when page becomes visible
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (mountedRef.current) {
+          if (session?.user) {
+            // Session is valid, ensure state is correct
+            if (!user || user.id !== session.user.id) {
+              setUser(session.user);
+            }
+            // Reload profile if missing
+            if (!profile) {
+              const profileData = await loadProfile(session.user.id);
+              if (mountedRef.current && profileData) {
+                setProfile(profileData);
+              }
+            }
+          } else if (user) {
+            // Session expired, clear state
+            setUser(null);
+            setProfile(null);
+          }
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     initializeAuth();
 
     return () => {
       mountedRef.current = false;
       subscription?.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [user, profile]);
 
   const isAdmin = profile?.rol === 'admin';
   const isUsuario = profile?.rol === 'usuario';
