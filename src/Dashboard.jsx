@@ -1341,7 +1341,9 @@ const ProductosView = ({ isAdmin }) => {
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 2000,
-            cursor: 'pointer'
+            cursor: 'pointer',
+            padding: '20px',
+            boxSizing: 'border-box'
           }}
         >
           <div
@@ -1350,16 +1352,21 @@ const ProductosView = ({ isAdmin }) => {
               background: colors.cotton,
               borderRadius: '12px',
               padding: '20px',
-              maxWidth: '90vw',
-              maxHeight: '90vh',
-              boxShadow: '0 20px 60px rgba(0,0,0,0.4)'
+              maxWidth: 'calc(100vw - 40px)',
+              maxHeight: 'calc(100vh - 40px)',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              boxSizing: 'border-box'
             }}
           >
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              marginBottom: '15px'
+              marginBottom: '15px',
+              flexShrink: 0
             }}>
               <h3 style={{ margin: 0, color: colors.espresso, fontSize: '18px' }}>
                 {imagenPopup.nombre}
@@ -1369,27 +1376,35 @@ const ProductosView = ({ isAdmin }) => {
                 style={{
                   background: 'none',
                   border: 'none',
-                  fontSize: '24px',
+                  fontSize: '28px',
                   cursor: 'pointer',
                   color: colors.camel,
-                  padding: '5px'
+                  padding: '5px',
+                  lineHeight: 1
                 }}
               >
                 ×
               </button>
             </div>
-            <img
-              src={imagenPopup.url}
-              alt={imagenPopup.nombre}
-              style={{
-                maxWidth: '95vw',
-                maxHeight: '85vh',
-                minWidth: '600px',
-                objectFit: 'contain',
-                borderRadius: '8px',
-                border: `2px solid ${colors.sand}`
-              }}
-            />
+            <div style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden'
+            }}>
+              <img
+                src={imagenPopup.url}
+                alt={imagenPopup.nombre}
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: 'calc(100vh - 140px)',
+                  objectFit: 'contain',
+                  borderRadius: '8px',
+                  border: `2px solid ${colors.sand}`
+                }}
+              />
+            </div>
           </div>
         </div>
       )}
