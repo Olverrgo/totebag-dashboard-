@@ -876,6 +876,7 @@ const ProductosView = ({ isAdmin }) => {
   const [productoEditandoId, setProductoEditandoId] = useState(null); // ID del producto que se está editando
   const [subiendoArchivo, setSubiendoArchivo] = useState({});
   const [expandirArchivos, setExpandirArchivos] = useState({});
+  const [imagenPopup, setImagenPopup] = useState(null); // { url, nombre } para mostrar en popup
 
   // Cargar datos de Supabase al montar
   useEffect(() => {
@@ -1325,6 +1326,73 @@ const ProductosView = ({ isAdmin }) => {
 
   return (
     <div>
+      {/* Popup para ver imagen en grande */}
+      {imagenPopup && (
+        <div
+          onClick={() => setImagenPopup(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.85)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000,
+            cursor: 'pointer'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: colors.cotton,
+              borderRadius: '12px',
+              padding: '20px',
+              maxWidth: '90vw',
+              maxHeight: '90vh',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.4)'
+            }}
+          >
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '15px'
+            }}>
+              <h3 style={{ margin: 0, color: colors.espresso, fontSize: '18px' }}>
+                {imagenPopup.nombre}
+              </h3>
+              <button
+                onClick={() => setImagenPopup(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: colors.camel,
+                  padding: '5px'
+                }}
+              >
+                ×
+              </button>
+            </div>
+            <img
+              src={imagenPopup.url}
+              alt={imagenPopup.nombre}
+              style={{
+                maxWidth: '80vw',
+                maxHeight: '70vh',
+                objectFit: 'contain',
+                borderRadius: '8px',
+                border: `2px solid ${colors.sand}`
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Header con título y botón agregar */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px' }}>
         <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '300', letterSpacing: '2px', color: colors.espresso }}>
@@ -1989,26 +2057,45 @@ const ProductosView = ({ isAdmin }) => {
                                 {prod.imagen_nombre || 'Sin imagen'}
                               </div>
                             </div>
-                            {isAdmin && (
-                              <label style={{
-                                padding: '6px 12px',
-                                background: subiendoArchivo[`img-${prod.id}`] ? colors.sand : colors.sidebarBg,
-                                color: colors.sidebarText,
-                                borderRadius: '4px',
-                                fontSize: '11px',
-                                cursor: subiendoArchivo[`img-${prod.id}`] ? 'wait' : 'pointer',
-                                fontWeight: '500'
-                              }}>
-                                {subiendoArchivo[`img-${prod.id}`] ? 'Subiendo...' : (prod.imagen_url ? 'Cambiar' : 'Subir')}
-                                <input
-                                  type="file"
-                                  accept="image/jpeg,image/png,image/webp"
-                                  onChange={(e) => handleImagenUpload(prod.id, e)}
-                                  style={{ display: 'none' }}
-                                  disabled={subiendoArchivo[`img-${prod.id}`]}
-                                />
-                              </label>
-                            )}
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              {prod.imagen_url && (
+                                <button
+                                  onClick={() => setImagenPopup({ url: prod.imagen_url, nombre: prod.linea_nombre })}
+                                  style={{
+                                    padding: '6px 10px',
+                                    background: colors.olive,
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    fontSize: '11px',
+                                    cursor: 'pointer',
+                                    fontWeight: '500'
+                                  }}
+                                >
+                                  Ver
+                                </button>
+                              )}
+                              {isAdmin && (
+                                <label style={{
+                                  padding: '6px 12px',
+                                  background: subiendoArchivo[`img-${prod.id}`] ? colors.sand : colors.sidebarBg,
+                                  color: colors.sidebarText,
+                                  borderRadius: '4px',
+                                  fontSize: '11px',
+                                  cursor: subiendoArchivo[`img-${prod.id}`] ? 'wait' : 'pointer',
+                                  fontWeight: '500'
+                                }}>
+                                  {subiendoArchivo[`img-${prod.id}`] ? 'Subiendo...' : (prod.imagen_url ? 'Cambiar' : 'Subir')}
+                                  <input
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp"
+                                    onChange={(e) => handleImagenUpload(prod.id, e)}
+                                    style={{ display: 'none' }}
+                                    disabled={subiendoArchivo[`img-${prod.id}`]}
+                                  />
+                                </label>
+                              )}
+                            </div>
                           </div>
 
                           {/* PDF Patron de corte */}
