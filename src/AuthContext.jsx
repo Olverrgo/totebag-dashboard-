@@ -140,15 +140,24 @@ export const AuthProvider = ({ children }) => {
 
         // Only handle SIGNED_IN after initialization (new logins)
         if (event === 'SIGNED_IN' && isInitialized && session?.user) {
+          // If we already have user and profile, skip - this is just a session refresh
+          if (userRef.current && profileRef.current) {
+            return;
+          }
+
           setUser(session.user);
-          setLoading(true);
 
-          await new Promise(r => setTimeout(r, 500));
+          // Only show loading if we don't have a profile yet
+          if (!profileRef.current) {
+            setLoading(true);
 
-          const profileData = await loadProfile(session.user.id);
-          if (mountedRef.current) {
-            setProfile(profileData);
-            setLoading(false);
+            await new Promise(r => setTimeout(r, 500));
+
+            const profileData = await loadProfile(session.user.id);
+            if (mountedRef.current) {
+              setProfile(profileData);
+              setLoading(false);
+            }
           }
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
