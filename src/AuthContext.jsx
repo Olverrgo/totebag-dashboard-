@@ -161,16 +161,20 @@ export const AuthProvider = ({ children }) => {
     // Handle visibility change (when user returns to tab/app)
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible' && isInitialized && mountedRef.current) {
-        // Verify session is still valid when page becomes visible
+        // If we already have user and profile, don't do anything - session is fine
+        if (userRef.current && profileRef.current) {
+          return;
+        }
+
+        // Only verify session if something is missing
         const { data: { session } } = await supabase.auth.getSession();
 
         if (mountedRef.current) {
           if (session?.user) {
-            // Session is valid, ensure state is correct (use refs to avoid stale closures)
-            if (!userRef.current || userRef.current.id !== session.user.id) {
+            // Session is valid, restore missing state
+            if (!userRef.current) {
               setUser(session.user);
             }
-            // Reload profile if missing
             if (!profileRef.current) {
               const profileData = await loadProfile(session.user.id);
               if (mountedRef.current && profileData) {
