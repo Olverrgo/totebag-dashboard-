@@ -17,6 +17,14 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
   const mountedRef = useRef(true);
+  const userRef = useRef(null);
+  const profileRef = useRef(null);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    userRef.current = user;
+    profileRef.current = profile;
+  }, [user, profile]);
 
   const loadProfile = async (userId, retryCount = 0) => {
         
@@ -120,8 +128,8 @@ export const AuthProvider = ({ children }) => {
         // Handle token refresh - keep user logged in
         if (event === 'TOKEN_REFRESHED' && session?.user) {
           setUser(session.user);
-          // No need to reload profile, just ensure user state is updated
-          if (!profile && isInitialized) {
+          // No need to reload profile, just ensure user state is updated (use ref to avoid stale closure)
+          if (!profileRef.current && isInitialized) {
             const profileData = await loadProfile(session.user.id);
             if (mountedRef.current && profileData) {
               setProfile(profileData);
@@ -158,18 +166,18 @@ export const AuthProvider = ({ children }) => {
 
         if (mountedRef.current) {
           if (session?.user) {
-            // Session is valid, ensure state is correct
-            if (!user || user.id !== session.user.id) {
+            // Session is valid, ensure state is correct (use refs to avoid stale closures)
+            if (!userRef.current || userRef.current.id !== session.user.id) {
               setUser(session.user);
             }
             // Reload profile if missing
-            if (!profile) {
+            if (!profileRef.current) {
               const profileData = await loadProfile(session.user.id);
               if (mountedRef.current && profileData) {
                 setProfile(profileData);
               }
             }
-          } else if (user) {
+          } else if (userRef.current) {
             // Session expired, clear state
             setUser(null);
             setProfile(null);
@@ -187,7 +195,7 @@ export const AuthProvider = ({ children }) => {
       subscription?.unsubscribe();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [user, profile]);
+  }, []);
 
   const isAdmin = profile?.rol === 'admin';
   const isUsuario = profile?.rol === 'usuario';
