@@ -2853,8 +2853,9 @@ const SalidasView = ({ isAdmin }) => {
         <div style={{ display: 'grid', gap: '10px' }}>
           {productos.map(prod => {
             const resumen = calcularResumen(prod.id);
-            const stockTotal = prod.stock || 0;
-            const disponible = stockTotal - resumen.enConsignacion - resumen.vendidoDirecto;
+            const stockTaller = prod.stock || 0;
+            const stockConsignacion = prod.stock_consignacion || 0;
+            const disponible = stockTaller + stockConsignacion;
             return (
               <div key={prod.id} style={{
                 background: colors.cotton,
@@ -2873,12 +2874,12 @@ const SalidasView = ({ isAdmin }) => {
                 </div>
                 <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '10px', color: colors.camel }}>STOCK</div>
-                    <div style={{ fontSize: '18px', fontWeight: '700', color: colors.espresso }}>{stockTotal}</div>
+                    <div style={{ fontSize: '10px', color: colors.camel }}>TALLER</div>
+                    <div style={{ fontSize: '18px', fontWeight: '700', color: colors.espresso }}>{stockTaller}</div>
                   </div>
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '10px', color: colors.camel }}>CONSIGNACIÓN</div>
-                    <div style={{ fontSize: '18px', fontWeight: '700', color: '#F39C12' }}>{resumen.enConsignacion}</div>
+                    <div style={{ fontSize: '18px', fontWeight: '700', color: '#F39C12' }}>{stockConsignacion}</div>
                   </div>
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '10px', color: colors.camel }}>VENDIDO</div>
