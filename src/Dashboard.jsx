@@ -368,54 +368,73 @@ const productos = {
 };
 
 // E-commerce análisis - AMAZON
-// Costos base Manta Cruda: Material $6.25 + Maquila $6 + Insumos $1.5 + Merma $0.75 = $14.50 ≈ $15
-const COSTO_PRODUCCION_MANTA = 15;
-const AMAZON_COMISION = 0.15; // 15% del valor de venta
-const AMAZON_FBA_FEE = 55; // Tarifa gestión FBA
-const AMAZON_ENVIO_BODEGA = 15; // Envío a bodega Amazon (prorrateado)
+// Valores por defecto para costos (editables por admin)
+const COSTOS_AMAZON_DEFAULT = {
+  material: 6.25,        // Manta $25/m ÷ 2 bolsas
+  maquila: 6.00,         // Corte + Confección
+  insumos: 1.50,         // Hilo + Etiqueta
+  merma: 0.75,           // 5% margen error
+  amazonComision: 15,    // 15% del valor de venta
+  amazonFbaFee: 55,      // Tarifa gestión FBA
+  amazonEnvioBodega: 15, // Envío a bodega Amazon
+  precioBaseMayoreo: 45, // Precio base mayoreo
+  piezasPorEnvioFBA: 10  // Piezas por envío para prorrateo
+};
 
-// Tabla de precios Amazon con diferentes puntos de precio
-const amazonPreciosData = [
-  { precioVenta: 149, piezas: 1 },
-  { precioVenta: 179, piezas: 1 },
-  { precioVenta: 199, piezas: 1 },
-  { precioVenta: 249, piezas: 1 },
-  { precioVenta: 299, piezas: 1 },
-].map(item => {
-  const comision = item.precioVenta * AMAZON_COMISION;
-  const costoFBA = AMAZON_FBA_FEE / 10; // Prorrateado por pieza (envío de 10 pzas)
-  const costoEnvioBodega = AMAZON_ENVIO_BODEGA / 10;
-  const costoTotal = COSTO_PRODUCCION_MANTA + comision + costoFBA + costoEnvioBodega;
-  const utilidad = item.precioVenta - costoTotal;
-  const margen = ((utilidad / costoTotal) * 100).toFixed(0);
-  return { ...item, comision: comision.toFixed(2), costoTotal: costoTotal.toFixed(2), utilidad: utilidad.toFixed(2), margen };
-});
+// Función para calcular costo de producción total
+const calcularCostoProduccion = (costos) => {
+  return costos.material + costos.maquila + costos.insumos + costos.merma;
+};
 
-// Tabla de mayoreo Amazon - Mínimo 20 piezas, con descuentos por volumen
-const amazonMayoreoData = [
-  { cantidad: 20, descuento: 0, segmento: 'Mayoreo inicial' },
-  { cantidad: 50, descuento: 0.05, segmento: 'Mayoreo estándar' },
-  { cantidad: 100, descuento: 0.10, segmento: 'Mayoreo preferente' },
-  { cantidad: 200, descuento: 0.15, segmento: 'Distribuidor' },
-  { cantidad: 300, descuento: 0.18, segmento: 'Distribuidor Plus' },
-  { cantidad: 500, descuento: 0.22, segmento: 'Mayorista' },
-].map(item => {
-  const precioBase = 45; // Precio base mayoreo por pieza
-  const precioUnit = precioBase * (1 - item.descuento);
-  const costoUnit = COSTO_PRODUCCION_MANTA;
-  const utilidadUnit = precioUnit - costoUnit;
-  const margen = ((utilidadUnit / costoUnit) * 100).toFixed(0);
-  const ingresoTotal = precioUnit * item.cantidad;
-  const utilidadTotal = utilidadUnit * item.cantidad;
-  return {
-    ...item,
-    precioUnit: precioUnit.toFixed(2),
-    utilidadUnit: utilidadUnit.toFixed(2),
-    margen,
-    ingresoTotal: ingresoTotal.toFixed(0),
-    utilidadTotal: utilidadTotal.toFixed(0)
-  };
-});
+// Función para generar datos de precios Amazon
+const generarAmazonPreciosData = (costos) => {
+  const costoProduccion = calcularCostoProduccion(costos);
+  const comisionRate = costos.amazonComision / 100;
+
+  return [
+    { precioVenta: 149, piezas: 1 },
+    { precioVenta: 179, piezas: 1 },
+    { precioVenta: 199, piezas: 1 },
+    { precioVenta: 249, piezas: 1 },
+    { precioVenta: 299, piezas: 1 },
+  ].map(item => {
+    const comision = item.precioVenta * comisionRate;
+    const costoFBA = costos.amazonFbaFee / costos.piezasPorEnvioFBA;
+    const costoEnvioBodega = costos.amazonEnvioBodega / costos.piezasPorEnvioFBA;
+    const costoTotal = costoProduccion + comision + costoFBA + costoEnvioBodega;
+    const utilidad = item.precioVenta - costoTotal;
+    const margen = ((utilidad / costoTotal) * 100).toFixed(0);
+    return { ...item, comision: comision.toFixed(2), costoTotal: costoTotal.toFixed(2), utilidad: utilidad.toFixed(2), margen };
+  });
+};
+
+// Función para generar datos de mayoreo Amazon
+const generarAmazonMayoreoData = (costos) => {
+  const costoProduccion = calcularCostoProduccion(costos);
+
+  return [
+    { cantidad: 20, descuento: 0, segmento: 'Mayoreo inicial' },
+    { cantidad: 50, descuento: 0.05, segmento: 'Mayoreo estándar' },
+    { cantidad: 100, descuento: 0.10, segmento: 'Mayoreo preferente' },
+    { cantidad: 200, descuento: 0.15, segmento: 'Distribuidor' },
+    { cantidad: 300, descuento: 0.18, segmento: 'Distribuidor Plus' },
+    { cantidad: 500, descuento: 0.22, segmento: 'Mayorista' },
+  ].map(item => {
+    const precioUnit = costos.precioBaseMayoreo * (1 - item.descuento);
+    const utilidadUnit = precioUnit - costoProduccion;
+    const margen = ((utilidadUnit / costoProduccion) * 100).toFixed(0);
+    const ingresoTotal = precioUnit * item.cantidad;
+    const utilidadTotal = utilidadUnit * item.cantidad;
+    return {
+      ...item,
+      precioUnit: precioUnit.toFixed(2),
+      utilidadUnit: utilidadUnit.toFixed(2),
+      margen,
+      ingresoTotal: ingresoTotal.toFixed(0),
+      utilidadTotal: utilidadTotal.toFixed(0)
+    };
+  });
+};
 
 // Costos de envío
 const costosEnvio = {
@@ -3286,7 +3305,38 @@ const MayoreoView = ({ productosActualizados, condicionesEco, condicionesEcoForr
 };
 
 // Vista E-commerce - AMAZON
-const EcommerceView = ({ productosActualizados, condicionesEco, condicionesEcoForro }) => {
+const EcommerceView = ({ productosActualizados, costosAmazon, setCostosAmazon, isAdmin }) => {
+  const [editandoCostos, setEditandoCostos] = useState(false);
+  const [costosTemp, setCostosTemp] = useState(costosAmazon || COSTOS_AMAZON_DEFAULT);
+
+  // Usar costos actuales o defaults
+  const costos = costosAmazon || COSTOS_AMAZON_DEFAULT;
+  const costoProduccion = calcularCostoProduccion(costos);
+  const amazonPreciosData = generarAmazonPreciosData(costos);
+  const amazonMayoreoData = generarAmazonMayoreoData(costos);
+
+  const handleGuardarCostos = () => {
+    if (setCostosAmazon) {
+      setCostosAmazon(costosTemp);
+    }
+    setEditandoCostos(false);
+  };
+
+  const handleCancelar = () => {
+    setCostosTemp(costos);
+    setEditandoCostos(false);
+  };
+
+  const inputStyle = {
+    width: '80px',
+    padding: '8px',
+    border: `1px solid ${colors.camel}`,
+    borderRadius: '4px',
+    fontSize: '14px',
+    textAlign: 'center',
+    fontWeight: '600'
+  };
+
   return (
     <div>
       <h2 style={{ margin: '0 0 25px', fontSize: '24px', fontWeight: '300', letterSpacing: '2px', color: colors.espresso }}>
@@ -3310,22 +3360,22 @@ const EcommerceView = ({ productosActualizados, condicionesEco, condicionesEcoFo
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' }}>
           <div style={{ background: 'rgba(255,255,255,0.9)', padding: '15px', borderRadius: '6px', textAlign: 'center' }}>
             <div style={{ fontSize: '10px', color: '#666', marginBottom: '5px' }}>COSTO PRODUCCIÓN</div>
-            <div style={{ fontSize: '24px', fontWeight: '700', color: '#232F3E' }}>${COSTO_PRODUCCION_MANTA}</div>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: '#232F3E' }}>${costoProduccion.toFixed(2)}</div>
             <div style={{ fontSize: '9px', color: '#888' }}>Material + Maquila + Insumos</div>
           </div>
           <div style={{ background: 'rgba(255,255,255,0.9)', padding: '15px', borderRadius: '6px', textAlign: 'center' }}>
             <div style={{ fontSize: '10px', color: '#666', marginBottom: '5px' }}>COMISIÓN AMAZON</div>
-            <div style={{ fontSize: '24px', fontWeight: '700', color: '#E47911' }}>{AMAZON_COMISION * 100}%</div>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: '#E47911' }}>{costos.amazonComision}%</div>
             <div style={{ fontSize: '9px', color: '#888' }}>Del valor de venta</div>
           </div>
           <div style={{ background: 'rgba(255,255,255,0.9)', padding: '15px', borderRadius: '6px', textAlign: 'center' }}>
             <div style={{ fontSize: '10px', color: '#666', marginBottom: '5px' }}>TARIFA FBA</div>
-            <div style={{ fontSize: '24px', fontWeight: '700', color: '#232F3E' }}>${AMAZON_FBA_FEE}</div>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: '#232F3E' }}>${costos.amazonFbaFee}</div>
             <div style={{ fontSize: '9px', color: '#888' }}>Gestión por envío</div>
           </div>
           <div style={{ background: 'rgba(255,255,255,0.9)', padding: '15px', borderRadius: '6px', textAlign: 'center' }}>
             <div style={{ fontSize: '10px', color: '#666', marginBottom: '5px' }}>ENVÍO BODEGA</div>
-            <div style={{ fontSize: '24px', fontWeight: '700', color: '#232F3E' }}>${AMAZON_ENVIO_BODEGA}</div>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: '#232F3E' }}>${costos.amazonEnvioBodega}</div>
             <div style={{ fontSize: '9px', color: '#888' }}>Prorrateado</div>
           </div>
         </div>
@@ -3339,7 +3389,7 @@ const EcommerceView = ({ productosActualizados, condicionesEco, condicionesEcoFo
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
           <thead>
             <tr style={{ background: '#232F3E', color: 'white' }}>
-              {['Precio Venta', 'Comisión 15%', 'Costo Total', 'Utilidad/pza', 'Margen %'].map(h => (
+              {['Precio Venta', `Comisión ${costos.amazonComision}%`, 'Costo Total', 'Utilidad/pza', 'Margen %'].map(h => (
                 <th key={h} style={{ padding: '12px', textAlign: 'center', fontSize: '10px' }}>{h}</th>
               ))}
             </tr>
@@ -3361,7 +3411,7 @@ const EcommerceView = ({ productosActualizados, condicionesEco, condicionesEcoFo
           </tbody>
         </table>
         <div style={{ marginTop: '15px', padding: '10px', background: '#FFF3CD', borderRadius: '4px', fontSize: '11px', color: '#856404' }}>
-          <strong>Nota:</strong> Costo FBA y envío a bodega prorrateados por 10 piezas. Para mejor margen, envía lotes de 20+ piezas.
+          <strong>Nota:</strong> Costo FBA y envío a bodega prorrateados por {costos.piezasPorEnvioFBA} piezas. Para mejor margen, envía lotes de 20+ piezas.
         </div>
       </div>
 
@@ -3370,7 +3420,7 @@ const EcommerceView = ({ productosActualizados, condicionesEco, condicionesEcoFo
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
           <span style={{ fontSize: '24px' }}>🏷️</span>
           <h3 style={{ margin: 0, fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>
-            TABLA DE PRECIOS MAYOREO — Mínimo 20 piezas (Precio Base: $45)
+            TABLA DE PRECIOS MAYOREO — Mínimo 20 piezas (Precio Base: ${costos.precioBaseMayoreo})
           </h3>
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
@@ -3417,36 +3467,194 @@ const EcommerceView = ({ productosActualizados, condicionesEco, condicionesEcoFo
         </ResponsiveContainer>
       </div>
 
-      {/* Desglose de Costos */}
-      <div style={{ background: `${colors.cream}`, padding: '20px', border: `1px solid ${colors.sand}`, marginBottom: '25px', borderRadius: '8px' }}>
-        <h3 style={{ margin: '0 0 15px', fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>
-          DESGLOSE DE COSTOS — Manta Cruda (Tote Bag 35x40 cm)
-        </h3>
+      {/* Desglose de Costos - EDITABLE POR ADMIN */}
+      <div style={{ background: `${colors.cream}`, padding: '20px', border: `2px solid ${isAdmin ? colors.sidebarBg : colors.sand}`, marginBottom: '25px', borderRadius: '8px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+          <h3 style={{ margin: 0, fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>
+            DESGLOSE DE COSTOS — Manta Cruda (Tote Bag 35x40 cm)
+            {isAdmin && <span style={{ fontSize: '10px', color: colors.sidebarBg, marginLeft: '10px' }}>(Admin: Editable)</span>}
+          </h3>
+          {isAdmin && !editandoCostos && (
+            <button
+              onClick={() => { setCostosTemp(costos); setEditandoCostos(true); }}
+              style={{
+                background: colors.sidebarBg,
+                color: 'white',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: '600'
+              }}
+            >
+              Editar Costos
+            </button>
+          )}
+          {isAdmin && editandoCostos && (
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={handleGuardarCostos}
+                style={{
+                  background: colors.olive,
+                  color: 'white',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: '600'
+                }}
+              >
+                Guardar
+              </button>
+              <button
+                onClick={handleCancelar}
+                style={{
+                  background: colors.terracotta,
+                  color: 'white',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: '600'
+                }}
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Costos de Producción */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
           <div style={{ background: colors.cotton, padding: '15px', borderRadius: '6px', border: `1px solid ${colors.sand}` }}>
-            <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '8px' }}>MATERIAL (Manta $25/m)</div>
-            <div style={{ fontSize: '18px', fontWeight: '700', color: colors.espresso }}>$6.25/bolsa</div>
-            <div style={{ fontSize: '9px', color: colors.camel }}>0.5m para 2 bolsas = $12.50/2</div>
+            <div style={{ fontSize: '11px', color: colors.sidebarBg, marginBottom: '8px', fontWeight: '600' }}>MATERIAL (Manta)</div>
+            {editandoCostos ? (
+              <input
+                type="number"
+                step="0.01"
+                value={costosTemp.material}
+                onChange={(e) => setCostosTemp({ ...costosTemp, material: parseFloat(e.target.value) || 0 })}
+                style={inputStyle}
+              />
+            ) : (
+              <div style={{ fontSize: '18px', fontWeight: '700', color: colors.espresso }}>${costos.material.toFixed(2)}/bolsa</div>
+            )}
+            <div style={{ fontSize: '9px', color: colors.camel, marginTop: '5px' }}>0.5m para 2 bolsas</div>
           </div>
           <div style={{ background: colors.cotton, padding: '15px', borderRadius: '6px', border: `1px solid ${colors.sand}` }}>
-            <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '8px' }}>MAQUILA (Corte + Confección)</div>
-            <div style={{ fontSize: '18px', fontWeight: '700', color: colors.espresso }}>$6.00/bolsa</div>
-            <div style={{ fontSize: '9px', color: colors.camel }}>Chiautempan/Texmelucan</div>
+            <div style={{ fontSize: '11px', color: colors.sidebarBg, marginBottom: '8px', fontWeight: '600' }}>MAQUILA (Corte + Confección)</div>
+            {editandoCostos ? (
+              <input
+                type="number"
+                step="0.01"
+                value={costosTemp.maquila}
+                onChange={(e) => setCostosTemp({ ...costosTemp, maquila: parseFloat(e.target.value) || 0 })}
+                style={inputStyle}
+              />
+            ) : (
+              <div style={{ fontSize: '18px', fontWeight: '700', color: colors.espresso }}>${costos.maquila.toFixed(2)}/bolsa</div>
+            )}
+            <div style={{ fontSize: '9px', color: colors.camel, marginTop: '5px' }}>Chiautempan/Texmelucan</div>
           </div>
           <div style={{ background: colors.cotton, padding: '15px', borderRadius: '6px', border: `1px solid ${colors.sand}` }}>
-            <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '8px' }}>INSUMOS (Hilo + Etiqueta)</div>
-            <div style={{ fontSize: '18px', fontWeight: '700', color: colors.espresso }}>$1.50/bolsa</div>
-            <div style={{ fontSize: '9px', color: colors.camel }}>Hilo calibre 30/2</div>
+            <div style={{ fontSize: '11px', color: colors.sidebarBg, marginBottom: '8px', fontWeight: '600' }}>INSUMOS (Hilo + Etiqueta)</div>
+            {editandoCostos ? (
+              <input
+                type="number"
+                step="0.01"
+                value={costosTemp.insumos}
+                onChange={(e) => setCostosTemp({ ...costosTemp, insumos: parseFloat(e.target.value) || 0 })}
+                style={inputStyle}
+              />
+            ) : (
+              <div style={{ fontSize: '18px', fontWeight: '700', color: colors.espresso }}>${costos.insumos.toFixed(2)}/bolsa</div>
+            )}
+            <div style={{ fontSize: '9px', color: colors.camel, marginTop: '5px' }}>Hilo calibre 30/2</div>
           </div>
           <div style={{ background: colors.cotton, padding: '15px', borderRadius: '6px', border: `1px solid ${colors.sand}` }}>
-            <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '8px' }}>MERMA (5%)</div>
-            <div style={{ fontSize: '18px', fontWeight: '700', color: colors.espresso }}>$0.75/bolsa</div>
-            <div style={{ fontSize: '9px', color: colors.camel }}>Margen de error</div>
+            <div style={{ fontSize: '11px', color: colors.sidebarBg, marginBottom: '8px', fontWeight: '600' }}>MERMA (5%)</div>
+            {editandoCostos ? (
+              <input
+                type="number"
+                step="0.01"
+                value={costosTemp.merma}
+                onChange={(e) => setCostosTemp({ ...costosTemp, merma: parseFloat(e.target.value) || 0 })}
+                style={inputStyle}
+              />
+            ) : (
+              <div style={{ fontSize: '18px', fontWeight: '700', color: colors.espresso }}>${costos.merma.toFixed(2)}/bolsa</div>
+            )}
+            <div style={{ fontSize: '9px', color: colors.camel, marginTop: '5px' }}>Margen de error</div>
           </div>
         </div>
+
+        {/* Costos Amazon */}
+        {editandoCostos && (
+          <div style={{ marginTop: '20px', padding: '15px', background: '#FF990015', borderRadius: '6px', border: '1px solid #FF9900' }}>
+            <h4 style={{ margin: '0 0 15px', fontSize: '12px', color: '#232F3E', fontWeight: '700' }}>PARÁMETROS AMAZON</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '15px' }}>
+              <div>
+                <label style={{ fontSize: '10px', color: colors.sidebarBg, display: 'block', marginBottom: '5px' }}>Comisión Amazon (%)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={costosTemp.amazonComision}
+                  onChange={(e) => setCostosTemp({ ...costosTemp, amazonComision: parseFloat(e.target.value) || 0 })}
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '10px', color: colors.sidebarBg, display: 'block', marginBottom: '5px' }}>Tarifa FBA ($)</label>
+                <input
+                  type="number"
+                  step="1"
+                  value={costosTemp.amazonFbaFee}
+                  onChange={(e) => setCostosTemp({ ...costosTemp, amazonFbaFee: parseFloat(e.target.value) || 0 })}
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '10px', color: colors.sidebarBg, display: 'block', marginBottom: '5px' }}>Envío Bodega ($)</label>
+                <input
+                  type="number"
+                  step="1"
+                  value={costosTemp.amazonEnvioBodega}
+                  onChange={(e) => setCostosTemp({ ...costosTemp, amazonEnvioBodega: parseFloat(e.target.value) || 0 })}
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '10px', color: colors.sidebarBg, display: 'block', marginBottom: '5px' }}>Precio Base Mayoreo ($)</label>
+                <input
+                  type="number"
+                  step="1"
+                  value={costosTemp.precioBaseMayoreo}
+                  onChange={(e) => setCostosTemp({ ...costosTemp, precioBaseMayoreo: parseFloat(e.target.value) || 0 })}
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '10px', color: colors.sidebarBg, display: 'block', marginBottom: '5px' }}>Piezas por Envío FBA</label>
+                <input
+                  type="number"
+                  step="1"
+                  value={costosTemp.piezasPorEnvioFBA}
+                  onChange={(e) => setCostosTemp({ ...costosTemp, piezasPorEnvioFBA: parseInt(e.target.value) || 1 })}
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         <div style={{ marginTop: '15px', padding: '15px', background: colors.sidebarBg, borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ color: 'white', fontSize: '14px', fontWeight: '600' }}>COSTO TOTAL DE PRODUCCIÓN</div>
-          <div style={{ color: '#ABD55E', fontSize: '24px', fontWeight: '700' }}>${COSTO_PRODUCCION_MANTA.toFixed(2)} MXN</div>
+          <div style={{ color: '#ABD55E', fontSize: '24px', fontWeight: '700' }}>
+            ${editandoCostos ? calcularCostoProduccion(costosTemp).toFixed(2) : costoProduccion.toFixed(2)} MXN
+          </div>
         </div>
       </div>
 
@@ -3457,10 +3665,10 @@ const EcommerceView = ({ productosActualizados, condicionesEco, condicionesEcoFo
         </h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '15px' }}>
           {[
-            { titulo: 'PRECIO MÍNIMO RENTABLE', desc: 'Vende a $199+ para mantener margen >50%. Precio ideal: $249-$299 para competir.' },
-            { titulo: 'MAYOREO MÍNIMO 20 PZAS', desc: 'El mínimo para mantener rentabilidad es 20 piezas a $45/pza con 200% de margen.' },
-            { titulo: 'ENVÍO A BODEGA', desc: 'Envía lotes de 20+ piezas a Amazon FBA para diluir costos de envío a bodega.' },
-            { titulo: 'COMISIÓN 15%', desc: 'Amazon cobra 15% del precio de venta. Factor en tu precio final para mantener margen.' },
+            { titulo: 'PRECIO MÍNIMO RENTABLE', desc: `Vende a $199+ para mantener margen >50%. Precio ideal: $249-$299 para competir.` },
+            { titulo: 'MAYOREO MÍNIMO 20 PZAS', desc: `El mínimo para mantener rentabilidad es 20 piezas a $${costos.precioBaseMayoreo}/pza.` },
+            { titulo: 'ENVÍO A BODEGA', desc: `Envía lotes de ${costos.piezasPorEnvioFBA}+ piezas a Amazon FBA para diluir costos de envío.` },
+            { titulo: `COMISIÓN ${costos.amazonComision}%`, desc: `Amazon cobra ${costos.amazonComision}% del precio de venta. Factor en tu precio final.` },
           ].map((rec, i) => (
             <div key={i} style={{ background: colors.cotton, padding: '15px', borderRadius: '6px', border: `1px solid #FF9900` }}>
               <div style={{ fontWeight: '700', color: '#232F3E', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -3988,6 +4196,9 @@ export default function DashboardToteBag() {
     premium: { precioPublico: 250, precioMayoreo: 165 }
   });
 
+  // Estado para costos Amazon (editables por admin)
+  const [costosAmazon, setCostosAmazon] = useState(COSTOS_AMAZON_DEFAULT);
+
   // Estado para datos cargados desde BD
   const [datosDB, setDatosDB] = useState(null);
   const [cargandoDatos, setCargandoDatos] = useState(true);
@@ -4140,7 +4351,7 @@ export default function DashboardToteBag() {
       case 'stocks': return <StocksView isAdmin={isAdmin} />;
       case 'salidas': return <SalidasView isAdmin={isAdmin} />;
       case 'mayoreo': return <MayoreoView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} />;
-      case 'ecommerce': return <EcommerceView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} datosDB={datosDB} />;
+      case 'ecommerce': return <EcommerceView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} datosDB={datosDB} costosAmazon={costosAmazon} setCostosAmazon={setCostosAmazon} isAdmin={isAdmin} />;
       case 'promociones': return <PromocionesView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} />;
       case 'costos': return <CostosView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} datosDB={datosDB} />;
       default: return <DashboardView productosActualizados={productosActualizados} />;
