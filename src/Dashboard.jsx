@@ -2622,6 +2622,7 @@ const SalidasView = ({ isAdmin }) => {
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
   const [hoverBtn, setHoverBtn] = useState({});
+  const [clienteHistorial, setClienteHistorial] = useState(null); // Cliente para ver historial
 
   // Formulario de nueva salida
   const [formSalida, setFormSalida] = useState({
@@ -2839,6 +2840,37 @@ const SalidasView = ({ isAdmin }) => {
     { id: 'venta_consignacion', nombre: 'Venta en Consignación', desc: 'El negocio vendió piezas' },
     { id: 'devolucion', nombre: 'Devolución', desc: 'Regreso de piezas en consignación' }
   ];
+
+  // Obtener historial de un cliente
+  const getClienteHistorial = (clienteId) => {
+    const movsCliente = movimientos.filter(m => m.cliente_id === clienteId);
+
+    // Agrupar por tipo
+    const consignaciones = movsCliente.filter(m => m.tipo_movimiento === 'consignacion');
+    const ventasDirectas = movsCliente.filter(m => m.tipo_movimiento === 'venta_directa');
+    const ventasConsignacion = movsCliente.filter(m => m.tipo_movimiento === 'venta_consignacion');
+    const devoluciones = movsCliente.filter(m => m.tipo_movimiento === 'devolucion');
+
+    // Calcular totales
+    const totalConsignacion = consignaciones.reduce((sum, m) => sum + m.cantidad, 0);
+    const totalVentaDirecta = ventasDirectas.reduce((sum, m) => sum + m.cantidad, 0);
+    const totalVentaConsignacion = ventasConsignacion.reduce((sum, m) => sum + m.cantidad, 0);
+    const totalDevolucion = devoluciones.reduce((sum, m) => sum + m.cantidad, 0);
+
+    return {
+      consignaciones,
+      ventasDirectas,
+      ventasConsignacion,
+      devoluciones,
+      totales: {
+        consignacion: totalConsignacion,
+        ventaDirecta: totalVentaDirecta,
+        ventaConsignacion: totalVentaConsignacion,
+        devolucion: totalDevolucion,
+        enConsignacionActual: totalConsignacion - totalVentaConsignacion - totalDevolucion
+      }
+    };
+  };
 
   const inputStyle = {
     width: '100%',
@@ -3073,6 +3105,171 @@ const SalidasView = ({ isAdmin }) => {
         </div>
       )}
 
+      {/* Modal Historial del Cliente */}
+      {clienteHistorial && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: colors.cotton, borderRadius: '12px', padding: '30px', maxWidth: '700px', width: '95%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div>
+                <h3 style={{ margin: 0, color: colors.sidebarBg }}>{clienteHistorial.nombre}</h3>
+                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '5px' }}>
+                  {clienteHistorial.tipo === 'consignacion' ? 'Cliente de Consignación' : 'Cliente Directo'}
+                  {clienteHistorial.contacto && ` • ${clienteHistorial.contacto}`}
+                </div>
+              </div>
+              <button onClick={() => setClienteHistorial(null)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: colors.camel }}>×</button>
+            </div>
+
+            {(() => {
+              const historial = getClienteHistorial(clienteHistorial.id);
+              return (
+                <>
+                  {/* Resumen de totales */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '10px', marginBottom: '20px' }}>
+                    <div style={{ background: '#FEF3E2', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '10px', color: '#F39C12', fontWeight: '600' }}>CONSIGNACIÓN</div>
+                      <div style={{ fontSize: '22px', fontWeight: '700', color: '#F39C12' }}>{historial.totales.consignacion}</div>
+                    </div>
+                    <div style={{ background: '#E8F5E9', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '10px', color: colors.olive, fontWeight: '600' }}>VENTA DIRECTA</div>
+                      <div style={{ fontSize: '22px', fontWeight: '700', color: colors.olive }}>{historial.totales.ventaDirecta}</div>
+                    </div>
+                    <div style={{ background: '#E3F2FD', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '10px', color: '#1976D2', fontWeight: '600' }}>VENTA CONSIG.</div>
+                      <div style={{ fontSize: '22px', fontWeight: '700', color: '#1976D2' }}>{historial.totales.ventaConsignacion}</div>
+                    </div>
+                    <div style={{ background: '#FFEBEE', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '10px', color: colors.terracotta, fontWeight: '600' }}>DEVOLUCION</div>
+                      <div style={{ fontSize: '22px', fontWeight: '700', color: colors.terracotta }}>{historial.totales.devolucion}</div>
+                    </div>
+                  </div>
+
+                  {/* Indicador de piezas en consignación activa */}
+                  {historial.totales.enConsignacionActual > 0 && (
+                    <div style={{
+                      background: `linear-gradient(135deg, #FEF3E2, ${colors.cotton})`,
+                      border: '2px solid #F39C12',
+                      padding: '15px',
+                      borderRadius: '8px',
+                      marginBottom: '20px',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ fontSize: '11px', color: '#F39C12', fontWeight: '600' }}>PIEZAS EN CONSIGNACIÓN ACTIVA</div>
+                      <div style={{ fontSize: '32px', fontWeight: '700', color: '#F39C12' }}>{historial.totales.enConsignacionActual}</div>
+                      <div style={{ fontSize: '11px', color: colors.camel }}>piezas pendientes de venta o devolución</div>
+                    </div>
+                  )}
+
+                  {/* Secciones por tipo de movimiento */}
+                  {historial.consignaciones.length > 0 && (
+                    <div style={{ marginBottom: '15px' }}>
+                      <h4 style={{ margin: '0 0 10px', fontSize: '13px', color: '#F39C12', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <span style={{ background: '#FEF3E2', padding: '2px 8px', borderRadius: '12px' }}>Consignaciones ({historial.consignaciones.length})</span>
+                      </h4>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {historial.consignaciones.map(mov => (
+                          <div key={mov.id} style={{ background: '#FEF3E2', padding: '10px 15px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <div style={{ fontWeight: '500', color: colors.espresso, fontSize: '13px' }}>{mov.producto?.linea_nombre}</div>
+                              <div style={{ fontSize: '11px', color: colors.camel }}>{new Date(mov.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                            </div>
+                            <span style={{ fontWeight: '700', fontSize: '16px', color: '#F39C12' }}>{mov.cantidad} pzas</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {historial.ventasDirectas.length > 0 && (
+                    <div style={{ marginBottom: '15px' }}>
+                      <h4 style={{ margin: '0 0 10px', fontSize: '13px', color: colors.olive, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <span style={{ background: '#E8F5E9', padding: '2px 8px', borderRadius: '12px' }}>Ventas Directas - Efectivo ({historial.ventasDirectas.length})</span>
+                      </h4>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {historial.ventasDirectas.map(mov => (
+                          <div key={mov.id} style={{ background: '#E8F5E9', padding: '10px 15px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <div style={{ fontWeight: '500', color: colors.espresso, fontSize: '13px' }}>{mov.producto?.linea_nombre}</div>
+                              <div style={{ fontSize: '11px', color: colors.camel }}>{new Date(mov.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                            </div>
+                            <span style={{ fontWeight: '700', fontSize: '16px', color: colors.olive }}>{mov.cantidad} pzas</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {historial.ventasConsignacion.length > 0 && (
+                    <div style={{ marginBottom: '15px' }}>
+                      <h4 style={{ margin: '0 0 10px', fontSize: '13px', color: '#1976D2', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <span style={{ background: '#E3F2FD', padding: '2px 8px', borderRadius: '12px' }}>Ventas en Consignación - Crédito ({historial.ventasConsignacion.length})</span>
+                      </h4>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {historial.ventasConsignacion.map(mov => (
+                          <div key={mov.id} style={{ background: '#E3F2FD', padding: '10px 15px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <div style={{ fontWeight: '500', color: colors.espresso, fontSize: '13px' }}>{mov.producto?.linea_nombre}</div>
+                              <div style={{ fontSize: '11px', color: colors.camel }}>{new Date(mov.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                            </div>
+                            <span style={{ fontWeight: '700', fontSize: '16px', color: '#1976D2' }}>{mov.cantidad} pzas</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {historial.devoluciones.length > 0 && (
+                    <div style={{ marginBottom: '15px' }}>
+                      <h4 style={{ margin: '0 0 10px', fontSize: '13px', color: colors.terracotta, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <span style={{ background: '#FFEBEE', padding: '2px 8px', borderRadius: '12px' }}>Devoluciones ({historial.devoluciones.length})</span>
+                      </h4>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {historial.devoluciones.map(mov => (
+                          <div key={mov.id} style={{ background: '#FFEBEE', padding: '10px 15px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <div style={{ fontWeight: '500', color: colors.espresso, fontSize: '13px' }}>{mov.producto?.linea_nombre}</div>
+                              <div style={{ fontSize: '11px', color: colors.camel }}>{new Date(mov.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                            </div>
+                            <span style={{ fontWeight: '700', fontSize: '16px', color: colors.terracotta }}>+{mov.cantidad} pzas</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Si no hay movimientos */}
+                  {historial.consignaciones.length === 0 && historial.ventasDirectas.length === 0 &&
+                   historial.ventasConsignacion.length === 0 && historial.devoluciones.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '30px', color: colors.camel }}>
+                      <span style={{ fontSize: '36px' }}>📋</span>
+                      <p style={{ marginTop: '10px' }}>No hay movimientos registrados para este cliente</p>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+
+            <button
+              onClick={() => setClienteHistorial(null)}
+              style={{
+                width: '100%',
+                padding: '12px',
+                background: colors.sidebarBg,
+                color: colors.sidebarText,
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '500',
+                marginTop: '15px'
+              }}
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Historial de Movimientos */}
       <div>
         <h3 style={{ margin: '0 0 15px', fontSize: '16px', color: colors.sidebarBg }}>Historial de Movimientos</h3>
@@ -3093,7 +3290,20 @@ const SalidasView = ({ isAdmin }) => {
                 <div>
                   <div style={{ fontWeight: '500', color: colors.espresso }}>{mov.producto?.linea_nombre}</div>
                   <div style={{ fontSize: '12px', color: colors.camel }}>
-                    {mov.cliente?.nombre} • {new Date(mov.fecha).toLocaleDateString('es-MX')}
+                    <span
+                      onClick={() => setClienteHistorial(mov.cliente)}
+                      style={{
+                        color: colors.sidebarBg,
+                        cursor: 'pointer',
+                        textDecoration: 'underline',
+                        fontWeight: '500'
+                      }}
+                      onMouseEnter={(e) => e.target.style.color = '#DA9F17'}
+                      onMouseLeave={(e) => e.target.style.color = colors.sidebarBg}
+                    >
+                      {mov.cliente?.nombre}
+                    </span>
+                    {' • '}{new Date(mov.fecha).toLocaleDateString('es-MX')}
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
