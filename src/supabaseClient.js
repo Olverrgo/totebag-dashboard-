@@ -814,7 +814,8 @@ export const getCostosAmazon = async () => {
         amazonFbaFee: parseFloat(data.amazon_fba_fee),
         amazonEnvioBodega: parseFloat(data.amazon_envio_bodega),
         precioBaseMayoreo: parseFloat(data.precio_base_mayoreo),
-        piezasPorEnvioFBA: parseInt(data.piezas_por_envio_fba)
+        piezasPorEnvioFBA: parseInt(data.piezas_por_envio_fba),
+        volumenesMayoreo: data.volumenes_mayoreo || null
       },
       error: null
     };
@@ -844,7 +845,8 @@ export const saveCostosAmazon = async (costos) => {
     amazon_fba_fee: costos.amazonFbaFee,
     amazon_envio_bodega: costos.amazonEnvioBodega,
     precio_base_mayoreo: costos.precioBaseMayoreo,
-    piezas_por_envio_fba: costos.piezasPorEnvioFBA
+    piezas_por_envio_fba: costos.piezasPorEnvioFBA,
+    volumenes_mayoreo: costos.volumenesMayoreo || null
   };
 
   let result;

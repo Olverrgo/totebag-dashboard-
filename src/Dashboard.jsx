@@ -379,8 +379,20 @@ const COSTOS_AMAZON_DEFAULT = {
   amazonComision: 15,    // 15% del valor de venta
   amazonFbaFee: 55,      // Tarifa gestión FBA
   amazonEnvioBodega: 15, // Envío a bodega Amazon
-  precioBaseMayoreo: 45, // Precio base mayoreo
-  piezasPorEnvioFBA: 10  // Piezas por envío para prorrateo
+  precioBaseMayoreo: 24.50, // Precio base mayoreo por pieza (mínimo 20 pzas)
+  piezasPorEnvioFBA: 10,  // Piezas por envío para prorrateo
+  // Tabla de volúmenes mayoreo con descuentos
+  volumenesMayoreo: [
+    { cantidad: 20, descuento: 0, segmento: 'Mínimo' },
+    { cantidad: 30, descuento: 3, segmento: 'Inicial' },
+    { cantidad: 40, descuento: 5, segmento: 'Básico' },
+    { cantidad: 50, descuento: 8, segmento: 'Estándar' },
+    { cantidad: 60, descuento: 10, segmento: 'Preferente' },
+    { cantidad: 70, descuento: 12, segmento: 'Frecuente' },
+    { cantidad: 80, descuento: 14, segmento: 'Premium' },
+    { cantidad: 100, descuento: 16, segmento: 'Distribuidor' },
+    { cantidad: 150, descuento: 20, segmento: 'Mayorista' }
+  ]
 };
 
 // Función para calcular costo de producción total
@@ -388,7 +400,7 @@ const calcularCostoProduccion = (costos) => {
   return costos.material + costos.maquila + costos.insumos + costos.merma;
 };
 
-// Función para generar datos de precios Amazon
+// Función para generar datos de precios Amazon (menudeo)
 const generarAmazonPreciosData = (costos) => {
   const costoProduccion = calcularCostoProduccion(costos);
   const comisionRate = costos.amazonComision / 100;
@@ -410,19 +422,14 @@ const generarAmazonPreciosData = (costos) => {
   });
 };
 
-// Función para generar datos de mayoreo Amazon
+// Función para generar datos de mayoreo Amazon (con volúmenes dinámicos)
 const generarAmazonMayoreoData = (costos) => {
   const costoProduccion = calcularCostoProduccion(costos);
+  const volumenes = costos.volumenesMayoreo || COSTOS_AMAZON_DEFAULT.volumenesMayoreo;
 
-  return [
-    { cantidad: 20, descuento: 0, segmento: 'Mayoreo inicial' },
-    { cantidad: 50, descuento: 0.05, segmento: 'Mayoreo estándar' },
-    { cantidad: 100, descuento: 0.10, segmento: 'Mayoreo preferente' },
-    { cantidad: 200, descuento: 0.15, segmento: 'Distribuidor' },
-    { cantidad: 300, descuento: 0.18, segmento: 'Distribuidor Plus' },
-    { cantidad: 500, descuento: 0.22, segmento: 'Mayorista' },
-  ].map(item => {
-    const precioUnit = costos.precioBaseMayoreo * (1 - item.descuento);
+  return volumenes.map(item => {
+    const descuentoDecimal = item.descuento / 100;
+    const precioUnit = costos.precioBaseMayoreo * (1 - descuentoDecimal);
     const utilidadUnit = precioUnit - costoProduccion;
     const margen = ((utilidadUnit / costoProduccion) * 100).toFixed(0);
     const ingresoTotal = precioUnit * item.cantidad;
@@ -3309,6 +3316,7 @@ const MayoreoView = ({ productosActualizados, condicionesEco, condicionesEcoForr
 // Vista E-commerce - AMAZON
 const EcommerceView = ({ productosActualizados, costosAmazon, setCostosAmazon, isAdmin }) => {
   const [editandoCostos, setEditandoCostos] = useState(false);
+  const [editandoMayoreo, setEditandoMayoreo] = useState(false);
   const [guardandoCostos, setGuardandoCostos] = useState(false);
   const [mensajeCostos, setMensajeCostos] = useState({ tipo: '', texto: '' });
   const [costosTemp, setCostosTemp] = useState(costosAmazon || COSTOS_AMAZON_DEFAULT);
@@ -3337,6 +3345,7 @@ const EcommerceView = ({ productosActualizados, costosAmazon, setCostosAmazon, i
         }
         setMensajeCostos({ tipo: 'exito', texto: 'Costos guardados correctamente' });
         setEditandoCostos(false);
+        setEditandoMayoreo(false);
 
         // Limpiar mensaje después de 3 segundos
         setTimeout(() => setMensajeCostos({ tipo: '', texto: '' }), 3000);
@@ -3443,39 +3452,179 @@ const EcommerceView = ({ productosActualizados, costosAmazon, setCostosAmazon, i
         </div>
       </div>
 
-      {/* Tabla de Mayoreo Amazon - Mínimo 20 piezas */}
-      <div style={{ background: colors.cotton, padding: '20px', border: `2px solid #DA9F17`, marginBottom: '25px', borderRadius: '8px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
-          <span style={{ fontSize: '24px' }}>🏷️</span>
-          <h3 style={{ margin: 0, fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>
-            TABLA DE PRECIOS MAYOREO — Mínimo 20 piezas (Precio Base: ${costos.precioBaseMayoreo})
-          </h3>
+      {/* Tabla de Mayoreo Amazon - Mínimo 20 piezas - EDITABLE */}
+      <div style={{ background: colors.cotton, padding: '20px', border: `2px solid ${editandoMayoreo ? colors.sidebarBg : '#DA9F17'}`, marginBottom: '25px', borderRadius: '8px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '24px' }}>🏷️</span>
+            <h3 style={{ margin: 0, fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>
+              TABLA DE PRECIOS MAYOREO — Mínimo {amazonMayoreoData[0]?.cantidad || 20} piezas (Precio Base: ${editandoMayoreo ? costosTemp.precioBaseMayoreo : costos.precioBaseMayoreo})
+              {isAdmin && <span style={{ fontSize: '10px', color: colors.sidebarBg, marginLeft: '10px' }}>(Admin: Editable)</span>}
+            </h3>
+          </div>
+          {isAdmin && !editandoMayoreo && !editandoCostos && (
+            <button
+              onClick={() => setEditandoMayoreo(true)}
+              style={{
+                background: '#DA9F17',
+                color: colors.sidebarBg,
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: '600'
+              }}
+            >
+              Editar Tabla
+            </button>
+          )}
+          {isAdmin && editandoMayoreo && (
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={handleGuardarCostos}
+                disabled={guardandoCostos}
+                style={{
+                  background: guardandoCostos ? colors.camel : colors.olive,
+                  color: 'white',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '4px',
+                  cursor: guardandoCostos ? 'wait' : 'pointer',
+                  fontSize: '12px',
+                  fontWeight: '600'
+                }}
+              >
+                {guardandoCostos ? 'Guardando...' : 'Guardar'}
+              </button>
+              <button
+                onClick={() => { setCostosTemp(costos); setEditandoMayoreo(false); }}
+                style={{
+                  background: colors.terracotta,
+                  color: 'white',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: '600'
+                }}
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
         </div>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-          <thead>
-            <tr style={{ background: colors.sidebarBg, color: 'white' }}>
-              {['Cantidad', 'Descuento', 'Precio/pza', 'Utilidad/pza', 'Margen %', 'Ingreso Total', 'Utilidad Total', 'Segmento'].map(h => (
-                <th key={h} style={{ padding: '10px', textAlign: 'center', fontSize: '9px' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {amazonMayoreoData.map((row, i) => (
-              <tr key={i} style={{ background: i % 2 === 0 ? colors.cotton : colors.cream }}>
-                <td style={{ padding: '10px', textAlign: 'center', fontWeight: '700', color: colors.sidebarBg }}>{row.cantidad} pzas</td>
-                <td style={{ padding: '10px', textAlign: 'center', color: '#E47911', fontWeight: '600' }}>{(row.descuento * 100).toFixed(0)}%</td>
-                <td style={{ padding: '10px', textAlign: 'center', fontWeight: '700', color: '#232F3E' }}>${row.precioUnit}</td>
-                <td style={{ padding: '10px', textAlign: 'center', fontWeight: '600', color: colors.olive }}>${row.utilidadUnit}</td>
-                <td style={{ padding: '10px', textAlign: 'center', fontWeight: '700', color: parseFloat(row.margen) >= 100 ? colors.olive : parseFloat(row.margen) >= 50 ? '#F39C12' : colors.terracotta }}>
-                  {row.margen}%
-                </td>
-                <td style={{ padding: '10px', textAlign: 'center', color: colors.camel }}>${row.ingresoTotal}</td>
-                <td style={{ padding: '10px', textAlign: 'center', fontWeight: '700', color: colors.olive }}>${row.utilidadTotal}</td>
-                <td style={{ padding: '10px', textAlign: 'center', fontSize: '10px', color: colors.espresso }}>{row.segmento}</td>
+
+        {/* Precio Base Editable */}
+        {editandoMayoreo && (
+          <div style={{ marginBottom: '15px', padding: '15px', background: '#DA9F1720', borderRadius: '6px', border: '1px solid #DA9F17' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
+              <div>
+                <label style={{ fontSize: '11px', color: colors.sidebarBg, display: 'block', marginBottom: '5px', fontWeight: '600' }}>
+                  Precio Base por Pieza ($)
+                </label>
+                <input
+                  type="number"
+                  step="0.5"
+                  value={costosTemp.precioBaseMayoreo}
+                  onChange={(e) => setCostosTemp({ ...costosTemp, precioBaseMayoreo: parseFloat(e.target.value) || 0 })}
+                  style={{ ...inputStyle, width: '100px' }}
+                />
+              </div>
+              <div style={{ fontSize: '11px', color: colors.camel, maxWidth: '300px' }}>
+                Este es el precio base sin descuento para la cantidad mínima (20 pzas). Los descuentos se aplican sobre este precio.
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '800px' }}>
+            <thead>
+              <tr style={{ background: colors.sidebarBg, color: 'white' }}>
+                {(editandoMayoreo
+                  ? ['Cantidad', 'Segmento', 'Descuento %', 'Precio/pza', 'Utilidad/pza', 'Margen %', 'Ingreso Total', 'Utilidad Total']
+                  : ['Cantidad', 'Descuento', 'Precio/pza', 'Utilidad/pza', 'Margen %', 'Ingreso Total', 'Utilidad Total', 'Segmento']
+                ).map(h => (
+                  <th key={h} style={{ padding: '10px', textAlign: 'center', fontSize: '9px' }}>{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {(editandoMayoreo ? generarAmazonMayoreoData(costosTemp) : amazonMayoreoData).map((row, i) => (
+                <tr key={i} style={{ background: i % 2 === 0 ? colors.cotton : colors.cream }}>
+                  {editandoMayoreo ? (
+                    <>
+                      <td style={{ padding: '8px', textAlign: 'center' }}>
+                        <input
+                          type="number"
+                          value={costosTemp.volumenesMayoreo[i]?.cantidad || row.cantidad}
+                          onChange={(e) => {
+                            const newVol = [...(costosTemp.volumenesMayoreo || COSTOS_AMAZON_DEFAULT.volumenesMayoreo)];
+                            newVol[i] = { ...newVol[i], cantidad: parseInt(e.target.value) || 0 };
+                            setCostosTemp({ ...costosTemp, volumenesMayoreo: newVol });
+                          }}
+                          style={{ ...inputStyle, width: '60px', padding: '6px' }}
+                        />
+                      </td>
+                      <td style={{ padding: '8px', textAlign: 'center' }}>
+                        <input
+                          type="text"
+                          value={costosTemp.volumenesMayoreo[i]?.segmento || row.segmento}
+                          onChange={(e) => {
+                            const newVol = [...(costosTemp.volumenesMayoreo || COSTOS_AMAZON_DEFAULT.volumenesMayoreo)];
+                            newVol[i] = { ...newVol[i], segmento: e.target.value };
+                            setCostosTemp({ ...costosTemp, volumenesMayoreo: newVol });
+                          }}
+                          style={{ ...inputStyle, width: '90px', padding: '6px' }}
+                        />
+                      </td>
+                      <td style={{ padding: '8px', textAlign: 'center' }}>
+                        <input
+                          type="number"
+                          step="1"
+                          value={costosTemp.volumenesMayoreo[i]?.descuento || 0}
+                          onChange={(e) => {
+                            const newVol = [...(costosTemp.volumenesMayoreo || COSTOS_AMAZON_DEFAULT.volumenesMayoreo)];
+                            newVol[i] = { ...newVol[i], descuento: parseFloat(e.target.value) || 0 };
+                            setCostosTemp({ ...costosTemp, volumenesMayoreo: newVol });
+                          }}
+                          style={{ ...inputStyle, width: '50px', padding: '6px' }}
+                        />
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td style={{ padding: '10px', textAlign: 'center', fontWeight: '700', color: colors.sidebarBg }}>{row.cantidad} pzas</td>
+                      <td style={{ padding: '10px', textAlign: 'center', color: '#E47911', fontWeight: '600' }}>{row.descuento}%</td>
+                    </>
+                  )}
+                  <td style={{ padding: '10px', textAlign: 'center', fontWeight: '700', color: '#232F3E' }}>${row.precioUnit}</td>
+                  <td style={{ padding: '10px', textAlign: 'center', fontWeight: '600', color: parseFloat(row.utilidadUnit) > 0 ? colors.olive : colors.terracotta }}>${row.utilidadUnit}</td>
+                  <td style={{ padding: '10px', textAlign: 'center', fontWeight: '700', color: parseFloat(row.margen) >= 50 ? colors.olive : parseFloat(row.margen) >= 20 ? '#F39C12' : colors.terracotta }}>
+                    {row.margen}%
+                  </td>
+                  <td style={{ padding: '10px', textAlign: 'center', color: colors.camel }}>${row.ingresoTotal}</td>
+                  <td style={{ padding: '10px', textAlign: 'center', fontWeight: '700', color: colors.olive }}>${row.utilidadTotal}</td>
+                  {!editandoMayoreo && (
+                    <td style={{ padding: '10px', textAlign: 'center', fontSize: '10px', color: colors.espresso }}>{row.segmento}</td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Resumen de rentabilidad */}
+        <div style={{ marginTop: '15px', padding: '12px', background: colors.sidebarBg, borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+          <div style={{ color: 'white', fontSize: '12px' }}>
+            <strong>Costo Producción:</strong> ${costoProduccion.toFixed(2)} | <strong>Precio Mín:</strong> ${costos.precioBaseMayoreo} | <strong>Utilidad Mín:</strong> ${(costos.precioBaseMayoreo - costoProduccion).toFixed(2)}
+          </div>
+          <div style={{ color: '#ABD55E', fontSize: '14px', fontWeight: '700' }}>
+            Margen Mínimo: {(((costos.precioBaseMayoreo - costoProduccion) / costoProduccion) * 100).toFixed(0)}%
+          </div>
+        </div>
       </div>
 
       {/* Gráfico comparativo - Utilidad por volumen */}
