@@ -367,15 +367,55 @@ const productos = {
   }
 };
 
-// E-commerce análisis
-const ecommerceData = [
-  { canal: 'ML Pack 2x$399', precio: 399, utilidad: 47, margen: 54, pros: 'Alto tráfico', contras: 'Comisiones altas' },
-  { canal: 'ML $299', precio: 299, utilidad: 41, margen: 47, pros: 'Envío gratis cliente', contras: 'Margen bajo' },
-  { canal: 'Amazon $299', precio: 299, utilidad: 57, margen: 65, pros: 'Mejor margen, Prime', contras: 'Más competencia' },
-  { canal: 'Directa + Skydropx', precio: 220, utilidad: 62, margen: 71, pros: 'Control total', contras: 'Sin tráfico orgánico' },
-  { canal: 'Directa + DiDi Local', precio: 250, utilidad: 118, margen: 136, pros: 'Máxima utilidad', contras: 'Solo Puebla' },
-  { canal: 'Promo 2x$400 local', precio: 400, utilidad: 98, margen: 119, pros: 'Volumen + utilidad', contras: 'Requiere marketing' },
-];
+// E-commerce análisis - AMAZON
+// Costos base Manta Cruda: Material $6.25 + Maquila $6 + Insumos $1.5 + Merma $0.75 = $14.50 ≈ $15
+const COSTO_PRODUCCION_MANTA = 15;
+const AMAZON_COMISION = 0.15; // 15% del valor de venta
+const AMAZON_FBA_FEE = 55; // Tarifa gestión FBA
+const AMAZON_ENVIO_BODEGA = 15; // Envío a bodega Amazon (prorrateado)
+
+// Tabla de precios Amazon con diferentes puntos de precio
+const amazonPreciosData = [
+  { precioVenta: 149, piezas: 1 },
+  { precioVenta: 179, piezas: 1 },
+  { precioVenta: 199, piezas: 1 },
+  { precioVenta: 249, piezas: 1 },
+  { precioVenta: 299, piezas: 1 },
+].map(item => {
+  const comision = item.precioVenta * AMAZON_COMISION;
+  const costoFBA = AMAZON_FBA_FEE / 10; // Prorrateado por pieza (envío de 10 pzas)
+  const costoEnvioBodega = AMAZON_ENVIO_BODEGA / 10;
+  const costoTotal = COSTO_PRODUCCION_MANTA + comision + costoFBA + costoEnvioBodega;
+  const utilidad = item.precioVenta - costoTotal;
+  const margen = ((utilidad / costoTotal) * 100).toFixed(0);
+  return { ...item, comision: comision.toFixed(2), costoTotal: costoTotal.toFixed(2), utilidad: utilidad.toFixed(2), margen };
+});
+
+// Tabla de mayoreo Amazon - Mínimo 20 piezas, con descuentos por volumen
+const amazonMayoreoData = [
+  { cantidad: 20, descuento: 0, segmento: 'Mayoreo inicial' },
+  { cantidad: 50, descuento: 0.05, segmento: 'Mayoreo estándar' },
+  { cantidad: 100, descuento: 0.10, segmento: 'Mayoreo preferente' },
+  { cantidad: 200, descuento: 0.15, segmento: 'Distribuidor' },
+  { cantidad: 300, descuento: 0.18, segmento: 'Distribuidor Plus' },
+  { cantidad: 500, descuento: 0.22, segmento: 'Mayorista' },
+].map(item => {
+  const precioBase = 45; // Precio base mayoreo por pieza
+  const precioUnit = precioBase * (1 - item.descuento);
+  const costoUnit = COSTO_PRODUCCION_MANTA;
+  const utilidadUnit = precioUnit - costoUnit;
+  const margen = ((utilidadUnit / costoUnit) * 100).toFixed(0);
+  const ingresoTotal = precioUnit * item.cantidad;
+  const utilidadTotal = utilidadUnit * item.cantidad;
+  return {
+    ...item,
+    precioUnit: precioUnit.toFixed(2),
+    utilidadUnit: utilidadUnit.toFixed(2),
+    margen,
+    ingresoTotal: ingresoTotal.toFixed(0),
+    utilidadTotal: utilidadTotal.toFixed(0)
+  };
+});
 
 // Costos de envío
 const costosEnvio = {
@@ -3245,149 +3285,188 @@ const MayoreoView = ({ productosActualizados, condicionesEco, condicionesEcoForr
   );
 };
 
-// Vista E-commerce
+// Vista E-commerce - AMAZON
 const EcommerceView = ({ productosActualizados, condicionesEco, condicionesEcoForro }) => {
-  const productosUsar = productosActualizados || productos;
   return (
     <div>
       <h2 style={{ margin: '0 0 25px', fontSize: '24px', fontWeight: '300', letterSpacing: '2px', color: colors.espresso }}>
-        Análisis E-commerce — Rentabilidad por Canal
+        Amazon — Análisis de Costos y Mayoreo
       </h2>
 
-      {/* Panel de condiciones de envío ECO para e-commerce */}
-      {(condicionesEco || condicionesEcoForro) && (
-        <div style={{
-          background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.linen} 100%)`,
-          border: `2px solid ${colors.camel}`,
-          padding: '20px',
-          marginBottom: '25px',
-          borderRadius: '8px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
-            <span style={{ fontSize: '24px' }}>🛒</span>
-            <h3 style={{ margin: 0, fontSize: '14px', color: colors.espresso }}>
-              ENVÍO GRATIS E-COMMERCE — Líneas ECO (Precios editables en Productos)
-            </h3>
+      {/* Parámetros Base */}
+      <div style={{
+        background: `linear-gradient(135deg, #FF9900 0%, #FF9900 100%)`,
+        padding: '20px',
+        marginBottom: '25px',
+        borderRadius: '8px',
+        color: '#232F3E'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
+          <span style={{ fontSize: '28px' }}>📦</span>
+          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '700' }}>
+            AMAZON — Parámetros de Costo (Manta Cruda)
+          </h3>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' }}>
+          <div style={{ background: 'rgba(255,255,255,0.9)', padding: '15px', borderRadius: '6px', textAlign: 'center' }}>
+            <div style={{ fontSize: '10px', color: '#666', marginBottom: '5px' }}>COSTO PRODUCCIÓN</div>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: '#232F3E' }}>${COSTO_PRODUCCION_MANTA}</div>
+            <div style={{ fontSize: '9px', color: '#888' }}>Material + Maquila + Insumos</div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
-            {condicionesEco && (
-              <div style={{ background: colors.cotton, padding: '15px', borderRadius: '6px', border: `1px solid ${productosUsar.eco.color}` }}>
-                <div style={{ fontSize: '12px', fontWeight: '600', color: productosUsar.eco.color, marginBottom: '10px' }}>
-                  💎 ECO — Precio: ${productosUsar.eco.precioPublico}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '9px', color: colors.camel }}>NAC. ENVÍO GRATIS</div>
-                    <div style={{ fontSize: '20px', fontWeight: '700', color: colors.olive }}>
-                      {condicionesEco.ecommerce.nacional.unidadesMin}+ pzas
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '9px', color: colors.camel }}>LOCAL ENVÍO GRATIS</div>
-                    <div style={{ fontSize: '20px', fontWeight: '700', color: colors.terracotta }}>
-                      {condicionesEco.ecommerce.local.unidadesMin}+ pzas
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '9px', color: colors.camel }}>MARGEN</div>
-                    <div style={{
-                      fontSize: '20px',
-                      fontWeight: '700',
-                      color: condicionesEco.esValidoPublico ? colors.olive : '#E74C3C'
-                    }}>
-                      {condicionesEco.margenPublicoActual}%
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            {condicionesEcoForro && (
-              <div style={{ background: colors.cotton, padding: '15px', borderRadius: '6px', border: `1px solid ${productosUsar.ecoForro.color}` }}>
-                <div style={{ fontSize: '12px', fontWeight: '600', color: productosUsar.ecoForro.color, marginBottom: '10px' }}>
-                  💠 ECO+FORRO — Precio: ${productosUsar.ecoForro.precioPublico}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '9px', color: colors.camel }}>NAC. ENVÍO GRATIS</div>
-                    <div style={{ fontSize: '20px', fontWeight: '700', color: colors.olive }}>
-                      {condicionesEcoForro.ecommerce.nacional.unidadesMin}+ pzas
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '9px', color: colors.camel }}>LOCAL ENVÍO GRATIS</div>
-                    <div style={{ fontSize: '20px', fontWeight: '700', color: colors.terracotta }}>
-                      {condicionesEcoForro.ecommerce.local.unidadesMin}+ pzas
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '9px', color: colors.camel }}>MARGEN</div>
-                    <div style={{
-                      fontSize: '20px',
-                      fontWeight: '700',
-                      color: condicionesEcoForro.esValidoPublico ? colors.olive : '#E74C3C'
-                    }}>
-                      {condicionesEcoForro.margenPublicoActual}%
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+          <div style={{ background: 'rgba(255,255,255,0.9)', padding: '15px', borderRadius: '6px', textAlign: 'center' }}>
+            <div style={{ fontSize: '10px', color: '#666', marginBottom: '5px' }}>COMISIÓN AMAZON</div>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: '#E47911' }}>{AMAZON_COMISION * 100}%</div>
+            <div style={{ fontSize: '9px', color: '#888' }}>Del valor de venta</div>
+          </div>
+          <div style={{ background: 'rgba(255,255,255,0.9)', padding: '15px', borderRadius: '6px', textAlign: 'center' }}>
+            <div style={{ fontSize: '10px', color: '#666', marginBottom: '5px' }}>TARIFA FBA</div>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: '#232F3E' }}>${AMAZON_FBA_FEE}</div>
+            <div style={{ fontSize: '9px', color: '#888' }}>Gestión por envío</div>
+          </div>
+          <div style={{ background: 'rgba(255,255,255,0.9)', padding: '15px', borderRadius: '6px', textAlign: 'center' }}>
+            <div style={{ fontSize: '10px', color: '#666', marginBottom: '5px' }}>ENVÍO BODEGA</div>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: '#232F3E' }}>${AMAZON_ENVIO_BODEGA}</div>
+            <div style={{ fontSize: '9px', color: '#888' }}>Prorrateado</div>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Comparativa de canales */}
-      <div style={{ background: colors.cotton, padding: '20px', border: `1px solid ${colors.sand}`, marginBottom: '25px' }}>
-        <h3 style={{ margin: '0 0 15px', fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>COMPARATIVA DE CANALES</h3>
+      {/* Análisis de Precios Amazon */}
+      <div style={{ background: colors.cotton, padding: '20px', border: `2px solid #FF9900`, marginBottom: '25px', borderRadius: '8px' }}>
+        <h3 style={{ margin: '0 0 15px', fontSize: '14px', letterSpacing: '1px', color: '#232F3E' }}>
+          ANÁLISIS DE RENTABILIDAD POR PRECIO — Amazon FBA
+        </h3>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
           <thead>
-            <tr style={{ background: colors.cream }}>
-              {['Canal', 'Precio', 'Utilidad/pza', 'Margen %', 'Pros', 'Contras'].map(h => (
-                <th key={h} style={{ padding: '12px', textAlign: 'center', borderBottom: `2px solid ${colors.camel}`, fontSize: '10px' }}>{h}</th>
+            <tr style={{ background: '#232F3E', color: 'white' }}>
+              {['Precio Venta', 'Comisión 15%', 'Costo Total', 'Utilidad/pza', 'Margen %'].map(h => (
+                <th key={h} style={{ padding: '12px', textAlign: 'center', fontSize: '10px' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {ecommerceData.map((row, i) => (
+            {amazonPreciosData.map((row, i) => (
               <tr key={i} style={{ background: i % 2 === 0 ? colors.cotton : colors.cream }}>
-                <td style={{ padding: '10px', fontWeight: '600' }}>{row.canal}</td>
-                <td style={{ padding: '10px', textAlign: 'center' }}>${row.precio}</td>
-                <td style={{ padding: '10px', textAlign: 'center', fontWeight: '600', color: colors.olive }}>~${row.utilidad}</td>
-                <td style={{ padding: '10px', textAlign: 'center', color: colors.gold }}>{row.margen}%</td>
-                <td style={{ padding: '10px', fontSize: '11px', color: colors.olive }}>{row.pros}</td>
-                <td style={{ padding: '10px', fontSize: '11px', color: colors.terracotta }}>{row.contras}</td>
+                <td style={{ padding: '12px', textAlign: 'center', fontWeight: '700', color: '#232F3E' }}>${row.precioVenta}</td>
+                <td style={{ padding: '12px', textAlign: 'center', color: '#E47911' }}>${row.comision}</td>
+                <td style={{ padding: '12px', textAlign: 'center', color: colors.camel }}>${row.costoTotal}</td>
+                <td style={{ padding: '12px', textAlign: 'center', fontWeight: '700', color: parseFloat(row.utilidad) > 0 ? colors.olive : colors.terracotta }}>
+                  ${row.utilidad}
+                </td>
+                <td style={{ padding: '12px', textAlign: 'center', fontWeight: '700', color: parseFloat(row.margen) >= 50 ? colors.olive : parseFloat(row.margen) >= 30 ? '#F39C12' : colors.terracotta }}>
+                  {row.margen}%
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div style={{ marginTop: '15px', padding: '10px', background: '#FFF3CD', borderRadius: '4px', fontSize: '11px', color: '#856404' }}>
+          <strong>Nota:</strong> Costo FBA y envío a bodega prorrateados por 10 piezas. Para mejor margen, envía lotes de 20+ piezas.
+        </div>
+      </div>
+
+      {/* Tabla de Mayoreo Amazon - Mínimo 20 piezas */}
+      <div style={{ background: colors.cotton, padding: '20px', border: `2px solid #DA9F17`, marginBottom: '25px', borderRadius: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
+          <span style={{ fontSize: '24px' }}>🏷️</span>
+          <h3 style={{ margin: 0, fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>
+            TABLA DE PRECIOS MAYOREO — Mínimo 20 piezas (Precio Base: $45)
+          </h3>
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+          <thead>
+            <tr style={{ background: colors.sidebarBg, color: 'white' }}>
+              {['Cantidad', 'Descuento', 'Precio/pza', 'Utilidad/pza', 'Margen %', 'Ingreso Total', 'Utilidad Total', 'Segmento'].map(h => (
+                <th key={h} style={{ padding: '10px', textAlign: 'center', fontSize: '9px' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {amazonMayoreoData.map((row, i) => (
+              <tr key={i} style={{ background: i % 2 === 0 ? colors.cotton : colors.cream }}>
+                <td style={{ padding: '10px', textAlign: 'center', fontWeight: '700', color: colors.sidebarBg }}>{row.cantidad} pzas</td>
+                <td style={{ padding: '10px', textAlign: 'center', color: '#E47911', fontWeight: '600' }}>{(row.descuento * 100).toFixed(0)}%</td>
+                <td style={{ padding: '10px', textAlign: 'center', fontWeight: '700', color: '#232F3E' }}>${row.precioUnit}</td>
+                <td style={{ padding: '10px', textAlign: 'center', fontWeight: '600', color: colors.olive }}>${row.utilidadUnit}</td>
+                <td style={{ padding: '10px', textAlign: 'center', fontWeight: '700', color: parseFloat(row.margen) >= 100 ? colors.olive : parseFloat(row.margen) >= 50 ? '#F39C12' : colors.terracotta }}>
+                  {row.margen}%
+                </td>
+                <td style={{ padding: '10px', textAlign: 'center', color: colors.camel }}>${row.ingresoTotal}</td>
+                <td style={{ padding: '10px', textAlign: 'center', fontWeight: '700', color: colors.olive }}>${row.utilidadTotal}</td>
+                <td style={{ padding: '10px', textAlign: 'center', fontSize: '10px', color: colors.espresso }}>{row.segmento}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {/* Gráfico comparativo */}
-      <div style={{ background: colors.cotton, padding: '20px', border: `1px solid ${colors.sand}`, marginBottom: '25px' }}>
-        <h3 style={{ margin: '0 0 15px', fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>UTILIDAD POR CANAL</h3>
+      {/* Gráfico comparativo - Utilidad por volumen */}
+      <div style={{ background: colors.cotton, padding: '20px', border: `1px solid ${colors.sand}`, marginBottom: '25px', borderRadius: '8px' }}>
+        <h3 style={{ margin: '0 0 15px', fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>UTILIDAD TOTAL POR VOLUMEN</h3>
         <ResponsiveContainer width="100%" height={250}>
-          <BarChart data={ecommerceData} layout="vertical">
+          <BarChart data={amazonMayoreoData}>
             <CartesianGrid strokeDasharray="3 3" stroke={colors.sand} />
-            <XAxis type="number" stroke={colors.camel} />
-            <YAxis dataKey="canal" type="category" width={120} tick={{ fontSize: 10 }} stroke={colors.camel} />
-            <Tooltip contentStyle={{ background: colors.cotton, border: `1px solid ${colors.camel}` }} />
-            <Bar dataKey="utilidad" fill={colors.olive} name="Utilidad/pza" />
+            <XAxis dataKey="cantidad" stroke={colors.camel} tick={{ fontSize: 10 }} tickFormatter={(v) => `${v} pzas`} />
+            <YAxis stroke={colors.camel} tick={{ fontSize: 10 }} tickFormatter={(v) => `$${v}`} />
+            <Tooltip
+              contentStyle={{ background: colors.cotton, border: `1px solid ${colors.camel}` }}
+              formatter={(value, name) => [`$${value}`, name]}
+            />
+            <Bar dataKey="utilidadTotal" fill={colors.olive} name="Utilidad Total" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Recomendaciones */}
-      <div style={{ background: `${colors.gold}20`, padding: '20px', border: `1px solid ${colors.gold}` }}>
-        <h3 style={{ margin: '0 0 15px', fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>💡 RECOMENDACIONES ESTRATÉGICAS</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px' }}>
+      {/* Desglose de Costos */}
+      <div style={{ background: `${colors.cream}`, padding: '20px', border: `1px solid ${colors.sand}`, marginBottom: '25px', borderRadius: '8px' }}>
+        <h3 style={{ margin: '0 0 15px', fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>
+          DESGLOSE DE COSTOS — Manta Cruda (Tote Bag 35x40 cm)
+        </h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
+          <div style={{ background: colors.cotton, padding: '15px', borderRadius: '6px', border: `1px solid ${colors.sand}` }}>
+            <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '8px' }}>MATERIAL (Manta $25/m)</div>
+            <div style={{ fontSize: '18px', fontWeight: '700', color: colors.espresso }}>$6.25/bolsa</div>
+            <div style={{ fontSize: '9px', color: colors.camel }}>0.5m para 2 bolsas = $12.50/2</div>
+          </div>
+          <div style={{ background: colors.cotton, padding: '15px', borderRadius: '6px', border: `1px solid ${colors.sand}` }}>
+            <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '8px' }}>MAQUILA (Corte + Confección)</div>
+            <div style={{ fontSize: '18px', fontWeight: '700', color: colors.espresso }}>$6.00/bolsa</div>
+            <div style={{ fontSize: '9px', color: colors.camel }}>Chiautempan/Texmelucan</div>
+          </div>
+          <div style={{ background: colors.cotton, padding: '15px', borderRadius: '6px', border: `1px solid ${colors.sand}` }}>
+            <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '8px' }}>INSUMOS (Hilo + Etiqueta)</div>
+            <div style={{ fontSize: '18px', fontWeight: '700', color: colors.espresso }}>$1.50/bolsa</div>
+            <div style={{ fontSize: '9px', color: colors.camel }}>Hilo calibre 30/2</div>
+          </div>
+          <div style={{ background: colors.cotton, padding: '15px', borderRadius: '6px', border: `1px solid ${colors.sand}` }}>
+            <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '8px' }}>MERMA (5%)</div>
+            <div style={{ fontSize: '18px', fontWeight: '700', color: colors.espresso }}>$0.75/bolsa</div>
+            <div style={{ fontSize: '9px', color: colors.camel }}>Margen de error</div>
+          </div>
+        </div>
+        <div style={{ marginTop: '15px', padding: '15px', background: colors.sidebarBg, borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ color: 'white', fontSize: '14px', fontWeight: '600' }}>COSTO TOTAL DE PRODUCCIÓN</div>
+          <div style={{ color: '#ABD55E', fontSize: '24px', fontWeight: '700' }}>${COSTO_PRODUCCION_MANTA.toFixed(2)} MXN</div>
+        </div>
+      </div>
+
+      {/* Recomendaciones Amazon */}
+      <div style={{ background: `#FF990020`, padding: '20px', border: `2px solid #FF9900`, borderRadius: '8px' }}>
+        <h3 style={{ margin: '0 0 15px', fontSize: '14px', letterSpacing: '1px', color: '#232F3E' }}>
+          RECOMENDACIONES AMAZON
+        </h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '15px' }}>
           {[
-            { titulo: 'PRIORIDAD LOCAL', desc: 'Tu promo 2x$400 + envío gratis en Puebla es la MÁS RENTABLE (~$98/pza)' },
-            { titulo: 'MERCADO LIBRE', desc: 'Vende en PACKS de 2 bolsas a $399-$499 para diluir comisiones y envío' },
-            { titulo: 'AMAZON', desc: 'Precio mínimo $299 para que valga la pena con FBA, mejor $349' },
-            { titulo: 'VENTA DIRECTA NACIONAL', desc: 'Usa Skydropx o EnvíaYa, precio $220-$250 con envío incluido' },
+            { titulo: 'PRECIO MÍNIMO RENTABLE', desc: 'Vende a $199+ para mantener margen >50%. Precio ideal: $249-$299 para competir.' },
+            { titulo: 'MAYOREO MÍNIMO 20 PZAS', desc: 'El mínimo para mantener rentabilidad es 20 piezas a $45/pza con 200% de margen.' },
+            { titulo: 'ENVÍO A BODEGA', desc: 'Envía lotes de 20+ piezas a Amazon FBA para diluir costos de envío a bodega.' },
+            { titulo: 'COMISIÓN 15%', desc: 'Amazon cobra 15% del precio de venta. Factor en tu precio final para mantener margen.' },
           ].map((rec, i) => (
-            <div key={i} style={{ background: colors.cotton, padding: '15px', border: `1px solid ${colors.sand}` }}>
-              <div style={{ fontWeight: '600', color: colors.espresso, marginBottom: '5px' }}>{i + 1}. {rec.titulo}</div>
+            <div key={i} style={{ background: colors.cotton, padding: '15px', borderRadius: '6px', border: `1px solid #FF9900` }}>
+              <div style={{ fontWeight: '700', color: '#232F3E', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ background: '#FF9900', color: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px' }}>{i + 1}</span>
+                {rec.titulo}
+              </div>
               <div style={{ fontSize: '12px', color: colors.camel }}>{rec.desc}</div>
             </div>
           ))}
