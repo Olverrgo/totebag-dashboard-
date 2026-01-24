@@ -788,6 +788,87 @@ export const onAuthStateChange = (callback) => {
 };
 
 // =====================================================
+// FUNCIONES PARA COSTOS AMAZON
+// =====================================================
+
+// Obtener costos Amazon
+export const getCostosAmazon = async () => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('costos_amazon')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (data) {
+    // Transformar nombres de columnas de snake_case a camelCase
+    return {
+      data: {
+        material: parseFloat(data.material),
+        maquila: parseFloat(data.maquila),
+        insumos: parseFloat(data.insumos),
+        merma: parseFloat(data.merma),
+        amazonComision: parseFloat(data.amazon_comision),
+        amazonFbaFee: parseFloat(data.amazon_fba_fee),
+        amazonEnvioBodega: parseFloat(data.amazon_envio_bodega),
+        precioBaseMayoreo: parseFloat(data.precio_base_mayoreo),
+        piezasPorEnvioFBA: parseInt(data.piezas_por_envio_fba)
+      },
+      error: null
+    };
+  }
+
+  return { data: null, error };
+};
+
+// Guardar costos Amazon (upsert)
+export const saveCostosAmazon = async (costos) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  // Primero obtener el ID del registro existente
+  const { data: existingData } = await supabase
+    .from('costos_amazon')
+    .select('id')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  const costosDB = {
+    material: costos.material,
+    maquila: costos.maquila,
+    insumos: costos.insumos,
+    merma: costos.merma,
+    amazon_comision: costos.amazonComision,
+    amazon_fba_fee: costos.amazonFbaFee,
+    amazon_envio_bodega: costos.amazonEnvioBodega,
+    precio_base_mayoreo: costos.precioBaseMayoreo,
+    piezas_por_envio_fba: costos.piezasPorEnvioFBA
+  };
+
+  let result;
+  if (existingData?.id) {
+    // Actualizar registro existente
+    result = await supabase
+      .from('costos_amazon')
+      .update(costosDB)
+      .eq('id', existingData.id)
+      .select()
+      .single();
+  } else {
+    // Insertar nuevo registro
+    result = await supabase
+      .from('costos_amazon')
+      .insert([costosDB])
+      .select()
+      .single();
+  }
+
+  return result;
+};
+
+// =====================================================
 // FUNCIONES PARA STORAGE (Imagenes y PDFs)
 // =====================================================
 

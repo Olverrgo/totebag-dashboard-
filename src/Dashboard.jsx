@@ -19,7 +19,9 @@ import {
   createMovimientoStock,
   uploadImagenProducto,
   uploadPdfProducto,
-  getSignedPdfUrl
+  getSignedPdfUrl,
+  getCostosAmazon,
+  saveCostosAmazon
 } from './supabaseClient';
 
 // ==================== DATOS ====================
@@ -3307,6 +3309,8 @@ const MayoreoView = ({ productosActualizados, condicionesEco, condicionesEcoForr
 // Vista E-commerce - AMAZON
 const EcommerceView = ({ productosActualizados, costosAmazon, setCostosAmazon, isAdmin }) => {
   const [editandoCostos, setEditandoCostos] = useState(false);
+  const [guardandoCostos, setGuardandoCostos] = useState(false);
+  const [mensajeCostos, setMensajeCostos] = useState({ tipo: '', texto: '' });
   const [costosTemp, setCostosTemp] = useState(costosAmazon || COSTOS_AMAZON_DEFAULT);
 
   // Usar costos actuales o defaults
@@ -3315,16 +3319,40 @@ const EcommerceView = ({ productosActualizados, costosAmazon, setCostosAmazon, i
   const amazonPreciosData = generarAmazonPreciosData(costos);
   const amazonMayoreoData = generarAmazonMayoreoData(costos);
 
-  const handleGuardarCostos = () => {
-    if (setCostosAmazon) {
-      setCostosAmazon(costosTemp);
+  const handleGuardarCostos = async () => {
+    setGuardandoCostos(true);
+    setMensajeCostos({ tipo: '', texto: '' });
+
+    try {
+      // Guardar en Supabase
+      const { error } = await saveCostosAmazon(costosTemp);
+
+      if (error) {
+        console.error('Error guardando costos:', error);
+        setMensajeCostos({ tipo: 'error', texto: 'Error al guardar costos' });
+      } else {
+        // Actualizar estado local
+        if (setCostosAmazon) {
+          setCostosAmazon(costosTemp);
+        }
+        setMensajeCostos({ tipo: 'exito', texto: 'Costos guardados correctamente' });
+        setEditandoCostos(false);
+
+        // Limpiar mensaje después de 3 segundos
+        setTimeout(() => setMensajeCostos({ tipo: '', texto: '' }), 3000);
+      }
+    } catch (err) {
+      console.error('Error guardando costos:', err);
+      setMensajeCostos({ tipo: 'error', texto: 'Error al guardar costos' });
+    } finally {
+      setGuardandoCostos(false);
     }
-    setEditandoCostos(false);
   };
 
   const handleCancelar = () => {
     setCostosTemp(costos);
     setEditandoCostos(false);
+    setMensajeCostos({ tipo: '', texto: '' });
   };
 
   const inputStyle = {
@@ -3492,31 +3520,34 @@ const EcommerceView = ({ productosActualizados, costosAmazon, setCostosAmazon, i
             </button>
           )}
           {isAdmin && editandoCostos && (
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
               <button
                 onClick={handleGuardarCostos}
+                disabled={guardandoCostos}
                 style={{
-                  background: colors.olive,
+                  background: guardandoCostos ? colors.camel : colors.olive,
                   color: 'white',
                   border: 'none',
                   padding: '8px 16px',
                   borderRadius: '4px',
-                  cursor: 'pointer',
+                  cursor: guardandoCostos ? 'wait' : 'pointer',
                   fontSize: '12px',
-                  fontWeight: '600'
+                  fontWeight: '600',
+                  opacity: guardandoCostos ? 0.7 : 1
                 }}
               >
-                Guardar
+                {guardandoCostos ? 'Guardando...' : 'Guardar'}
               </button>
               <button
                 onClick={handleCancelar}
+                disabled={guardandoCostos}
                 style={{
                   background: colors.terracotta,
                   color: 'white',
                   border: 'none',
                   padding: '8px 16px',
                   borderRadius: '4px',
-                  cursor: 'pointer',
+                  cursor: guardandoCostos ? 'not-allowed' : 'pointer',
                   fontSize: '12px',
                   fontWeight: '600'
                 }}
@@ -3526,6 +3557,23 @@ const EcommerceView = ({ productosActualizados, costosAmazon, setCostosAmazon, i
             </div>
           )}
         </div>
+
+        {/* Mensaje de éxito/error */}
+        {mensajeCostos.texto && (
+          <div style={{
+            marginBottom: '15px',
+            padding: '12px',
+            borderRadius: '6px',
+            background: mensajeCostos.tipo === 'exito' ? 'rgba(171,213,94,0.2)' : 'rgba(196,120,74,0.2)',
+            border: `1px solid ${mensajeCostos.tipo === 'exito' ? colors.olive : colors.terracotta}`,
+            color: mensajeCostos.tipo === 'exito' ? colors.olive : colors.terracotta,
+            textAlign: 'center',
+            fontWeight: '500',
+            fontSize: '13px'
+          }}>
+            {mensajeCostos.texto}
+          </div>
+        )}
 
         {/* Costos de Producción */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
@@ -4212,7 +4260,12 @@ export default function DashboardToteBag() {
       }
 
       try {
-        const resultado = await cargarDatosDashboard();
+        // Cargar datos del dashboard y costos Amazon en paralelo
+        const [resultado, costosRes] = await Promise.all([
+          cargarDatosDashboard(),
+          getCostosAmazon()
+        ]);
+
         if (resultado.data && !resultado.usarDatosLocales) {
           setDatosDB(resultado.data);
           // Actualizar precios globales desde BD si hay datos
@@ -4227,6 +4280,11 @@ export default function DashboardToteBag() {
             });
             setPreciosGlobales(prev => ({ ...prev, ...nuevosPrecios }));
           }
+        }
+
+        // Cargar costos Amazon si existen
+        if (costosRes.data) {
+          setCostosAmazon(costosRes.data);
         }
       } catch (error) {
         console.error('Error cargando datos:', error);
