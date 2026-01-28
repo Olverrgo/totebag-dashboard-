@@ -38,7 +38,7 @@ const Login = ({ onLoginSuccess }) => {
       }
     } catch (err) {
       setError('Error al iniciar sesion');
-      console.error(err);
+      console.error('Error al iniciar sesion');
     } finally {
       setLoading(false);
     }

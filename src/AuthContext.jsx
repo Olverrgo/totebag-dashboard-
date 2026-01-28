@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { supabase, signOut } from './supabaseClient';
+import { supabase, signOut, isSupabaseConfigured } from './supabaseClient';
 
 const AuthContext = createContext({});
 
@@ -54,7 +54,7 @@ export const AuthProvider = ({ children }) => {
 
       return null;
     } catch (err) {
-      console.error('loadProfile error:', err);
+      console.error('Error al cargar perfil');
       if (retryCount < 2) {
         await new Promise(r => setTimeout(r, 1000));
         return loadProfile(userId, retryCount + 1);
@@ -72,13 +72,20 @@ export const AuthProvider = ({ children }) => {
       // Solo limpiar la clave de auth, no todo localStorage
       localStorage.removeItem('totebag-auth-token');
     } catch (err) {
-      console.error('signOut error:', err);
+      console.error('Error al cerrar sesion');
     }
   };
 
   useEffect(() => {
     mountedRef.current = true;
     let isInitialized = false;
+
+    // Si Supabase no esta configurado, no intentar autenticar
+    if (!isSupabaseConfigured || !supabase) {
+      setLoading(false);
+      setAuthError('Supabase no configurado');
+      return;
+    }
 
     const initializeAuth = async () => {
 
@@ -107,9 +114,9 @@ export const AuthProvider = ({ children }) => {
           }
         }
       } catch (err) {
-        console.error('initializeAuth error:', err);
+        console.error('Error al inicializar autenticacion');
         if (mountedRef.current) {
-          setAuthError(err.message);
+          setAuthError('Error al inicializar sesion');
         }
       } finally {
         if (mountedRef.current) {

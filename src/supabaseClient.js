@@ -390,7 +390,7 @@ export const cargarDatosDashboard = async () => {
     ].filter(Boolean);
 
     if (errores.length > 0) {
-      console.warn('Algunos datos no pudieron cargarse:', errores);
+      console.warn('Algunos datos no pudieron cargarse. Total errores:', errores.length);
     }
 
     // Transformar líneas de producto a formato esperado por Dashboard
@@ -478,7 +478,7 @@ export const cargarDatosDashboard = async () => {
       usarDatosLocales: !lineasRes.data || lineasRes.data.length === 0
     };
   } catch (error) {
-    console.error('Error cargando datos del dashboard:', error);
+    console.error('Error cargando datos del dashboard');
     return {
       data: null,
       error: error.message,
