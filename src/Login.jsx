@@ -25,10 +25,13 @@ const Login = ({ onLoginSuccess }) => {
       const { data, error: signInError } = await signIn(email, password);
 
       if (signInError) {
-        if (signInError.message.includes('Invalid login')) {
+        const msg = typeof signInError === 'string' ? signInError : (signInError.message || 'Error desconocido');
+        if (msg.includes('Invalid login')) {
           setError('Email o contrasena incorrectos');
+        } else if (msg.includes('no configurado')) {
+          setError('Error de conexion. Recarga la pagina e intenta de nuevo.');
         } else {
-          setError(signInError.message);
+          setError(msg);
         }
         return;
       }
