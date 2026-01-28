@@ -3,12 +3,14 @@ import { createClient } from '@supabase/supabase-js';
 // =====================================================
 // CONFIGURACIÓN DE SUPABASE - BLANCOS SINAI TOTEBAG
 // =====================================================
+// Las credenciales se cargan desde variables de entorno (.env.local)
+// Nunca hardcodear claves en el código fuente
 
-const supabaseUrl = 'https://xaacdoacjzjjvldgovxs.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhhYWNkb2FjanpqanZsZGdvdnhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzNDcxNjQsImV4cCI6MjA4MzkyMzE2NH0.BoLWKoMk3cLjttEJAGwSQNxlyDgUs6xZya1SDIOgLvc';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 // Verificar si las credenciales están configuradas
-const isConfigured = !supabaseUrl.includes('TU_SUPABASE') && !supabaseAnonKey.includes('TU_SUPABASE');
+const isConfigured = supabaseUrl.length > 0 && supabaseAnonKey.length > 0;
 
 // Crear cliente de Supabase (solo si está configurado)
 export const supabase = isConfigured
