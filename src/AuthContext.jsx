@@ -69,8 +69,8 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
     try {
       await signOut();
-      // Limpiar localStorage para asegurar que se requiera login al volver
-      localStorage.clear();
+      // Solo limpiar la clave de auth, no todo localStorage
+      localStorage.removeItem('totebag-auth-token');
     } catch (err) {
       console.error('signOut error:', err);
     }

@@ -27,6 +27,18 @@ export const supabase = isConfigured
 
 export const isSupabaseConfigured = isConfigured;
 
+// Helper: detectar errores de permisos RLS y dar mensaje claro
+const handleRLSError = (error) => {
+  if (!error) return null;
+  const msg = error.message || '';
+  if (msg.includes('row-level security') || msg.includes('policy') ||
+      error.code === '42501' || msg.includes('permission denied') ||
+      msg.includes('new row violates')) {
+    return { ...error, message: 'Permiso denegado: solo administradores pueden realizar esta acción' };
+  }
+  return error;
+};
+
 // =====================================================
 // FUNCIONES PARA LÍNEAS DE PRODUCTO
 // =====================================================
@@ -41,7 +53,7 @@ export const getLineasProducto = async () => {
     .eq('activo', true)
     .order('orden', { ascending: true });
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // Actualizar una línea de producto
@@ -55,7 +67,7 @@ export const updateLineaProducto = async (id, updates) => {
     .select()
     .single();
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // =====================================================
@@ -71,7 +83,7 @@ export const getProyecciones = async () => {
     .select('*')
     .order('mes_numero', { ascending: true });
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // Actualizar una proyección
@@ -85,7 +97,7 @@ export const updateProyeccion = async (id, updates) => {
     .select()
     .single();
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // =====================================================
@@ -102,7 +114,7 @@ export const getCanalesEcommerce = async () => {
     .eq('activo', true)
     .order('orden', { ascending: true });
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // Actualizar un canal e-commerce
@@ -116,7 +128,7 @@ export const updateCanalEcommerce = async (id, updates) => {
     .select()
     .single();
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // Crear un nuevo canal e-commerce
@@ -129,7 +141,7 @@ export const createCanalEcommerce = async (canal) => {
     .select()
     .single();
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // Eliminar un canal e-commerce
@@ -158,7 +170,7 @@ export const getCostosEnvio = async () => {
     .eq('activo', true)
     .order('orden', { ascending: true });
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // Actualizar un costo de envío
@@ -172,7 +184,7 @@ export const updateCostoEnvio = async (id, updates) => {
     .select()
     .single();
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // Crear un nuevo costo de envío
@@ -185,7 +197,7 @@ export const createCostoEnvio = async (costo) => {
     .select()
     .single();
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // Eliminar un costo de envío
@@ -214,7 +226,7 @@ export const getPersonalizacion = async () => {
     .eq('activo', true)
     .order('orden', { ascending: true });
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // Actualizar una opción de personalización
@@ -228,7 +240,7 @@ export const updatePersonalizacion = async (id, updates) => {
     .select()
     .single();
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // =====================================================
@@ -245,7 +257,7 @@ export const getTiposDiseno = async () => {
     .eq('activo', true)
     .order('orden', { ascending: true });
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // Actualizar un tipo de diseño
@@ -259,7 +271,7 @@ export const updateTipoDiseno = async (id, updates) => {
     .select()
     .single();
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // =====================================================
@@ -276,7 +288,7 @@ export const getColecciones = async () => {
     .eq('activo', true)
     .order('orden', { ascending: true });
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // Actualizar una colección
@@ -290,7 +302,7 @@ export const updateColeccion = async (id, updates) => {
     .select()
     .single();
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // =====================================================
@@ -327,7 +339,7 @@ export const updateConfiguracion = async (clave, valor) => {
     .select()
     .single();
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // =====================================================
@@ -489,7 +501,7 @@ export const getTiposTela = async () => {
     .eq('activo', true)
     .order('orden', { ascending: true });
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // Actualizar tipo de tela (solo admin)
@@ -503,7 +515,7 @@ export const updateTipoTela = async (id, updates) => {
     .select()
     .single();
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // Crear tipo de tela (solo admin)
@@ -516,7 +528,7 @@ export const createTipoTela = async (tela) => {
     .select()
     .single();
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // =====================================================
@@ -533,7 +545,7 @@ export const getConfigEnvio = async () => {
     .eq('activo', true)
     .order('id', { ascending: true });
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // Actualizar configuración de envío (solo admin)
@@ -547,7 +559,7 @@ export const updateConfigEnvio = async (id, updates) => {
     .select()
     .single();
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // =====================================================
@@ -568,7 +580,7 @@ export const getProductos = async () => {
     .eq('activo', true)
     .order('created_at', { ascending: false });
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // Crear producto
@@ -581,7 +593,7 @@ export const createProducto = async (producto) => {
     .select()
     .single();
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // Actualizar producto
@@ -595,7 +607,7 @@ export const updateProducto = async (id, updates) => {
     .select()
     .single();
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // Eliminar producto (soft delete)
@@ -624,7 +636,7 @@ export const getClientes = async () => {
     .eq('activo', true)
     .order('nombre', { ascending: true });
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // Crear cliente
@@ -637,7 +649,7 @@ export const createCliente = async (cliente) => {
     .select()
     .single();
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // Actualizar cliente
@@ -651,7 +663,7 @@ export const updateCliente = async (id, updates) => {
     .select()
     .single();
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // =====================================================
@@ -671,7 +683,7 @@ export const getMovimientosStock = async () => {
     `)
     .order('fecha', { ascending: false });
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // Crear movimiento de stock
@@ -684,7 +696,7 @@ export const createMovimientoStock = async (movimiento) => {
     .select()
     .single();
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // Obtener resumen de stock por producto
@@ -742,7 +754,7 @@ export const signIn = async (email, password) => {
     password
   });
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // Cerrar sesión
@@ -779,7 +791,7 @@ export const getUserProfile = async (userId) => {
     .eq('id', userId)
     .single();
 
-  return { data, error };
+  return { data, error: handleRLSError(error) };
 };
 
 // Escuchar cambios de autenticación
