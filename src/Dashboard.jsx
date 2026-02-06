@@ -28,7 +28,13 @@ import {
   getCamposCategoria,
   createCategoria,
   deleteCategoria,
-  deleteSubcategoria
+  deleteSubcategoria,
+  getVentas,
+  createVenta,
+  updateVenta,
+  deleteVenta,
+  getResumenVentas,
+  registrarPagoVenta
 } from './supabaseClient';
 
 // ==================== DATOS ====================
@@ -670,6 +676,7 @@ const Sidebar = ({ seccionActiva, setSeccionActiva, menuAbierto, setMenuAbierto,
     { id: 'productos', nombre: 'Productos', icon: '🛍️' },
     { id: 'stocks', nombre: 'Stocks', icon: '📋' },
     { id: 'salidas', nombre: 'Salidas', icon: '📤' },
+    { id: 'ventas', nombre: 'Ventas', icon: '💵' },
     { id: 'mayoreo', nombre: 'Mayoreo', icon: '📦' },
     { id: 'ecommerce', nombre: 'E-commerce', icon: '🛒' },
     { id: 'promociones', nombre: 'Promociones', icon: '🎉' },
@@ -4089,6 +4096,672 @@ const SalidasView = ({ isAdmin }) => {
 };
 
 
+// Vista Ventas
+const VentasView = ({ isAdmin }) => {
+  const [ventas, setVentas] = useState([]);
+  const [productos, setProductos] = useState([]);
+  const [clientes, setClientes] = useState([]);
+  const [resumen, setResumen] = useState(null);
+  const [mostrarFormulario, setMostrarFormulario] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
+  const [hoverBtn, setHoverBtn] = useState({});
+  const [filtroEstado, setFiltroEstado] = useState('todos');
+  const [filtroPeriodo, setFiltroPeriodo] = useState('mes'); // hoy, semana, mes, todo
+  const [ventaEditando, setVentaEditando] = useState(null);
+  const [mostrarPago, setMostrarPago] = useState(null); // ID de venta para registrar pago
+
+  // Formulario de nueva venta
+  const [formVenta, setFormVenta] = useState({
+    productoId: '',
+    clienteId: '',
+    cantidad: 1,
+    precioUnitario: 0,
+    descuentoPorcentaje: 0,
+    metodoPago: 'efectivo',
+    estadoPago: 'pagado',
+    tipoVenta: 'directa',
+    notas: ''
+  });
+
+  // Calcular fechas según período
+  const getFechasPeriodo = () => {
+    const hoy = new Date();
+    const hoyStr = hoy.toISOString().split('T')[0];
+
+    switch (filtroPeriodo) {
+      case 'hoy':
+        return { inicio: hoyStr, fin: hoyStr };
+      case 'semana':
+        const hace7Dias = new Date(hoy.getTime() - 7 * 24 * 60 * 60 * 1000);
+        return { inicio: hace7Dias.toISOString().split('T')[0], fin: hoyStr };
+      case 'mes':
+        const hace30Dias = new Date(hoy.getTime() - 30 * 24 * 60 * 60 * 1000);
+        return { inicio: hace30Dias.toISOString().split('T')[0], fin: hoyStr };
+      case 'todo':
+      default:
+        return { inicio: null, fin: null };
+    }
+  };
+
+  // Cargar datos
+  const cargarDatos = async () => {
+    if (!isSupabaseConfigured) return;
+
+    const fechas = getFechasPeriodo();
+
+    const [prodRes, cliRes, ventasRes, resumenRes] = await Promise.all([
+      getProductos(),
+      getClientes(),
+      getVentas({
+        fechaInicio: fechas.inicio,
+        fechaFin: fechas.fin,
+        estadoPago: filtroEstado !== 'todos' ? filtroEstado : null
+      }),
+      getResumenVentas(fechas.inicio, fechas.fin)
+    ]);
+
+    if (prodRes.data) setProductos(prodRes.data);
+    if (cliRes.data) setClientes(cliRes.data);
+    if (ventasRes.data) setVentas(ventasRes.data);
+    if (resumenRes.data) setResumen(resumenRes.data);
+  };
+
+  useEffect(() => {
+    cargarDatos();
+  }, [filtroEstado, filtroPeriodo]);
+
+  // Calcular total de venta
+  const calcularTotal = () => {
+    const subtotal = formVenta.cantidad * formVenta.precioUnitario;
+    const descuento = subtotal * (formVenta.descuentoPorcentaje / 100);
+    return subtotal - descuento;
+  };
+
+  // Seleccionar producto y cargar precio sugerido
+  const seleccionarProducto = (productoId) => {
+    const producto = productos.find(p => p.id === parseInt(productoId));
+    if (producto) {
+      setFormVenta({
+        ...formVenta,
+        productoId,
+        precioUnitario: parseFloat(producto.costo_total_1_tinta) * 2 || 0 // Sugerir 100% margen
+      });
+    }
+  };
+
+  // Registrar venta
+  const registrarVenta = async () => {
+    if (!isAdmin) {
+      setMensaje({ tipo: 'error', texto: 'Solo admin puede registrar ventas' });
+      return;
+    }
+
+    if (!formVenta.productoId || !formVenta.cantidad || !formVenta.precioUnitario) {
+      setMensaje({ tipo: 'error', texto: 'Completa producto, cantidad y precio' });
+      return;
+    }
+
+    setGuardando(true);
+    try {
+      const producto = productos.find(p => p.id === parseInt(formVenta.productoId));
+      const cliente = clientes.find(c => c.id === parseInt(formVenta.clienteId));
+      const total = calcularTotal();
+
+      const ventaData = {
+        producto_id: parseInt(formVenta.productoId),
+        cliente_id: formVenta.clienteId ? parseInt(formVenta.clienteId) : null,
+        producto_nombre: producto?.linea_nombre || '',
+        producto_medidas: producto?.linea_medidas || '',
+        cliente_nombre: cliente?.nombre || 'Venta directa',
+        cantidad: parseInt(formVenta.cantidad),
+        precio_unitario: parseFloat(formVenta.precioUnitario),
+        descuento_porcentaje: parseFloat(formVenta.descuentoPorcentaje) || 0,
+        descuento_monto: (formVenta.cantidad * formVenta.precioUnitario) * (formVenta.descuentoPorcentaje / 100),
+        total: total,
+        costo_unitario: parseFloat(producto?.costo_total_1_tinta) || 0,
+        metodo_pago: formVenta.metodoPago,
+        estado_pago: formVenta.estadoPago,
+        monto_pagado: formVenta.estadoPago === 'pagado' ? total : 0,
+        tipo_venta: formVenta.tipoVenta,
+        notas: formVenta.notas
+      };
+
+      const { data, error } = await createVenta(ventaData);
+
+      if (error) {
+        setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
+      } else {
+        setMensaje({ tipo: 'exito', texto: 'Venta registrada correctamente' });
+        setMostrarFormulario(false);
+        setFormVenta({
+          productoId: '',
+          clienteId: '',
+          cantidad: 1,
+          precioUnitario: 0,
+          descuentoPorcentaje: 0,
+          metodoPago: 'efectivo',
+          estadoPago: 'pagado',
+          tipoVenta: 'directa',
+          notas: ''
+        });
+        cargarDatos();
+        setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+      }
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: 'Error: ' + err.message });
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  // Registrar pago
+  const hacerPago = async (ventaId, monto) => {
+    if (!monto || monto <= 0) {
+      setMensaje({ tipo: 'error', texto: 'Ingresa un monto válido' });
+      return;
+    }
+
+    setGuardando(true);
+    try {
+      const { error } = await registrarPagoVenta(ventaId, parseFloat(monto));
+      if (error) {
+        setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
+      } else {
+        setMensaje({ tipo: 'exito', texto: 'Pago registrado' });
+        setMostrarPago(null);
+        cargarDatos();
+        setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+      }
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: 'Error: ' + err.message });
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  // Eliminar venta
+  const eliminarVentaHandler = async (ventaId) => {
+    if (!window.confirm('¿Eliminar esta venta?')) return;
+
+    const { error } = await deleteVenta(ventaId);
+    if (error) {
+      setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
+    } else {
+      setMensaje({ tipo: 'exito', texto: 'Venta eliminada' });
+      cargarDatos();
+      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+    }
+  };
+
+  const formatearFecha = (fecha) => {
+    if (!fecha) return '-';
+    return new Date(fecha).toLocaleDateString('es-MX', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
+  const formatearMoneda = (monto) => {
+    return '$' + (parseFloat(monto) || 0).toLocaleString('es-MX', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
+
+  const inputStyle = {
+    width: '100%',
+    padding: '10px 12px',
+    border: '2px solid #DA9F17',
+    borderRadius: '6px',
+    fontSize: '14px',
+    boxSizing: 'border-box',
+    background: colors.cream
+  };
+
+  const cardStyle = {
+    background: colors.cotton,
+    border: `2px solid ${colors.sand}`,
+    borderRadius: '8px',
+    padding: '15px',
+    textAlign: 'center'
+  };
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+        <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '300', letterSpacing: '2px', color: colors.espresso }}>
+          Ventas
+        </h2>
+        {isAdmin && (
+          <button
+            onClick={() => setMostrarFormulario(true)}
+            onMouseEnter={() => setHoverBtn({ ...hoverBtn, nueva: true })}
+            onMouseLeave={() => setHoverBtn({ ...hoverBtn, nueva: false })}
+            style={{
+              padding: '10px 20px',
+              background: hoverBtn.nueva ? colors.sidebarText : colors.sidebarBg,
+              color: hoverBtn.nueva ? colors.sidebarBg : colors.sidebarText,
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '500',
+              transition: 'all 0.3s ease'
+            }}
+          >
+            + Nueva Venta
+          </button>
+        )}
+      </div>
+
+      {/* Mensaje */}
+      {mensaje.texto && (
+        <div style={{
+          marginBottom: '20px',
+          padding: '15px',
+          borderRadius: '6px',
+          background: mensaje.tipo === 'exito' ? 'rgba(171,213,94,0.2)' : 'rgba(196,120,74,0.2)',
+          border: `1px solid ${mensaje.tipo === 'exito' ? colors.olive : colors.terracotta}`,
+          color: mensaje.tipo === 'exito' ? colors.olive : colors.terracotta,
+          textAlign: 'center',
+          fontWeight: '500'
+        }}>
+          {mensaje.texto}
+        </div>
+      )}
+
+      {/* Dashboard de resumen */}
+      {resumen && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px', marginBottom: '25px' }}>
+          <div style={{ ...cardStyle, borderColor: colors.sidebarBg }}>
+            <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>VENTAS HOY</div>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: colors.sidebarBg }}>{formatearMoneda(resumen.ventasHoy)}</div>
+            <div style={{ fontSize: '12px', color: colors.camel }}>{resumen.piezasHoy} piezas</div>
+          </div>
+          <div style={{ ...cardStyle, borderColor: colors.olive }}>
+            <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>VENTAS PERÍODO</div>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: colors.olive }}>{formatearMoneda(resumen.totalVentas)}</div>
+            <div style={{ fontSize: '12px', color: colors.camel }}>{resumen.totalPiezas} piezas</div>
+          </div>
+          <div style={{ ...cardStyle, borderColor: '#27ae60' }}>
+            <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>COBRADO</div>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: '#27ae60' }}>{formatearMoneda(resumen.totalCobrado)}</div>
+          </div>
+          <div style={{ ...cardStyle, borderColor: colors.terracotta }}>
+            <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>POR COBRAR</div>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: colors.terracotta }}>{formatearMoneda(resumen.totalPorCobrar)}</div>
+          </div>
+          <div style={{ ...cardStyle, borderColor: '#9b59b6' }}>
+            <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>UTILIDAD</div>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: '#9b59b6' }}>{formatearMoneda(resumen.totalUtilidad)}</div>
+          </div>
+          <div style={{ ...cardStyle, borderColor: colors.camel }}>
+            <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>TICKET PROM.</div>
+            <div style={{ fontSize: '24px', fontWeight: '700', color: colors.espresso }}>{formatearMoneda(resumen.ticketPromedio)}</div>
+            <div style={{ fontSize: '12px', color: colors.camel }}>{resumen.numVentas} ventas</div>
+          </div>
+        </div>
+      )}
+
+      {/* Filtros */}
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
+        <select
+          value={filtroPeriodo}
+          onChange={(e) => setFiltroPeriodo(e.target.value)}
+          style={{ ...inputStyle, width: 'auto', minWidth: '120px' }}
+        >
+          <option value="hoy">Hoy</option>
+          <option value="semana">Últimos 7 días</option>
+          <option value="mes">Últimos 30 días</option>
+          <option value="todo">Todo</option>
+        </select>
+        <select
+          value={filtroEstado}
+          onChange={(e) => setFiltroEstado(e.target.value)}
+          style={{ ...inputStyle, width: 'auto', minWidth: '120px' }}
+        >
+          <option value="todos">Todos los estados</option>
+          <option value="pagado">Pagados</option>
+          <option value="pendiente">Pendientes</option>
+          <option value="parcial">Pago parcial</option>
+        </select>
+      </div>
+
+      {/* Formulario nueva venta */}
+      {mostrarFormulario && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: colors.cotton, borderRadius: '12px', padding: '30px',
+            maxWidth: '500px', width: '90%', maxHeight: '90vh', overflowY: 'auto'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, color: colors.espresso }}>Nueva Venta</h3>
+              <button onClick={() => setMostrarFormulario(false)}
+                style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: colors.camel }}>×</button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              {/* Producto */}
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', color: colors.espresso }}>Producto *</label>
+                <select
+                  value={formVenta.productoId}
+                  onChange={(e) => seleccionarProducto(e.target.value)}
+                  style={inputStyle}
+                >
+                  <option value="">Seleccionar producto...</option>
+                  {productos.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.linea_nombre} - {p.linea_medidas} (Stock: {p.stock || 0})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Cliente */}
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', color: colors.espresso }}>Cliente (opcional)</label>
+                <select
+                  value={formVenta.clienteId}
+                  onChange={(e) => setFormVenta({ ...formVenta, clienteId: e.target.value })}
+                  style={inputStyle}
+                >
+                  <option value="">Venta directa (sin cliente)</option>
+                  {clientes.map(c => (
+                    <option key={c.id} value={c.id}>{c.nombre}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Cantidad y Precio */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', color: colors.espresso }}>Cantidad *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formVenta.cantidad}
+                    onChange={(e) => setFormVenta({ ...formVenta, cantidad: parseInt(e.target.value) || 1 })}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', color: colors.espresso }}>Precio Unitario *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formVenta.precioUnitario}
+                    onChange={(e) => setFormVenta({ ...formVenta, precioUnitario: parseFloat(e.target.value) || 0 })}
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+
+              {/* Descuento */}
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', color: colors.espresso }}>Descuento (%)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={formVenta.descuentoPorcentaje}
+                  onChange={(e) => setFormVenta({ ...formVenta, descuentoPorcentaje: parseFloat(e.target.value) || 0 })}
+                  style={inputStyle}
+                />
+              </div>
+
+              {/* Resumen */}
+              <div style={{ background: colors.sidebarBg, padding: '15px', borderRadius: '8px', color: colors.sidebarText }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span>Subtotal:</span>
+                  <span>{formatearMoneda(formVenta.cantidad * formVenta.precioUnitario)}</span>
+                </div>
+                {formVenta.descuentoPorcentaje > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', color: '#F7B731' }}>
+                    <span>Descuento ({formVenta.descuentoPorcentaje}%):</span>
+                    <span>-{formatearMoneda((formVenta.cantidad * formVenta.precioUnitario) * (formVenta.descuentoPorcentaje / 100))}</span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '18px', fontWeight: '700', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '8px' }}>
+                  <span>TOTAL:</span>
+                  <span>{formatearMoneda(calcularTotal())}</span>
+                </div>
+              </div>
+
+              {/* Método y Estado de pago */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', color: colors.espresso }}>Método de Pago</label>
+                  <select
+                    value={formVenta.metodoPago}
+                    onChange={(e) => setFormVenta({ ...formVenta, metodoPago: e.target.value })}
+                    style={inputStyle}
+                  >
+                    <option value="efectivo">Efectivo</option>
+                    <option value="transferencia">Transferencia</option>
+                    <option value="tarjeta">Tarjeta</option>
+                    <option value="credito">Crédito</option>
+                    <option value="otro">Otro</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', color: colors.espresso }}>Estado</label>
+                  <select
+                    value={formVenta.estadoPago}
+                    onChange={(e) => setFormVenta({ ...formVenta, estadoPago: e.target.value })}
+                    style={inputStyle}
+                  >
+                    <option value="pagado">Pagado</option>
+                    <option value="pendiente">Pendiente</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Tipo de venta */}
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', color: colors.espresso }}>Tipo de Venta</label>
+                <select
+                  value={formVenta.tipoVenta}
+                  onChange={(e) => setFormVenta({ ...formVenta, tipoVenta: e.target.value })}
+                  style={inputStyle}
+                >
+                  <option value="directa">Venta Directa</option>
+                  <option value="consignacion">Consignación</option>
+                  <option value="mayoreo">Mayoreo</option>
+                  <option value="ecommerce">E-commerce</option>
+                </select>
+              </div>
+
+              {/* Notas */}
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', color: colors.espresso }}>Notas</label>
+                <textarea
+                  value={formVenta.notas}
+                  onChange={(e) => setFormVenta({ ...formVenta, notas: e.target.value })}
+                  style={{ ...inputStyle, minHeight: '60px', resize: 'vertical' }}
+                  placeholder="Notas adicionales..."
+                />
+              </div>
+
+              {/* Botones */}
+              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                <button
+                  onClick={() => setMostrarFormulario(false)}
+                  style={{ flex: 1, padding: '12px', background: colors.sand, color: colors.espresso, border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={registrarVenta}
+                  disabled={guardando}
+                  style={{ flex: 1, padding: '12px', background: colors.sidebarBg, color: colors.sidebarText, border: 'none', borderRadius: '6px', cursor: guardando ? 'not-allowed' : 'pointer', fontWeight: '500' }}
+                >
+                  {guardando ? 'Guardando...' : 'Registrar Venta'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lista de ventas */}
+      {ventas.length > 0 ? (
+        <div style={{ display: 'grid', gap: '12px' }}>
+          {ventas.map((venta) => (
+            <div key={venta.id} style={{
+              background: colors.cotton,
+              border: `2px solid ${venta.estado_pago === 'pagado' ? colors.olive : venta.estado_pago === 'parcial' ? '#F7B731' : colors.terracotta}`,
+              borderRadius: '8px',
+              padding: '15px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px' }}>
+                {/* Info */}
+                <div style={{ flex: 1, minWidth: '200px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px' }}>
+                    <span style={{ fontWeight: '600', color: colors.espresso }}>{venta.producto_nombre}</span>
+                    <span style={{
+                      padding: '2px 8px',
+                      borderRadius: '10px',
+                      fontSize: '11px',
+                      background: venta.estado_pago === 'pagado' ? 'rgba(171,213,94,0.2)' :
+                                  venta.estado_pago === 'parcial' ? 'rgba(247,183,49,0.2)' : 'rgba(196,120,74,0.2)',
+                      color: venta.estado_pago === 'pagado' ? colors.olive :
+                             venta.estado_pago === 'parcial' ? '#F7B731' : colors.terracotta
+                    }}>
+                      {venta.estado_pago === 'pagado' ? 'Pagado' : venta.estado_pago === 'parcial' ? 'Parcial' : 'Pendiente'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '13px', color: colors.camel }}>
+                    {venta.cliente_nombre || 'Venta directa'} • {venta.cantidad} pzas • {formatearFecha(venta.created_at)}
+                  </div>
+                  {venta.notas && <div style={{ fontSize: '12px', color: colors.camel, marginTop: '5px', fontStyle: 'italic' }}>{venta.notas}</div>}
+                </div>
+
+                {/* Montos */}
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '20px', fontWeight: '700', color: colors.sidebarBg }}>{formatearMoneda(venta.total)}</div>
+                  {venta.estado_pago !== 'pagado' && (
+                    <div style={{ fontSize: '12px', color: colors.terracotta }}>
+                      Pendiente: {formatearMoneda((venta.total || 0) - (venta.monto_pagado || 0))}
+                    </div>
+                  )}
+                  <div style={{ fontSize: '11px', color: '#9b59b6' }}>Utilidad: {formatearMoneda(venta.utilidad)}</div>
+                </div>
+
+                {/* Acciones */}
+                {isAdmin && (
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    {venta.estado_pago !== 'pagado' && (
+                      <button
+                        onClick={() => setMostrarPago(mostrarPago === venta.id ? null : venta.id)}
+                        style={{
+                          padding: '6px 12px',
+                          background: '#27ae60',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '12px'
+                        }}
+                      >
+                        Pagar
+                      </button>
+                    )}
+                    <button
+                      onClick={() => eliminarVentaHandler(venta.id)}
+                      style={{
+                        padding: '6px 12px',
+                        background: colors.terracotta,
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px'
+                      }}
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Formulario de pago */}
+              {mostrarPago === venta.id && (
+                <div style={{
+                  marginTop: '15px',
+                  padding: '15px',
+                  background: colors.cream,
+                  borderRadius: '6px',
+                  display: 'flex',
+                  gap: '10px',
+                  alignItems: 'center',
+                  flexWrap: 'wrap'
+                }}>
+                  <span style={{ fontSize: '13px', color: colors.espresso }}>Registrar pago:</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="Monto"
+                    id={`pago-${venta.id}`}
+                    style={{ ...inputStyle, width: '120px' }}
+                  />
+                  <button
+                    onClick={() => {
+                      const input = document.getElementById(`pago-${venta.id}`);
+                      hacerPago(venta.id, input.value);
+                    }}
+                    disabled={guardando}
+                    style={{
+                      padding: '10px 20px',
+                      background: colors.sidebarBg,
+                      color: colors.sidebarText,
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '13px'
+                    }}
+                  >
+                    Confirmar
+                  </button>
+                  <button
+                    onClick={() => setMostrarPago(null)}
+                    style={{
+                      padding: '10px 15px',
+                      background: colors.sand,
+                      color: colors.espresso,
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '13px'
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ background: colors.cotton, border: '2px solid #DA9F17', padding: '40px', textAlign: 'center', borderRadius: '8px' }}>
+          <span style={{ fontSize: '48px' }}>💵</span>
+          <h3 style={{ margin: '20px 0 10px', color: colors.espresso }}>Sin ventas registradas</h3>
+          <p style={{ color: colors.camel, fontSize: '14px' }}>Haz clic en "+ Nueva Venta" para registrar tu primera venta</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 // Vista Mayoreo
 const MayoreoView = ({ productosActualizados, condicionesEco, condicionesEcoForro }) => {
   const [lineaActiva, setLineaActiva] = useState('estandar');
@@ -5516,6 +6189,7 @@ export default function DashboardToteBag() {
       );
       case 'stocks': return <StocksView isAdmin={isAdmin} />;
       case 'salidas': return <SalidasView isAdmin={isAdmin} />;
+      case 'ventas': return <VentasView isAdmin={isAdmin} />;
       case 'mayoreo': return <MayoreoView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} />;
       case 'ecommerce': return <EcommerceView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} datosDB={datosDB} costosAmazon={costosAmazon} setCostosAmazon={setCostosAmazon} isAdmin={isAdmin} />;
       case 'promociones': return <PromocionesView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} />;

@@ -841,6 +841,198 @@ export const updateCliente = async (id, updates) => {
 };
 
 // =====================================================
+// FUNCIONES PARA VENTAS
+// =====================================================
+
+// Obtener ventas con filtros opcionales
+export const getVentas = async (filtros = {}) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  let query = supabase
+    .from('ventas')
+    .select(`
+      *,
+      producto:productos(id, linea_nombre, linea_medidas, costo_total_1_tinta),
+      cliente:clientes(id, nombre, tipo)
+    `)
+    .eq('activo', true)
+    .order('created_at', { ascending: false });
+
+  // Filtro por fecha inicio
+  if (filtros.fechaInicio) {
+    query = query.gte('created_at', filtros.fechaInicio);
+  }
+
+  // Filtro por fecha fin
+  if (filtros.fechaFin) {
+    query = query.lte('created_at', filtros.fechaFin + 'T23:59:59');
+  }
+
+  // Filtro por estado de pago
+  if (filtros.estadoPago) {
+    query = query.eq('estado_pago', filtros.estadoPago);
+  }
+
+  // Filtro por tipo de venta
+  if (filtros.tipoVenta) {
+    query = query.eq('tipo_venta', filtros.tipoVenta);
+  }
+
+  // Filtro por cliente
+  if (filtros.clienteId) {
+    query = query.eq('cliente_id', filtros.clienteId);
+  }
+
+  // Filtro por producto
+  if (filtros.productoId) {
+    query = query.eq('producto_id', filtros.productoId);
+  }
+
+  // Límite
+  if (filtros.limite) {
+    query = query.limit(filtros.limite);
+  }
+
+  const { data, error } = await query;
+  return { data, error: handleRLSError(error) };
+};
+
+// Crear venta
+export const createVenta = async (venta) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('ventas')
+    .insert([venta])
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+// Actualizar venta
+export const updateVenta = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('ventas')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+// Eliminar venta (soft delete)
+export const deleteVenta = async (id) => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+
+  const { error } = await supabase
+    .from('ventas')
+    .update({ activo: false })
+    .eq('id', id);
+
+  return { error: handleRLSError(error) };
+};
+
+// Obtener resumen de ventas por período
+export const getResumenVentas = async (fechaInicio = null, fechaFin = null) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  // Si no hay fechas, usar últimos 30 días
+  const hoy = new Date();
+  const hace30Dias = new Date(hoy.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  const inicio = fechaInicio || hace30Dias.toISOString().split('T')[0];
+  const fin = fechaFin || hoy.toISOString().split('T')[0];
+
+  const { data, error } = await supabase
+    .from('ventas')
+    .select('total, cantidad, utilidad, estado_pago, monto_pagado, created_at')
+    .eq('activo', true)
+    .gte('created_at', inicio)
+    .lte('created_at', fin + 'T23:59:59');
+
+  if (error) return { data: null, error: handleRLSError(error) };
+
+  // Calcular resumen
+  const resumen = {
+    totalVentas: 0,
+    totalPiezas: 0,
+    totalUtilidad: 0,
+    totalCobrado: 0,
+    totalPorCobrar: 0,
+    numVentas: data?.length || 0,
+    ticketPromedio: 0,
+    ventasHoy: 0,
+    piezasHoy: 0
+  };
+
+  const hoyStr = hoy.toISOString().split('T')[0];
+
+  data?.forEach(v => {
+    resumen.totalVentas += parseFloat(v.total) || 0;
+    resumen.totalPiezas += v.cantidad || 0;
+    resumen.totalUtilidad += parseFloat(v.utilidad) || 0;
+
+    if (v.estado_pago === 'pagado') {
+      resumen.totalCobrado += parseFloat(v.total) || 0;
+    } else {
+      resumen.totalCobrado += parseFloat(v.monto_pagado) || 0;
+      resumen.totalPorCobrar += (parseFloat(v.total) || 0) - (parseFloat(v.monto_pagado) || 0);
+    }
+
+    // Ventas de hoy
+    if (v.created_at?.startsWith(hoyStr)) {
+      resumen.ventasHoy += parseFloat(v.total) || 0;
+      resumen.piezasHoy += v.cantidad || 0;
+    }
+  });
+
+  resumen.ticketPromedio = resumen.numVentas > 0 ? resumen.totalVentas / resumen.numVentas : 0;
+
+  return { data: resumen, error: null };
+};
+
+// Registrar pago de venta
+export const registrarPagoVenta = async (ventaId, montoPago) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  // Obtener venta actual
+  const { data: venta, error: errorGet } = await supabase
+    .from('ventas')
+    .select('total, monto_pagado')
+    .eq('id', ventaId)
+    .single();
+
+  if (errorGet) return { data: null, error: handleRLSError(errorGet) };
+
+  const nuevoMontoPagado = (parseFloat(venta.monto_pagado) || 0) + montoPago;
+  const total = parseFloat(venta.total) || 0;
+
+  let nuevoEstado = 'parcial';
+  if (nuevoMontoPagado >= total) {
+    nuevoEstado = 'pagado';
+  } else if (nuevoMontoPagado <= 0) {
+    nuevoEstado = 'pendiente';
+  }
+
+  const { data, error } = await supabase
+    .from('ventas')
+    .update({
+      monto_pagado: nuevoMontoPagado,
+      estado_pago: nuevoEstado,
+      fecha_pago: nuevoEstado === 'pagado' ? new Date().toISOString() : null
+    })
+    .eq('id', ventaId)
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+// =====================================================
 // FUNCIONES PARA MOVIMIENTOS DE STOCK
 // =====================================================
 
