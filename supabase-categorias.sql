@@ -171,7 +171,7 @@ CREATE POLICY "Categorias: escritura para admin" ON categorias
   FOR ALL USING (
     EXISTS (
       SELECT 1 FROM user_profiles
-      WHERE id = auth.uid() AND role = 'admin'
+      WHERE id = auth.uid() AND rol = 'admin'
     )
   );
 
@@ -183,7 +183,7 @@ CREATE POLICY "Subcategorias: escritura para admin" ON subcategorias
   FOR ALL USING (
     EXISTS (
       SELECT 1 FROM user_profiles
-      WHERE id = auth.uid() AND role = 'admin'
+      WHERE id = auth.uid() AND rol = 'admin'
     )
   );
 
@@ -195,7 +195,7 @@ CREATE POLICY "CamposCategoria: escritura para admin" ON campos_categoria
   FOR ALL USING (
     EXISTS (
       SELECT 1 FROM user_profiles
-      WHERE id = auth.uid() AND role = 'admin'
+      WHERE id = auth.uid() AND rol = 'admin'
     )
   );
 
