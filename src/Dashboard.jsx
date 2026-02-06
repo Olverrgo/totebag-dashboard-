@@ -37,7 +37,12 @@ import {
   updateVenta,
   deleteVenta,
   getResumenVentas,
-  registrarPagoVenta
+  registrarPagoVenta,
+  getVariantes,
+  createVariante,
+  updateVariante,
+  deleteVariante,
+  updateStockVariante
 } from './supabaseClient';
 
 // ==================== DATOS ====================
@@ -1084,6 +1089,20 @@ const ProductosView = ({ isAdmin }) => {
   const [nuevaCategoria, setNuevaCategoria] = useState({ nombre: '', icono: '📦' });
   const [hoverCategorias, setHoverCategorias] = useState({});
 
+  // Estados para variantes de producto
+  const [productoVariantes, setProductoVariantes] = useState(null); // Producto seleccionado para ver variantes
+  const [variantes, setVariantes] = useState([]);
+  const [mostrarFormVariante, setMostrarFormVariante] = useState(false);
+  const [varianteEditando, setVarianteEditando] = useState(null);
+  const [formVariante, setFormVariante] = useState({
+    material: '',
+    color: '',
+    talla: '',
+    stock: 0,
+    costo_unitario: 0,
+    precio_venta: 0
+  });
+
   // Cargar datos de Supabase al montar
   useEffect(() => {
     const cargarDatos = async () => {
@@ -1281,6 +1300,119 @@ const ProductosView = ({ isAdmin }) => {
       setProductosGuardados(productosGuardados.filter(p => p.id !== productoId));
       setMensaje({ tipo: 'exito', texto: 'Producto eliminado' });
       setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+    }
+  };
+
+  // ==================== FUNCIONES PARA VARIANTES ====================
+
+  // Abrir modal de variantes para un producto
+  const abrirVariantes = async (producto) => {
+    setProductoVariantes(producto);
+    const { data } = await getVariantes(producto.id);
+    setVariantes(data || []);
+  };
+
+  // Cerrar modal de variantes
+  const cerrarVariantes = () => {
+    setProductoVariantes(null);
+    setVariantes([]);
+    setMostrarFormVariante(false);
+    setVarianteEditando(null);
+    setFormVariante({ material: '', color: '', talla: '', stock: 0, costo_unitario: 0, precio_venta: 0 });
+  };
+
+  // Abrir formulario para nueva variante
+  const nuevaVarianteHandler = () => {
+    setVarianteEditando(null);
+    setFormVariante({
+      material: '',
+      color: '',
+      talla: '',
+      stock: 0,
+      costo_unitario: productoVariantes?.costo_total_1_tinta || 0,
+      precio_venta: productoVariantes?.precio_venta || 0
+    });
+    setMostrarFormVariante(true);
+  };
+
+  // Editar variante existente
+  const editarVarianteHandler = (variante) => {
+    setVarianteEditando(variante);
+    setFormVariante({
+      material: variante.material || '',
+      color: variante.color || '',
+      talla: variante.talla || '',
+      stock: variante.stock || 0,
+      costo_unitario: parseFloat(variante.costo_unitario) || 0,
+      precio_venta: parseFloat(variante.precio_venta) || 0
+    });
+    setMostrarFormVariante(true);
+  };
+
+  // Guardar variante (crear o actualizar)
+  const guardarVariante = async () => {
+    if (!formVariante.material && !formVariante.color && !formVariante.talla) {
+      setMensaje({ tipo: 'error', texto: 'Ingresa al menos un atributo (material, color o talla)' });
+      return;
+    }
+
+    setGuardando(true);
+    try {
+      const varianteData = {
+        producto_id: productoVariantes.id,
+        material: formVariante.material || null,
+        color: formVariante.color || null,
+        talla: formVariante.talla || null,
+        stock: parseInt(formVariante.stock) || 0,
+        costo_unitario: parseFloat(formVariante.costo_unitario) || 0,
+        precio_venta: parseFloat(formVariante.precio_venta) || 0
+      };
+
+      let result;
+      if (varianteEditando) {
+        result = await updateVariante(varianteEditando.id, varianteData);
+      } else {
+        result = await createVariante(varianteData);
+      }
+
+      if (result.error) {
+        setMensaje({ tipo: 'error', texto: 'Error: ' + result.error.message });
+      } else {
+        setMensaje({ tipo: 'exito', texto: varianteEditando ? 'Variante actualizada' : 'Variante creada' });
+        // Recargar variantes
+        const { data } = await getVariantes(productoVariantes.id);
+        setVariantes(data || []);
+        setMostrarFormVariante(false);
+        setVarianteEditando(null);
+        setFormVariante({ material: '', color: '', talla: '', stock: 0, costo_unitario: 0, precio_venta: 0 });
+        setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+      }
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: 'Error: ' + err.message });
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  // Eliminar variante
+  const eliminarVarianteHandler = async (varianteId) => {
+    if (!window.confirm('¿Eliminar esta variante?')) return;
+
+    const { error } = await deleteVariante(varianteId);
+    if (error) {
+      setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
+    } else {
+      setVariantes(variantes.filter(v => v.id !== varianteId));
+      setMensaje({ tipo: 'exito', texto: 'Variante eliminada' });
+      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+    }
+  };
+
+  // Actualizar stock de variante rápido
+  const actualizarStockVariante = async (varianteId, nuevoStock) => {
+    const { error } = await updateStockVariante(varianteId, parseInt(nuevoStock) || 0);
+    if (!error) {
+      setVariantes(variantes.map(v => v.id === varianteId ? { ...v, stock: parseInt(nuevoStock) || 0 } : v));
     }
   };
 
@@ -3122,6 +3254,24 @@ const ProductosView = ({ isAdmin }) => {
                         {prod.costo_total_4_tintas > 0 && <span>4 tintas: ${prod.costo_total_4_tintas?.toFixed(2)}</span>}
                       </div>
                       <div style={{ display: 'flex', gap: '8px' }}>
+                        {/* Botón Variantes */}
+                        <button
+                          onClick={() => abrirVariantes(prod)}
+                          onMouseEnter={() => setHoverEditar({ ...hoverEditar, [`var-${prod.id}`]: true })}
+                          onMouseLeave={() => setHoverEditar({ ...hoverEditar, [`var-${prod.id}`]: false })}
+                          style={{
+                            padding: '8px 14px',
+                            background: hoverEditar[`var-${prod.id}`] ? '#9b59b6' : '#8e44ad',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            fontWeight: '500',
+                            transition: 'all 0.3s ease'
+                          }}>
+                          Variantes
+                        </button>
                         <button
                           onClick={() => editarProductoDirecto(prod)}
                           onMouseEnter={() => setHoverEditar({ ...hoverEditar, [prod.id]: true })}
@@ -3172,6 +3322,244 @@ const ProductosView = ({ isAdmin }) => {
               <p style={{ color: colors.camel, fontSize: '14px' }}>Haz clic en "+ Agregar" para crear tu primer producto</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Modal de Variantes */}
+      {productoVariantes && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center',
+          justifyContent: 'center', zIndex: 1000
+        }}>
+          <div style={{
+            background: colors.cotton, borderRadius: '12px', padding: '25px',
+            maxWidth: '800px', width: '95%', maxHeight: '90vh', overflowY: 'auto'
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div>
+                <h3 style={{ margin: 0, color: colors.espresso }}>Variantes: {productoVariantes.linea_nombre}</h3>
+                <p style={{ margin: '5px 0 0', fontSize: '13px', color: colors.camel }}>{productoVariantes.linea_medidas}</p>
+              </div>
+              <button onClick={cerrarVariantes} style={{ background: 'none', border: 'none', fontSize: '28px', cursor: 'pointer', color: colors.camel }}>×</button>
+            </div>
+
+            {/* Mensaje */}
+            {mensaje.texto && (
+              <div style={{
+                marginBottom: '15px', padding: '12px', borderRadius: '6px',
+                background: mensaje.tipo === 'exito' ? 'rgba(171,213,94,0.2)' : 'rgba(196,120,74,0.2)',
+                color: mensaje.tipo === 'exito' ? colors.olive : colors.terracotta,
+                textAlign: 'center', fontSize: '14px'
+              }}>
+                {mensaje.texto}
+              </div>
+            )}
+
+            {/* Botón agregar variante */}
+            {isAdmin && !mostrarFormVariante && (
+              <button
+                onClick={nuevaVarianteHandler}
+                style={{
+                  marginBottom: '20px', padding: '10px 20px',
+                  background: colors.sidebarBg, color: colors.sidebarText,
+                  border: 'none', borderRadius: '6px', cursor: 'pointer',
+                  fontSize: '14px', fontWeight: '500'
+                }}
+              >
+                + Nueva Variante
+              </button>
+            )}
+
+            {/* Formulario de variante */}
+            {mostrarFormVariante && (
+              <div style={{
+                background: colors.cream, padding: '20px', borderRadius: '8px',
+                marginBottom: '20px', border: `2px solid ${colors.sidebarBg}`
+              }}>
+                <h4 style={{ margin: '0 0 15px', color: colors.sidebarBg }}>
+                  {varianteEditando ? 'Editar Variante' : 'Nueva Variante'}
+                </h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: colors.espresso, marginBottom: '5px' }}>Material</label>
+                    <input
+                      type="text"
+                      value={formVariante.material}
+                      onChange={(e) => setFormVariante({ ...formVariante, material: e.target.value })}
+                      placeholder="Ej: Franela, Algodón..."
+                      style={{ width: '100%', padding: '10px', border: `2px solid ${colors.sand}`, borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: colors.espresso, marginBottom: '5px' }}>Color</label>
+                    <input
+                      type="text"
+                      value={formVariante.color}
+                      onChange={(e) => setFormVariante({ ...formVariante, color: e.target.value })}
+                      placeholder="Ej: Azul, Rojo..."
+                      style={{ width: '100%', padding: '10px', border: `2px solid ${colors.sand}`, borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: colors.espresso, marginBottom: '5px' }}>Talla</label>
+                    <input
+                      type="text"
+                      value={formVariante.talla}
+                      onChange={(e) => setFormVariante({ ...formVariante, talla: e.target.value })}
+                      placeholder="Ej: Matrimonial, Queen..."
+                      style={{ width: '100%', padding: '10px', border: `2px solid ${colors.sand}`, borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: colors.espresso, marginBottom: '5px' }}>Stock</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formVariante.stock}
+                      onChange={(e) => setFormVariante({ ...formVariante, stock: e.target.value })}
+                      style={{ width: '100%', padding: '10px', border: `2px solid ${colors.sand}`, borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: colors.espresso, marginBottom: '5px' }}>Costo Unitario</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formVariante.costo_unitario}
+                      onChange={(e) => setFormVariante({ ...formVariante, costo_unitario: e.target.value })}
+                      style={{ width: '100%', padding: '10px', border: `2px solid ${colors.sand}`, borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: colors.espresso, marginBottom: '5px' }}>Precio Venta</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formVariante.precio_venta}
+                      onChange={(e) => setFormVariante({ ...formVariante, precio_venta: e.target.value })}
+                      style={{ width: '100%', padding: '10px', border: `2px solid ${colors.sand}`, borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                  <button
+                    onClick={() => { setMostrarFormVariante(false); setVarianteEditando(null); }}
+                    style={{ padding: '10px 20px', background: colors.sand, color: colors.espresso, border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={guardarVariante}
+                    disabled={guardando}
+                    style={{ padding: '10px 20px', background: colors.sidebarBg, color: colors.sidebarText, border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}
+                  >
+                    {guardando ? 'Guardando...' : (varianteEditando ? 'Actualizar' : 'Guardar')}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Lista de variantes */}
+            {variantes.length > 0 ? (
+              <div style={{ display: 'grid', gap: '10px' }}>
+                {variantes.map((v) => (
+                  <div key={v.id} style={{
+                    background: colors.cream, border: `2px solid ${colors.sand}`,
+                    borderRadius: '8px', padding: '15px',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    flexWrap: 'wrap', gap: '10px'
+                  }}>
+                    <div style={{ flex: 1, minWidth: '200px' }}>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '5px' }}>
+                        {v.material && (
+                          <span style={{ background: '#e8f5e9', color: '#2e7d32', padding: '3px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: '500' }}>
+                            {v.material}
+                          </span>
+                        )}
+                        {v.color && (
+                          <span style={{ background: '#e3f2fd', color: '#1565c0', padding: '3px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: '500' }}>
+                            {v.color}
+                          </span>
+                        )}
+                        {v.talla && (
+                          <span style={{ background: '#fce4ec', color: '#c2185b', padding: '3px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: '500' }}>
+                            {v.talla}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '11px', color: colors.camel }}>
+                        SKU: {v.sku || 'Pendiente'}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '10px', color: colors.camel }}>STOCK</div>
+                        <div style={{ fontSize: '20px', fontWeight: '700', color: v.stock > 0 ? colors.olive : colors.terracotta }}>{v.stock}</div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '10px', color: colors.camel }}>COSTO</div>
+                        <div style={{ fontSize: '14px', fontWeight: '600', color: colors.espresso }}>${parseFloat(v.costo_unitario || 0).toFixed(2)}</div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '10px', color: colors.camel }}>PRECIO</div>
+                        <div style={{ fontSize: '14px', fontWeight: '600', color: colors.sidebarBg }}>${parseFloat(v.precio_venta || 0).toFixed(2)}</div>
+                      </div>
+                    </div>
+                    {isAdmin && (
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          onClick={() => editarVarianteHandler(v)}
+                          style={{ padding: '6px 12px', background: colors.sidebarBg, color: colors.sidebarText, border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+                        >
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => eliminarVarianteHandler(v.id)}
+                          style={{ padding: '6px 12px', background: colors.terracotta, color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '30px', color: colors.camel }}>
+                <div style={{ fontSize: '40px', marginBottom: '10px' }}>📦</div>
+                <p>No hay variantes registradas para este producto</p>
+                {isAdmin && <p style={{ fontSize: '13px' }}>Haz clic en "+ Nueva Variante" para agregar</p>}
+              </div>
+            )}
+
+            {/* Resumen de stock total */}
+            {variantes.length > 0 && (
+              <div style={{
+                marginTop: '20px', padding: '15px', background: colors.sidebarBg,
+                borderRadius: '8px', color: colors.sidebarText,
+                display: 'flex', justifyContent: 'space-around', textAlign: 'center'
+              }}>
+                <div>
+                  <div style={{ fontSize: '11px', opacity: 0.8 }}>VARIANTES</div>
+                  <div style={{ fontSize: '24px', fontWeight: '700' }}>{variantes.length}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '11px', opacity: 0.8 }}>STOCK TOTAL</div>
+                  <div style={{ fontSize: '24px', fontWeight: '700' }}>{variantes.reduce((sum, v) => sum + (v.stock || 0), 0)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '11px', opacity: 0.8 }}>VALOR INVENTARIO</div>
+                  <div style={{ fontSize: '24px', fontWeight: '700' }}>
+                    ${variantes.reduce((sum, v) => sum + ((v.stock || 0) * (parseFloat(v.costo_unitario) || 0)), 0).toFixed(2)}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

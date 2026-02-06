@@ -797,6 +797,119 @@ export const deleteProducto = async (id) => {
 };
 
 // =====================================================
+// FUNCIONES PARA VARIANTES DE PRODUCTO
+// =====================================================
+
+// Obtener variantes de un producto
+export const getVariantes = async (productoId = null) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  let query = supabase
+    .from('variantes_producto')
+    .select(`
+      *,
+      producto:productos(id, linea_nombre, linea_medidas, categoria_id)
+    `)
+    .eq('activo', true)
+    .order('created_at', { ascending: false });
+
+  if (productoId) {
+    query = query.eq('producto_id', productoId);
+  }
+
+  const { data, error } = await query;
+  return { data, error: handleRLSError(error) };
+};
+
+// Crear variante
+export const createVariante = async (variante) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('variantes_producto')
+    .insert([variante])
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+// Actualizar variante
+export const updateVariante = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('variantes_producto')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+// Eliminar variante (soft delete)
+export const deleteVariante = async (id) => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+
+  const { error } = await supabase
+    .from('variantes_producto')
+    .update({ activo: false })
+    .eq('id', id);
+
+  return { error: handleRLSError(error) };
+};
+
+// Actualizar stock de variante
+export const updateStockVariante = async (id, stockTaller, stockConsignacion = null) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const updates = { stock: stockTaller };
+  if (stockConsignacion !== null) {
+    updates.stock_consignacion = stockConsignacion;
+  }
+
+  const { data, error } = await supabase
+    .from('variantes_producto')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+// Obtener resumen de variantes por producto
+export const getResumenVariantes = async (productoId) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('variantes_producto')
+    .select('stock, stock_consignacion, material, color, talla')
+    .eq('producto_id', productoId)
+    .eq('activo', true);
+
+  if (error) return { data: null, error: handleRLSError(error) };
+
+  // Calcular resumen
+  const resumen = {
+    stockTotal: 0,
+    consignacionTotal: 0,
+    numVariantes: data?.length || 0,
+    materiales: [...new Set(data?.map(v => v.material).filter(Boolean))],
+    colores: [...new Set(data?.map(v => v.color).filter(Boolean))],
+    tallas: [...new Set(data?.map(v => v.talla).filter(Boolean))]
+  };
+
+  data?.forEach(v => {
+    resumen.stockTotal += v.stock || 0;
+    resumen.consignacionTotal += v.stock_consignacion || 0;
+  });
+
+  return { data: resumen, error: null };
+};
+
+// =====================================================
 // FUNCIONES PARA CLIENTES
 // =====================================================
 
