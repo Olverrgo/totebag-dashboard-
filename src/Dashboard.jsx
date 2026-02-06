@@ -1322,7 +1322,8 @@ const ProductosView = ({ isAdmin }) => {
     empaque: 0,
     tipoEntrega: 'envio', // 'envio' o 'recolecta'
     envio: 0,
-    minPiezasEnvio: 20
+    minPiezasEnvio: 20,
+    precioVenta: 0 // Precio de venta sugerido
   });
 
   // Cálculos automáticos
@@ -1401,7 +1402,8 @@ const ProductosView = ({ isAdmin }) => {
         empaque: parseFloat(productoExistente.empaque) || 0,
         tipoEntrega: productoExistente.tipo_entrega || 'envio',
         envio: formProducto.envio || 0,
-        minPiezasEnvio: formProducto.minPiezasEnvio || 20
+        minPiezasEnvio: formProducto.minPiezasEnvio || 20,
+        precioVenta: parseFloat(productoExistente.precio_venta) || 0
       });
     } else {
       // Nuevo producto - valores por defecto
@@ -1421,7 +1423,8 @@ const ProductosView = ({ isAdmin }) => {
         empaque: 0,
         tipoEntrega: 'envio',
         envio: formProducto.envio || 0,
-        minPiezasEnvio: formProducto.minPiezasEnvio || 20
+        minPiezasEnvio: formProducto.minPiezasEnvio || 20,
+        precioVenta: 0
       });
     }
   };
@@ -1503,7 +1506,8 @@ const ProductosView = ({ isAdmin }) => {
         descripcion: formProducto.descripcion,
         categoria_id: categoriaActiva?.id || null,
         subcategoria_id: subcategoriaActiva?.id || null,
-        campos_dinamicos: Object.keys(camposDinamicos).length > 0 ? camposDinamicos : {}
+        campos_dinamicos: Object.keys(camposDinamicos).length > 0 ? camposDinamicos : {},
+        precio_venta: parseFloat(formProducto.precioVenta) || 0
       };
 
       // Si es categoría legacy (Totebags), incluir campos específicos
@@ -2621,6 +2625,43 @@ const ProductosView = ({ isAdmin }) => {
                 <div style={{ background: 'rgba(171,213,94,0.5)', padding: '12px', borderRadius: '6px', textAlign: 'center' }}>
                   <div style={{ fontSize: '11px', opacity: 0.9 }}>4 TINTAS</div>
                   <div style={{ fontSize: '20px', fontWeight: '700', marginTop: '5px' }}>${costos.total4Tintas}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Precio de Venta */}
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '20px', marginTop: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: '150px' }}>
+                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>PRECIO DE VENTA SUGERIDO</div>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formProducto.precioVenta}
+                    onChange={(e) => setFormProducto({ ...formProducto, precioVenta: parseFloat(e.target.value) || 0 })}
+                    disabled={!isAdmin}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      fontSize: '18px',
+                      fontWeight: '600',
+                      border: '2px solid rgba(255,255,255,0.3)',
+                      borderRadius: '6px',
+                      background: 'rgba(255,255,255,0.1)',
+                      color: colors.sidebarText,
+                      textAlign: 'center'
+                    }}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div style={{ textAlign: 'center', padding: '10px' }}>
+                  <div style={{ fontSize: '11px', opacity: 0.7 }}>Margen estimado</div>
+                  <div style={{ fontSize: '18px', fontWeight: '600', color: colors.olive }}>
+                    {formProducto.precioVenta > 0 && parseFloat(costos.total1Tinta) > 0
+                      ? `${(((formProducto.precioVenta - parseFloat(costos.total1Tinta)) / parseFloat(costos.total1Tinta)) * 100).toFixed(0)}%`
+                      : '--'}
+                  </div>
                 </div>
               </div>
             </div>
@@ -3812,8 +3853,8 @@ const SalidasView = ({ isAdmin }) => {
                   onChange={(e) => {
                     const prodId = e.target.value;
                     const prod = productos.find(p => p.id === parseInt(prodId));
-                    // Auto-llenar precio sugerido (precio_venta o costo * 2 como margen base)
-                    const precioSugerido = prod?.precio_venta || (prod?.costo_total_1_tinta ? parseFloat(prod.costo_total_1_tinta) * 2 : 0);
+                    // Auto-llenar precio sugerido desde precio_venta del producto
+                    const precioSugerido = parseFloat(prod?.precio_venta) || (prod?.costo_total_1_tinta ? parseFloat(prod.costo_total_1_tinta) * 2 : 0);
                     setFormSalida({ ...formSalida, productoId: prodId, precioUnitario: precioSugerido });
                   }}
                   style={inputStyle}
@@ -4259,12 +4300,109 @@ const VentasView = ({ isAdmin }) => {
   const seleccionarProducto = (productoId) => {
     const producto = productos.find(p => p.id === parseInt(productoId));
     if (producto) {
+      // Usar precio_venta si existe, sino costo * 2
+      const precioSugerido = parseFloat(producto.precio_venta) || (parseFloat(producto.costo_total_1_tinta) * 2) || 0;
       setFormVenta({
         ...formVenta,
         productoId,
-        precioUnitario: parseFloat(producto.costo_total_1_tinta) * 2 || 0 // Sugerir 100% margen
+        precioUnitario: precioSugerido
       });
     }
+  };
+
+  // Abrir formulario para editar venta existente
+  const editarVenta = (venta) => {
+    setVentaEditando(venta);
+    setFormVenta({
+      productoId: venta.producto_id?.toString() || '',
+      clienteId: venta.cliente_id?.toString() || '',
+      cantidad: venta.cantidad || 1,
+      precioUnitario: parseFloat(venta.precio_unitario) || 0,
+      descuentoPorcentaje: parseFloat(venta.descuento_porcentaje) || 0,
+      metodoPago: venta.metodo_pago || 'efectivo',
+      estadoPago: venta.estado_pago || 'pendiente',
+      tipoVenta: venta.tipo_venta || 'directa',
+      notas: venta.notas || ''
+    });
+    setMostrarFormulario(true);
+  };
+
+  // Guardar venta (crear o actualizar)
+  const guardarVenta = async () => {
+    if (!isAdmin) {
+      setMensaje({ tipo: 'error', texto: 'Solo admin puede modificar ventas' });
+      return;
+    }
+
+    if (!formVenta.productoId || !formVenta.cantidad || !formVenta.precioUnitario) {
+      setMensaje({ tipo: 'error', texto: 'Completa producto, cantidad y precio' });
+      return;
+    }
+
+    setGuardando(true);
+    try {
+      const producto = productos.find(p => p.id === parseInt(formVenta.productoId));
+      const cliente = clientes.find(c => c.id === parseInt(formVenta.clienteId));
+      const total = calcularTotal();
+
+      const ventaData = {
+        producto_id: parseInt(formVenta.productoId),
+        cliente_id: formVenta.clienteId ? parseInt(formVenta.clienteId) : null,
+        producto_nombre: producto?.linea_nombre || '',
+        producto_medidas: producto?.linea_medidas || '',
+        cliente_nombre: cliente?.nombre || 'Venta directa',
+        cantidad: parseInt(formVenta.cantidad),
+        precio_unitario: parseFloat(formVenta.precioUnitario),
+        descuento_porcentaje: parseFloat(formVenta.descuentoPorcentaje) || 0,
+        descuento_monto: (formVenta.cantidad * formVenta.precioUnitario) * (formVenta.descuentoPorcentaje / 100),
+        total: total,
+        costo_unitario: parseFloat(producto?.costo_total_1_tinta) || 0,
+        metodo_pago: formVenta.metodoPago,
+        estado_pago: formVenta.estadoPago,
+        monto_pagado: formVenta.estadoPago === 'pagado' ? total : (ventaEditando?.monto_pagado || 0),
+        tipo_venta: formVenta.tipoVenta,
+        notas: formVenta.notas
+      };
+
+      let result;
+      if (ventaEditando) {
+        // Actualizar venta existente
+        result = await updateVenta(ventaEditando.id, ventaData);
+      } else {
+        // Crear nueva venta
+        result = await createVenta(ventaData);
+      }
+
+      if (result.error) {
+        setMensaje({ tipo: 'error', texto: 'Error: ' + result.error.message });
+      } else {
+        setMensaje({ tipo: 'exito', texto: ventaEditando ? 'Venta actualizada' : 'Venta registrada' });
+        cerrarFormulario();
+        cargarDatos();
+        setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+      }
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: 'Error: ' + err.message });
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  // Cerrar formulario y limpiar
+  const cerrarFormulario = () => {
+    setMostrarFormulario(false);
+    setVentaEditando(null);
+    setFormVenta({
+      productoId: '',
+      clienteId: '',
+      cantidad: 1,
+      precioUnitario: 0,
+      descuentoPorcentaje: 0,
+      metodoPago: 'efectivo',
+      estadoPago: 'pagado',
+      tipoVenta: 'directa',
+      notas: ''
+    });
   };
 
   // Registrar venta
@@ -4520,8 +4658,8 @@ const VentasView = ({ isAdmin }) => {
             maxWidth: '500px', width: '90%', maxHeight: '90vh', overflowY: 'auto'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <h3 style={{ margin: 0, color: colors.espresso }}>Nueva Venta</h3>
-              <button onClick={() => setMostrarFormulario(false)}
+              <h3 style={{ margin: 0, color: colors.espresso }}>{ventaEditando ? 'Editar Venta' : 'Nueva Venta'}</h3>
+              <button onClick={cerrarFormulario}
                 style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: colors.camel }}>×</button>
             </div>
 
@@ -4671,17 +4809,17 @@ const VentasView = ({ isAdmin }) => {
               {/* Botones */}
               <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
                 <button
-                  onClick={() => setMostrarFormulario(false)}
+                  onClick={cerrarFormulario}
                   style={{ flex: 1, padding: '12px', background: colors.sand, color: colors.espresso, border: 'none', borderRadius: '6px', cursor: 'pointer' }}
                 >
                   Cancelar
                 </button>
                 <button
-                  onClick={registrarVenta}
+                  onClick={guardarVenta}
                   disabled={guardando}
                   style={{ flex: 1, padding: '12px', background: colors.sidebarBg, color: colors.sidebarText, border: 'none', borderRadius: '6px', cursor: guardando ? 'not-allowed' : 'pointer', fontWeight: '500' }}
                 >
-                  {guardando ? 'Guardando...' : 'Registrar Venta'}
+                  {guardando ? 'Guardando...' : (ventaEditando ? 'Actualizar Venta' : 'Registrar Venta')}
                 </button>
               </div>
             </div>
@@ -4752,6 +4890,20 @@ const VentasView = ({ isAdmin }) => {
                         Pagar
                       </button>
                     )}
+                    <button
+                      onClick={() => editarVenta(venta)}
+                      style={{
+                        padding: '6px 12px',
+                        background: colors.sidebarBg,
+                        color: colors.sidebarText,
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px'
+                      }}
+                    >
+                      Editar
+                    </button>
                     <button
                       onClick={() => eliminarVentaHandler(venta.id)}
                       style={{
