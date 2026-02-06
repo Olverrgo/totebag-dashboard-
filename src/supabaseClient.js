@@ -1118,6 +1118,157 @@ export const createConsignacionConVenta = async (movimiento, datosVenta) => {
   };
 };
 
+// Registrar venta de consignación (cliente vendió piezas - actualiza cuenta por cobrar)
+export const registrarVentaConsignacion = async (movimiento, datosVenta) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  // 1. Crear el movimiento de stock
+  const { data: movData, error: movError } = await supabase
+    .from('movimientos_stock')
+    .insert([movimiento])
+    .select()
+    .single();
+
+  if (movError) return { data: null, error: handleRLSError(movError) };
+
+  // 2. Buscar ventas pendientes de consignación para este producto/cliente
+  const { data: ventasPendientes, error: searchError } = await supabase
+    .from('ventas')
+    .select('*')
+    .eq('producto_id', datosVenta.producto_id)
+    .eq('cliente_id', datosVenta.cliente_id)
+    .eq('tipo_venta', 'consignacion')
+    .in('estado_pago', ['pendiente', 'parcial'])
+    .eq('activo', true)
+    .order('created_at', { ascending: true });
+
+  if (searchError) {
+    console.error('Error buscando ventas pendientes:', searchError);
+    return { data: { movimiento: movData }, error: null, warning: 'Movimiento creado pero no se encontraron ventas pendientes' };
+  }
+
+  // 3. Registrar pago en las ventas pendientes (FIFO - primero las más antiguas)
+  let cantidadPorPagar = datosVenta.cantidad;
+  const ventasActualizadas = [];
+
+  for (const venta of (ventasPendientes || [])) {
+    if (cantidadPorPagar <= 0) break;
+
+    const cantidadPendienteVenta = venta.cantidad - (venta.monto_pagado / venta.precio_unitario);
+    const cantidadAPagar = Math.min(cantidadPorPagar, cantidadPendienteVenta);
+    const montoAPagar = cantidadAPagar * venta.precio_unitario;
+
+    const nuevoMontoPagado = (parseFloat(venta.monto_pagado) || 0) + montoAPagar;
+    const nuevoEstado = nuevoMontoPagado >= parseFloat(venta.total) ? 'pagado' : 'parcial';
+
+    const { data: ventaActualizada, error: updateError } = await supabase
+      .from('ventas')
+      .update({
+        monto_pagado: nuevoMontoPagado,
+        estado_pago: nuevoEstado,
+        fecha_pago: nuevoEstado === 'pagado' ? new Date().toISOString() : null
+      })
+      .eq('id', venta.id)
+      .select()
+      .single();
+
+    if (!updateError) {
+      ventasActualizadas.push(ventaActualizada);
+    }
+
+    cantidadPorPagar -= cantidadAPagar;
+  }
+
+  return {
+    data: { movimiento: movData, ventasActualizadas },
+    error: null
+  };
+};
+
+// Registrar devolución de consignación (reduce cuenta por cobrar)
+export const registrarDevolucionConsignacion = async (movimiento, datosDevolucion) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  // 1. Crear el movimiento de stock
+  const { data: movData, error: movError } = await supabase
+    .from('movimientos_stock')
+    .insert([movimiento])
+    .select()
+    .single();
+
+  if (movError) return { data: null, error: handleRLSError(movError) };
+
+  // 2. Buscar ventas pendientes de consignación para este producto/cliente
+  const { data: ventasPendientes, error: searchError } = await supabase
+    .from('ventas')
+    .select('*')
+    .eq('producto_id', datosDevolucion.producto_id)
+    .eq('cliente_id', datosDevolucion.cliente_id)
+    .eq('tipo_venta', 'consignacion')
+    .in('estado_pago', ['pendiente', 'parcial'])
+    .eq('activo', true)
+    .order('created_at', { ascending: false }); // LIFO para devoluciones - las más recientes primero
+
+  if (searchError) {
+    console.error('Error buscando ventas para devolución:', searchError);
+    return { data: { movimiento: movData }, error: null, warning: 'Movimiento creado pero no se actualizaron ventas' };
+  }
+
+  // 3. Reducir cantidad en ventas pendientes o cancelarlas
+  let cantidadPorDevolver = datosDevolucion.cantidad;
+  const ventasActualizadas = [];
+
+  for (const venta of (ventasPendientes || [])) {
+    if (cantidadPorDevolver <= 0) break;
+
+    const cantidadPendienteVenta = venta.cantidad - (parseFloat(venta.monto_pagado) / parseFloat(venta.precio_unitario));
+    const cantidadAReducir = Math.min(cantidadPorDevolver, cantidadPendienteVenta);
+
+    if (cantidadAReducir >= cantidadPendienteVenta) {
+      // Cancelar la venta completa si se devuelve todo lo pendiente
+      const { data: ventaCancelada, error: cancelError } = await supabase
+        .from('ventas')
+        .update({
+          estado_pago: 'cancelado',
+          notas: `${venta.notas || ''} | Cancelado por devolución ${new Date().toLocaleDateString('es-MX')}`
+        })
+        .eq('id', venta.id)
+        .select()
+        .single();
+
+      if (!cancelError) {
+        ventasActualizadas.push(ventaCancelada);
+      }
+    } else {
+      // Reducir cantidad de la venta
+      const nuevaCantidad = venta.cantidad - cantidadAReducir;
+      const nuevoTotal = nuevaCantidad * parseFloat(venta.precio_unitario);
+
+      const { data: ventaReducida, error: reduceError } = await supabase
+        .from('ventas')
+        .update({
+          cantidad: nuevaCantidad,
+          total: nuevoTotal,
+          notas: `${venta.notas || ''} | Reducido por devolución de ${cantidadAReducir} pzas`
+        })
+        .eq('id', venta.id)
+        .select()
+        .single();
+
+      if (!reduceError) {
+        ventasActualizadas.push(ventaReducida);
+      }
+    }
+
+    cantidadPorDevolver -= cantidadAReducir;
+  }
+
+  return {
+    data: { movimiento: movData, ventasActualizadas },
+    error: null
+  };
+};
+
 // Obtener resumen de stock por producto
 export const getResumenStock = async (productoId) => {
   if (!supabase) return { data: null, error: 'Supabase no configurado' };

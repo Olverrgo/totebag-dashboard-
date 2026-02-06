@@ -19,6 +19,8 @@ import {
   getMovimientosStock,
   createMovimientoStock,
   createConsignacionConVenta,
+  registrarVentaConsignacion,
+  registrarDevolucionConsignacion,
   uploadImagenProducto,
   uploadPdfProducto,
   getSignedPdfUrl,
@@ -3495,10 +3497,11 @@ const SalidasView = ({ isAdmin }) => {
       };
 
       let result;
+      const cliente = clientes.find(c => c.id === parseInt(formSalida.clienteId));
 
-      // Si es consignación, crear también registro de venta pendiente
+      // Manejar según tipo de movimiento
       if (formSalida.tipoMovimiento === 'consignacion') {
-        const cliente = clientes.find(c => c.id === parseInt(formSalida.clienteId));
+        // Consignación: crear movimiento + venta pendiente
         const datosVenta = {
           producto_id: parseInt(formSalida.productoId),
           cliente_id: parseInt(formSalida.clienteId),
@@ -3511,7 +3514,24 @@ const SalidasView = ({ isAdmin }) => {
           notas: formSalida.notas
         };
         result = await createConsignacionConVenta(movimiento, datosVenta);
+      } else if (formSalida.tipoMovimiento === 'venta_consignacion') {
+        // Venta de consignación: crear movimiento + registrar pago en ventas pendientes
+        const datosVenta = {
+          producto_id: parseInt(formSalida.productoId),
+          cliente_id: parseInt(formSalida.clienteId),
+          cantidad: cantidad
+        };
+        result = await registrarVentaConsignacion(movimiento, datosVenta);
+      } else if (formSalida.tipoMovimiento === 'devolucion') {
+        // Devolución: crear movimiento + reducir/cancelar ventas pendientes
+        const datosDevolucion = {
+          producto_id: parseInt(formSalida.productoId),
+          cliente_id: parseInt(formSalida.clienteId),
+          cantidad: cantidad
+        };
+        result = await registrarDevolucionConsignacion(movimiento, datosDevolucion);
       } else {
+        // Venta directa u otros: solo crear movimiento
         result = await createMovimientoStock(movimiento);
       }
 
