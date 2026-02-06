@@ -1,7 +1,7 @@
 ---
 name: pre-push
 description: Revision rapida antes de push - verifica build, seguridad basica y estado de git
-allowed-tools: Read, Grep, Glob, Bash(npm run build), Bash(git *)
+allowed-tools: Read, Grep, Glob, Bash
 ---
 
 # Revision Pre-Push

@@ -1,7 +1,31 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(dir \"C:\\\\Users\\\\olver\\\\Downloads\\\\totebag-dashboard\" /b)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)",
+      "Bash(dir \"C:\\\\Users\\\\olver\\\\Downloads\\\\totebag-dashboard\" /s /b)",
+      "Bash(findstr:*)",
+      "Bash(dir \"C:\\\\Users\\\\olver\\\\Downloads\\\\totebag-dashboard\\\\logos\" /b)",
+      "Bash(dir \"C:\\\\Users\\\\olver\\\\Downloads\\\\totebag-dashboard\\\\public\" /b)",
+      "Bash(dir:*)",
+      "Bash(Get-ChildItem \"C:\\\\Users\\\\olver\\\\Downloads\" -Filter \"*ToteBag*Costos*\" -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object Name, FullName)",
+      "Bash(Get-ChildItem \"C:\\\\Users\\\\olver\\\\Downloads\" -Filter \"*.xlsx\" -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object Name)",
+      "Bash(python:*)",
+      "Bash(if [ -f vite.config.js ])",
+      "Bash(then cat vite.config.js)",
+      "Bash(elif [ -f vite.config.ts ])",
+      "Bash(then cat vite.config.ts)",
+      "Bash(fi)",
+      "Bash(grep:*)",
+      "Bash(git push:*)",
+      "Bash(git remote set-head:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(node:*)"
     ]
   }
 }
