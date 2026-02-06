@@ -21,7 +21,11 @@ import {
   uploadPdfProducto,
   getSignedPdfUrl,
   getCostosAmazon,
-  saveCostosAmazon
+  saveCostosAmazon,
+  getCategorias,
+  getSubcategorias,
+  getCamposCategoria,
+  createCategoria
 } from './supabaseClient';
 
 // ==================== DATOS ====================
@@ -924,6 +928,115 @@ const DashboardView = ({ productosActualizados }) => {
   );
 };
 
+// Componente para renderizar campos dinámicos
+const CampoDinamico = ({ campo, valor, onChange, colors }) => {
+  const inputStyle = {
+    width: '100%',
+    padding: '10px 12px',
+    border: '2px solid #DA9F17',
+    borderRadius: '6px',
+    fontSize: '14px',
+    boxSizing: 'border-box',
+    background: colors.cream
+  };
+
+  switch (campo.tipo_campo) {
+    case 'text':
+      return (
+        <input
+          type="text"
+          value={valor || ''}
+          onChange={(e) => onChange(campo.nombre_campo, e.target.value)}
+          placeholder={campo.nombre_display}
+          style={inputStyle}
+        />
+      );
+
+    case 'textarea':
+      return (
+        <textarea
+          value={valor || ''}
+          onChange={(e) => onChange(campo.nombre_campo, e.target.value)}
+          placeholder={campo.nombre_display}
+          style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }}
+        />
+      );
+
+    case 'number':
+      return (
+        <input
+          type="number"
+          value={valor || ''}
+          onChange={(e) => onChange(campo.nombre_campo, parseFloat(e.target.value) || 0)}
+          placeholder="0"
+          style={inputStyle}
+        />
+      );
+
+    case 'decimal':
+      return (
+        <input
+          type="number"
+          step="0.01"
+          value={valor || ''}
+          onChange={(e) => onChange(campo.nombre_campo, parseFloat(e.target.value) || 0)}
+          placeholder="0.00"
+          style={inputStyle}
+        />
+      );
+
+    case 'select':
+      const opciones = campo.opciones || [];
+      return (
+        <select
+          value={valor || ''}
+          onChange={(e) => onChange(campo.nombre_campo, e.target.value)}
+          style={{ ...inputStyle, cursor: 'pointer' }}
+        >
+          <option value="">Seleccionar...</option>
+          {opciones.map((opcion, idx) => (
+            <option key={idx} value={opcion}>{opcion}</option>
+          ))}
+        </select>
+      );
+
+    case 'boolean':
+      return (
+        <label style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          padding: '10px 12px',
+          background: valor ? 'rgba(171,213,94,0.2)' : colors.cream,
+          border: `2px solid ${valor ? colors.olive : '#DA9F17'}`,
+          borderRadius: '6px',
+          cursor: 'pointer',
+          transition: 'all 0.3s ease'
+        }}>
+          <input
+            type="checkbox"
+            checked={valor || false}
+            onChange={(e) => onChange(campo.nombre_campo, e.target.checked)}
+            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+          />
+          <span style={{ color: colors.espresso, fontSize: '14px' }}>
+            {campo.nombre_display}
+          </span>
+        </label>
+      );
+
+    default:
+      return (
+        <input
+          type="text"
+          value={valor || ''}
+          onChange={(e) => onChange(campo.nombre_campo, e.target.value)}
+          style={inputStyle}
+        />
+      );
+  }
+};
+
 // Vista Productos
 const ProductosView = ({ isAdmin }) => {
   const [hoverAgregar, setHoverAgregar] = useState(false);
@@ -947,9 +1060,41 @@ const ProductosView = ({ isAdmin }) => {
   const [imagenPopup, setImagenPopup] = useState(null); // { url, nombre } para mostrar en popup
   const [hoverVerBtn, setHoverVerBtn] = useState({}); // Estado para hover de botones "Ver"
 
+  // Estados para categorías jerárquicas
+  const [categorias, setCategorias] = useState([]);
+  const [subcategorias, setSubcategorias] = useState([]);
+  const [camposCategoria, setCamposCategoria] = useState([]);
+  const [categoriaActiva, setCategoriaActiva] = useState(null);
+  const [subcategoriaActiva, setSubcategoriaActiva] = useState(null);
+  const [camposDinamicos, setCamposDinamicos] = useState({});
+  const [mostrarAgregarCategoria, setMostrarAgregarCategoria] = useState(false);
+  const [nuevaCategoria, setNuevaCategoria] = useState({ nombre: '', icono: '📦' });
+  const [hoverCategorias, setHoverCategorias] = useState({});
+
   // Cargar datos de Supabase al montar
   useEffect(() => {
     const cargarDatos = async () => {
+      // Cargar categorías
+      const { data: categoriasData } = await getCategorias();
+      if (categoriasData && categoriasData.length > 0) {
+        setCategorias(categoriasData);
+        // Seleccionar primera categoría (Totebags) por defecto
+        const primeraCategoria = categoriasData[0];
+        setCategoriaActiva(primeraCategoria);
+
+        // Cargar subcategorías de la primera categoría
+        const { data: subcatsData } = await getSubcategorias(primeraCategoria.id);
+        if (subcatsData) {
+          setSubcategorias(subcatsData);
+        }
+
+        // Cargar campos dinámicos de la primera categoría
+        const { data: camposData } = await getCamposCategoria(primeraCategoria.id);
+        if (camposData) {
+          setCamposCategoria(camposData);
+        }
+      }
+
       // Cargar tipos de tela
       const { data: telasData } = await getTiposTela();
       if (telasData && telasData.length > 0) {
@@ -984,6 +1129,90 @@ const ProductosView = ({ isAdmin }) => {
       cargarDatos();
     }
   }, []);
+
+  // Cambiar categoría activa
+  const cambiarCategoria = async (categoria) => {
+    setCategoriaActiva(categoria);
+    setSubcategoriaActiva(null);
+    setCamposDinamicos({});
+
+    // Cargar subcategorías
+    const { data: subcatsData } = await getSubcategorias(categoria.id);
+    if (subcatsData) {
+      setSubcategorias(subcatsData);
+    } else {
+      setSubcategorias([]);
+    }
+
+    // Cargar campos dinámicos
+    const { data: camposData } = await getCamposCategoria(categoria.id);
+    if (camposData) {
+      setCamposCategoria(camposData);
+    } else {
+      setCamposCategoria([]);
+    }
+
+    // Recargar productos filtrados por categoría
+    const { data: productosData } = await getProductos(categoria.id);
+    if (productosData) {
+      setProductosGuardados(productosData);
+    }
+  };
+
+  // Cambiar subcategoría activa
+  const cambiarSubcategoria = async (subcategoria) => {
+    setSubcategoriaActiva(subcategoria);
+
+    // Recargar productos filtrados por subcategoría
+    const { data: productosData } = await getProductos(categoriaActiva?.id, subcategoria?.id);
+    if (productosData) {
+      setProductosGuardados(productosData);
+    }
+  };
+
+  // Actualizar campo dinámico
+  const actualizarCampoDinamico = (nombreCampo, valor) => {
+    setCamposDinamicos(prev => ({
+      ...prev,
+      [nombreCampo]: valor
+    }));
+  };
+
+  // Agregar nueva categoría
+  const agregarCategoria = async () => {
+    if (!nuevaCategoria.nombre.trim()) return;
+
+    const slug = nuevaCategoria.nombre.toLowerCase().replace(/\s+/g, '-');
+    const { data, error } = await createCategoria({
+      nombre: nuevaCategoria.nombre,
+      slug,
+      icono: nuevaCategoria.icono,
+      orden: categorias.length + 1
+    });
+
+    if (data) {
+      setCategorias([...categorias, data]);
+      setNuevaCategoria({ nombre: '', icono: '📦' });
+      setMostrarAgregarCategoria(false);
+      setMensaje({ tipo: 'exito', texto: 'Categoría creada correctamente' });
+      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+    } else if (error) {
+      setMensaje({ tipo: 'error', texto: 'Error al crear categoría: ' + error.message });
+    }
+  };
+
+  // Verificar si es categoría Totebags (usa formulario legacy)
+  const esCategoriaLegacy = () => {
+    return categoriaActiva?.slug === 'totebags';
+  };
+
+  // Agrupar campos por sección
+  const camposPorSeccion = camposCategoria.reduce((acc, campo) => {
+    const seccion = campo.seccion || 'general';
+    if (!acc[seccion]) acc[seccion] = [];
+    acc[seccion].push(campo);
+    return acc;
+  }, {});
 
   // Estado para anchos de tela disponibles (editables por admin)
   const [anchosTela, setAnchosTela] = useState([
@@ -1115,7 +1344,7 @@ const ProductosView = ({ isAdmin }) => {
   };
 
   // Editar producto directamente desde la tarjeta
-  const editarProductoDirecto = (producto) => {
+  const editarProductoDirecto = async (producto) => {
     // Crear objeto de línea desde el producto
     const linea = {
       id: producto.linea_id,
@@ -1126,6 +1355,33 @@ const ProductosView = ({ isAdmin }) => {
     setLineaSeleccionada(linea);
     setProductoEditandoId(producto.id);
     setMensaje({ tipo: '', texto: '' });
+
+    // Cargar campos dinámicos si existen
+    if (producto.campos_dinamicos) {
+      setCamposDinamicos(producto.campos_dinamicos);
+    } else {
+      setCamposDinamicos({});
+    }
+
+    // Si el producto tiene categoría, cargar los campos de esa categoría
+    if (producto.categoria_id) {
+      const catEncontrada = categorias.find(c => c.id === producto.categoria_id);
+      if (catEncontrada) {
+        setCategoriaActiva(catEncontrada);
+        const { data: camposData } = await getCamposCategoria(producto.categoria_id);
+        if (camposData) {
+          setCamposCategoria(camposData);
+        }
+      }
+    }
+
+    // Si el producto tiene subcategoría
+    if (producto.subcategoria_id) {
+      const subcatEncontrada = subcategorias.find(s => s.id === producto.subcategoria_id);
+      if (subcatEncontrada) {
+        setSubcategoriaActiva(subcatEncontrada);
+      }
+    }
 
     setFormProducto({
       descripcion: producto.descripcion || '',
@@ -1156,29 +1412,52 @@ const ProductosView = ({ isAdmin }) => {
     try {
       const costosCalculados = calcularCostos();
 
+      // Datos base del producto
       const productoData = {
         linea_id: lineaSeleccionada.id,
         linea_nombre: lineaSeleccionada.nombre,
         linea_medidas: lineaSeleccionada.medidas,
         descripcion: formProducto.descripcion,
-        tipo_tela_id: formProducto.telaSeleccionada,
-        cantidad_tela: formProducto.cantidadTela,
-        piezas_por_corte: formProducto.piezasPorCorte,
-        costo_maquila: formProducto.costoMaquila,
-        insumos: formProducto.insumos,
-        merma: formProducto.merma,
-        serigrafia_1_tinta: formProducto.serigrafia1,
-        serigrafia_2_tintas: formProducto.serigrafia2,
-        serigrafia_3_tintas: formProducto.serigrafia3,
-        serigrafia_4_tintas: formProducto.serigrafia4,
-        tipo_entrega: formProducto.tipoEntrega,
-        empaque: formProducto.empaque,
-        envio_id: configEnvioId,
-        costo_total_1_tinta: parseFloat(costosCalculados.total1Tinta),
-        costo_total_2_tintas: parseFloat(costosCalculados.total2Tintas),
-        costo_total_3_tintas: parseFloat(costosCalculados.total3Tintas),
-        costo_total_4_tintas: parseFloat(costosCalculados.total4Tintas)
+        categoria_id: categoriaActiva?.id || null,
+        subcategoria_id: subcategoriaActiva?.id || null,
+        campos_dinamicos: Object.keys(camposDinamicos).length > 0 ? camposDinamicos : {}
       };
+
+      // Si es categoría legacy (Totebags), incluir campos específicos
+      if (esCategoriaLegacy()) {
+        Object.assign(productoData, {
+          tipo_tela_id: formProducto.telaSeleccionada,
+          cantidad_tela: formProducto.cantidadTela,
+          piezas_por_corte: formProducto.piezasPorCorte,
+          costo_maquila: formProducto.costoMaquila,
+          insumos: formProducto.insumos,
+          merma: formProducto.merma,
+          serigrafia_1_tinta: formProducto.serigrafia1,
+          serigrafia_2_tintas: formProducto.serigrafia2,
+          serigrafia_3_tintas: formProducto.serigrafia3,
+          serigrafia_4_tintas: formProducto.serigrafia4,
+          tipo_entrega: formProducto.tipoEntrega,
+          empaque: formProducto.empaque,
+          envio_id: configEnvioId,
+          costo_total_1_tinta: parseFloat(costosCalculados.total1Tinta),
+          costo_total_2_tintas: parseFloat(costosCalculados.total2Tintas),
+          costo_total_3_tintas: parseFloat(costosCalculados.total3Tintas),
+          costo_total_4_tintas: parseFloat(costosCalculados.total4Tintas)
+        });
+      } else {
+        // Para categorías nuevas (Ropa de Cama, etc.), calcular costos desde campos dinámicos
+        const costoMaterial = parseFloat(camposDinamicos.costo_material) || 0;
+        const costoConfeccion = parseFloat(camposDinamicos.costo_confeccion) || 0;
+        const costoEmpaque = parseFloat(camposDinamicos.costo_empaque) || 0;
+        const costoTotal = costoMaterial + costoConfeccion + costoEmpaque;
+
+        Object.assign(productoData, {
+          costo_total_1_tinta: costoTotal,
+          costo_total_2_tintas: costoTotal,
+          costo_total_3_tintas: costoTotal,
+          costo_total_4_tintas: costoTotal
+        });
+      }
 
       let data, error;
 
@@ -1210,6 +1489,7 @@ const ProductosView = ({ isAdmin }) => {
         setTimeout(() => {
           setLineaSeleccionada(null);
           setProductoEditandoId(null);
+          setCamposDinamicos({});
           setMensaje({ tipo: '', texto: '' });
         }, 2000);
       }
@@ -1479,7 +1759,7 @@ const ProductosView = ({ isAdmin }) => {
       )}
 
       {/* Header con título y botón agregar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '15px' }}>
         <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '300', letterSpacing: '2px', color: colors.espresso }}>
           Productos
         </h2>
@@ -1503,6 +1783,184 @@ const ProductosView = ({ isAdmin }) => {
           + Agregar
         </button>
       </div>
+
+      {/* Selector de Categorías */}
+      <div style={{
+        display: 'flex',
+        gap: '10px',
+        marginBottom: '15px',
+        flexWrap: 'wrap',
+        alignItems: 'center'
+      }}>
+        {categorias.map((cat) => (
+          <button
+            key={cat.id}
+            onClick={() => cambiarCategoria(cat)}
+            onMouseEnter={() => setHoverCategorias({ ...hoverCategorias, [cat.id]: true })}
+            onMouseLeave={() => setHoverCategorias({ ...hoverCategorias, [cat.id]: false })}
+            style={{
+              padding: '10px 18px',
+              fontSize: '14px',
+              fontWeight: categoriaActiva?.id === cat.id ? '600' : '400',
+              background: categoriaActiva?.id === cat.id
+                ? colors.sidebarBg
+                : (hoverCategorias[cat.id] ? colors.sand : colors.cream),
+              color: categoriaActiva?.id === cat.id ? colors.sidebarText : colors.espresso,
+              border: `2px solid ${categoriaActiva?.id === cat.id ? colors.sidebarBg : colors.sand}`,
+              borderRadius: '25px',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            <span>{cat.icono}</span>
+            <span>{cat.nombre}</span>
+          </button>
+        ))}
+
+        {/* Botón para agregar nueva categoría (solo admin) */}
+        {isAdmin && (
+          <button
+            onClick={() => setMostrarAgregarCategoria(!mostrarAgregarCategoria)}
+            style={{
+              padding: '10px 15px',
+              fontSize: '14px',
+              background: 'transparent',
+              color: colors.camel,
+              border: `2px dashed ${colors.camel}`,
+              borderRadius: '25px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+          >
+            + Nueva Categoría
+          </button>
+        )}
+      </div>
+
+      {/* Formulario para agregar categoría (solo admin) */}
+      {mostrarAgregarCategoria && isAdmin && (
+        <div style={{
+          background: colors.cream,
+          border: `2px solid ${colors.sand}`,
+          borderRadius: '8px',
+          padding: '15px',
+          marginBottom: '15px',
+          display: 'flex',
+          gap: '10px',
+          alignItems: 'center',
+          flexWrap: 'wrap'
+        }}>
+          <input
+            type="text"
+            placeholder="Nombre de categoría"
+            value={nuevaCategoria.nombre}
+            onChange={(e) => setNuevaCategoria({ ...nuevaCategoria, nombre: e.target.value })}
+            style={{
+              padding: '8px 12px',
+              border: `1px solid ${colors.sand}`,
+              borderRadius: '4px',
+              fontSize: '14px',
+              flex: 1,
+              minWidth: '150px'
+            }}
+          />
+          <select
+            value={nuevaCategoria.icono}
+            onChange={(e) => setNuevaCategoria({ ...nuevaCategoria, icono: e.target.value })}
+            style={{
+              padding: '8px 12px',
+              border: `1px solid ${colors.sand}`,
+              borderRadius: '4px',
+              fontSize: '14px',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="📦">📦 Caja</option>
+            <option value="🛍️">🛍️ Bolsa</option>
+            <option value="🛏️">🛏️ Cama</option>
+            <option value="👕">👕 Ropa</option>
+            <option value="🧵">🧵 Textil</option>
+            <option value="🎁">🎁 Regalo</option>
+            <option value="✨">✨ Especial</option>
+          </select>
+          <button
+            onClick={agregarCategoria}
+            style={{
+              padding: '8px 16px',
+              background: colors.sidebarBg,
+              color: colors.sidebarText,
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontWeight: '500'
+            }}
+          >
+            Crear
+          </button>
+          <button
+            onClick={() => { setMostrarAgregarCategoria(false); setNuevaCategoria({ nombre: '', icono: '📦' }); }}
+            style={{
+              padding: '8px 16px',
+              background: colors.sand,
+              color: colors.espresso,
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+          >
+            Cancelar
+          </button>
+        </div>
+      )}
+
+      {/* Selector de Subcategorías (si existen) */}
+      {subcategorias.length > 0 && (
+        <div style={{
+          display: 'flex',
+          gap: '8px',
+          marginBottom: '20px',
+          flexWrap: 'wrap'
+        }}>
+          <button
+            onClick={() => cambiarSubcategoria(null)}
+            style={{
+              padding: '8px 14px',
+              fontSize: '13px',
+              background: subcategoriaActiva === null ? colors.olive : 'transparent',
+              color: subcategoriaActiva === null ? 'white' : colors.espresso,
+              border: `1px solid ${subcategoriaActiva === null ? colors.olive : colors.sand}`,
+              borderRadius: '20px',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease'
+            }}
+          >
+            Todos
+          </button>
+          {subcategorias.map((subcat) => (
+            <button
+              key={subcat.id}
+              onClick={() => cambiarSubcategoria(subcat)}
+              style={{
+                padding: '8px 14px',
+                fontSize: '13px',
+                background: subcategoriaActiva?.id === subcat.id ? colors.olive : 'transparent',
+                color: subcategoriaActiva?.id === subcat.id ? 'white' : colors.espresso,
+                border: `1px solid ${subcategoriaActiva?.id === subcat.id ? colors.olive : colors.sand}`,
+                borderRadius: '20px',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease'
+              }}
+            >
+              {subcat.nombre}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Popup para seleccionar línea de producto */}
       {mostrarPopup && (
@@ -1609,9 +2067,21 @@ const ProductosView = ({ isAdmin }) => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
             <div>
               <h3 style={{ margin: 0, color: colors.espresso, fontSize: '20px' }}>{lineaSeleccionada.nombre}</h3>
-              <p style={{ margin: '5px 0 0', color: colors.camel, fontSize: '14px' }}>{lineaSeleccionada.medidas}</p>
+              <p style={{ margin: '5px 0 0', color: colors.camel, fontSize: '14px' }}>
+                {lineaSeleccionada.medidas}
+                {categoriaActiva && (
+                  <span style={{ marginLeft: '10px', background: colors.sand, padding: '2px 8px', borderRadius: '10px', fontSize: '11px' }}>
+                    {categoriaActiva.icono} {categoriaActiva.nombre}
+                  </span>
+                )}
+                {subcategoriaActiva && (
+                  <span style={{ marginLeft: '5px', background: colors.olive, color: 'white', padding: '2px 8px', borderRadius: '10px', fontSize: '11px' }}>
+                    {subcategoriaActiva.nombre}
+                  </span>
+                )}
+              </p>
             </div>
-            <button onClick={() => setLineaSeleccionada(null)}
+            <button onClick={() => { setLineaSeleccionada(null); setCamposDinamicos({}); }}
               style={{ padding: '8px 16px', background: colors.sand, color: colors.espresso,
                 border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}>
               Cancelar
@@ -1627,6 +2097,75 @@ const ProductosView = ({ isAdmin }) => {
               style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }} />
           </div>
 
+          {/* Campos dinámicos para categorías nuevas (no Totebags) */}
+          {!esCategoriaLegacy() && camposCategoria.length > 0 && (
+            <>
+              {/* Agrupar campos por sección */}
+              {Object.entries(camposPorSeccion).map(([seccion, campos]) => (
+                <div key={seccion} style={sectionStyle}>
+                  <label style={{ ...labelStyle, fontSize: '15px', marginBottom: '15px', textTransform: 'capitalize' }}>
+                    {seccion === 'medidas' && '📏 '}
+                    {seccion === 'caracteristicas' && '✨ '}
+                    {seccion === 'costos' && '💰 '}
+                    {seccion === 'produccion' && '🏭 '}
+                    {seccion === 'general' && '📝 '}
+                    {seccion.replace(/_/g, ' ')}
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
+                    {campos.map((campo) => (
+                      <div key={campo.id}>
+                        {campo.tipo_campo !== 'boolean' && (
+                          <label style={labelStyle}>
+                            {campo.nombre_display}
+                            {campo.es_requerido && <span style={{ color: colors.terracotta }}> *</span>}
+                          </label>
+                        )}
+                        <CampoDinamico
+                          campo={campo}
+                          valor={camposDinamicos[campo.nombre_campo]}
+                          onChange={actualizarCampoDinamico}
+                          colors={colors}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {/* Resumen de costos para categorías nuevas */}
+              {camposPorSeccion.costos && (
+                <div style={{ background: colors.sidebarBg, borderRadius: '8px', padding: '25px', color: colors.sidebarText }}>
+                  <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '20px', letterSpacing: '1px' }}>
+                    RESUMEN DE COSTOS
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', marginBottom: '20px' }}>
+                    {camposPorSeccion.costos.map((campo) => (
+                      <div key={campo.id} style={{ background: 'rgba(255,255,255,0.1)', padding: '10px', borderRadius: '6px' }}>
+                        <div style={{ fontSize: '10px', opacity: 0.8 }}>{campo.nombre_display}</div>
+                        <div style={{ fontSize: '16px', fontWeight: '600' }}>
+                          ${(parseFloat(camposDinamicos[campo.nombre_campo]) || 0).toFixed(2)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.15)', padding: '15px', borderRadius: '6px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '12px', opacity: 0.9, marginBottom: '5px' }}>COSTO TOTAL</div>
+                    <div style={{ fontSize: '28px', fontWeight: '700' }}>
+                      ${(
+                        (parseFloat(camposDinamicos.costo_material) || 0) +
+                        (parseFloat(camposDinamicos.costo_confeccion) || 0) +
+                        (parseFloat(camposDinamicos.costo_empaque) || 0)
+                      ).toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Formulario legacy para Totebags */}
+          {esCategoriaLegacy() && (
+          <>
           {/* 2. Parámetros de Producción */}
           <div style={sectionStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
@@ -1940,6 +2479,9 @@ const ProductosView = ({ isAdmin }) => {
               </div>
             </div>
           </div>
+          </>
+          )}
+          {/* Fin formulario legacy Totebags */}
 
           {/* Mensaje de estado */}
           {mensaje.texto && (
@@ -1959,7 +2501,7 @@ const ProductosView = ({ isAdmin }) => {
 
           {/* Botón Guardar */}
           <div style={{ marginTop: '25px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-            <button onClick={() => setLineaSeleccionada(null)}
+            <button onClick={() => { setLineaSeleccionada(null); setCamposDinamicos({}); }}
               disabled={guardando}
               style={{ padding: '12px 25px', background: colors.sand, color: colors.espresso,
                 border: 'none', borderRadius: '6px', cursor: guardando ? 'not-allowed' : 'pointer', fontSize: '14px',
@@ -1990,12 +2532,61 @@ const ProductosView = ({ isAdmin }) => {
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div>
-                        <h4 style={{ margin: 0, color: colors.espresso, fontSize: '16px' }}>{prod.linea_nombre}</h4>
+                        <h4 style={{ margin: 0, color: colors.espresso, fontSize: '16px' }}>
+                          {prod.linea_nombre}
+                          {prod.categoria && (
+                            <span style={{
+                              marginLeft: '10px',
+                              background: colors.sand,
+                              padding: '2px 8px',
+                              borderRadius: '10px',
+                              fontSize: '11px',
+                              fontWeight: '400'
+                            }}>
+                              {prod.categoria.icono} {prod.categoria.nombre}
+                            </span>
+                          )}
+                          {prod.subcategoria && (
+                            <span style={{
+                              marginLeft: '5px',
+                              background: colors.olive,
+                              color: 'white',
+                              padding: '2px 8px',
+                              borderRadius: '10px',
+                              fontSize: '11px',
+                              fontWeight: '400'
+                            }}>
+                              {prod.subcategoria.nombre}
+                            </span>
+                          )}
+                        </h4>
                         <p style={{ margin: '5px 0', color: colors.camel, fontSize: '13px' }}>{prod.linea_medidas}</p>
                         {prod.descripcion && <p style={{ margin: '5px 0', color: colors.espresso, fontSize: '13px' }}>{prod.descripcion}</p>}
+                        {/* Mostrar campos dinámicos si existen */}
+                        {prod.campos_dinamicos && Object.keys(prod.campos_dinamicos).length > 0 && (
+                          <div style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            {prod.campos_dinamicos.talla_cama && (
+                              <span style={{ fontSize: '11px', background: colors.cream, padding: '3px 8px', borderRadius: '4px', color: colors.espresso }}>
+                                Talla: {prod.campos_dinamicos.talla_cama}
+                              </span>
+                            )}
+                            {prod.campos_dinamicos.hilos && (
+                              <span style={{ fontSize: '11px', background: colors.cream, padding: '3px 8px', borderRadius: '4px', color: colors.espresso }}>
+                                {prod.campos_dinamicos.hilos} hilos
+                              </span>
+                            )}
+                            {prod.campos_dinamicos.composicion && (
+                              <span style={{ fontSize: '11px', background: colors.cream, padding: '3px 8px', borderRadius: '4px', color: colors.espresso }}>
+                                {prod.campos_dinamicos.composicion}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '11px', color: colors.camel }}>Costo Total (1 tinta)</div>
+                        <div style={{ fontSize: '11px', color: colors.camel }}>
+                          {prod.categoria?.slug === 'totebags' ? 'Costo Total (1 tinta)' : 'Costo Total'}
+                        </div>
                         <div style={{ fontSize: '20px', fontWeight: '600', color: colors.sidebarBg }}>${prod.costo_total_1_tinta?.toFixed(2)}</div>
                       </div>
                     </div>

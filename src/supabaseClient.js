@@ -563,23 +563,173 @@ export const updateConfigEnvio = async (id, updates) => {
 };
 
 // =====================================================
-// FUNCIONES PARA PRODUCTOS
+// FUNCIONES PARA CATEGORÍAS
 // =====================================================
 
-// Obtener todos los productos
-export const getProductos = async () => {
+// Obtener todas las categorías
+export const getCategorias = async () => {
   if (!supabase) return { data: null, error: 'Supabase no configurado' };
 
   const { data, error } = await supabase
+    .from('categorias')
+    .select('*')
+    .eq('activo', true)
+    .order('orden', { ascending: true });
+
+  return { data, error: handleRLSError(error) };
+};
+
+// Crear categoría
+export const createCategoria = async (categoria) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('categorias')
+    .insert([categoria])
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+// Actualizar categoría
+export const updateCategoria = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('categorias')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+// =====================================================
+// FUNCIONES PARA SUBCATEGORÍAS
+// =====================================================
+
+// Obtener subcategorías por categoría
+export const getSubcategorias = async (categoriaId = null) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  let query = supabase
+    .from('subcategorias')
+    .select('*')
+    .eq('activo', true)
+    .order('orden', { ascending: true });
+
+  if (categoriaId) {
+    query = query.eq('categoria_id', categoriaId);
+  }
+
+  const { data, error } = await query;
+  return { data, error: handleRLSError(error) };
+};
+
+// Crear subcategoría
+export const createSubcategoria = async (subcategoria) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('subcategorias')
+    .insert([subcategoria])
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+// Actualizar subcategoría
+export const updateSubcategoria = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('subcategorias')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+// =====================================================
+// FUNCIONES PARA CAMPOS DE CATEGORÍA
+// =====================================================
+
+// Obtener campos dinámicos por categoría
+export const getCamposCategoria = async (categoriaId) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('campos_categoria')
+    .select('*')
+    .eq('categoria_id', categoriaId)
+    .eq('activo', true)
+    .order('seccion', { ascending: true })
+    .order('orden', { ascending: true });
+
+  return { data, error: handleRLSError(error) };
+};
+
+// Crear campo de categoría
+export const createCampoCategoria = async (campo) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('campos_categoria')
+    .insert([campo])
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+// Actualizar campo de categoría
+export const updateCampoCategoria = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('campos_categoria')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+// =====================================================
+// FUNCIONES PARA PRODUCTOS
+// =====================================================
+
+// Obtener todos los productos (con filtro opcional por categoría)
+export const getProductos = async (categoriaId = null, subcategoriaId = null) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  let query = supabase
     .from('productos')
     .select(`
       *,
       tipo_tela:tipos_tela(*),
-      config_envio:config_envio(*)
+      config_envio:config_envio(*),
+      categoria:categorias(*),
+      subcategoria:subcategorias(*)
     `)
     .eq('activo', true)
     .order('created_at', { ascending: false });
 
+  if (categoriaId) {
+    query = query.eq('categoria_id', categoriaId);
+  }
+
+  if (subcategoriaId) {
+    query = query.eq('subcategoria_id', subcategoriaId);
+  }
+
+  const { data, error } = await query;
   return { data, error: handleRLSError(error) };
 };
 
