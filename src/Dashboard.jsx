@@ -18,6 +18,7 @@ import {
   createCliente,
   getMovimientosStock,
   createMovimientoStock,
+  createConsignacionConVenta,
   uploadImagenProducto,
   uploadPdfProducto,
   getSignedPdfUrl,
@@ -3386,6 +3387,7 @@ const SalidasView = ({ isAdmin }) => {
     clienteId: '',
     tipoMovimiento: 'consignacion',
     cantidad: 0,
+    precioUnitario: 0, // Para consignaciones: precio de venta sugerido
     notas: ''
   });
 
@@ -3492,7 +3494,28 @@ const SalidasView = ({ isAdmin }) => {
         notas: formSalida.notas
       };
 
-      const { data, error } = await createMovimientoStock(movimiento);
+      let result;
+
+      // Si es consignación, crear también registro de venta pendiente
+      if (formSalida.tipoMovimiento === 'consignacion') {
+        const cliente = clientes.find(c => c.id === parseInt(formSalida.clienteId));
+        const datosVenta = {
+          producto_id: parseInt(formSalida.productoId),
+          cliente_id: parseInt(formSalida.clienteId),
+          producto_nombre: producto?.linea_nombre || 'Producto',
+          producto_medidas: producto?.linea_medidas || '',
+          cliente_nombre: cliente?.nombre || 'Cliente',
+          cantidad: cantidad,
+          precio_unitario: parseFloat(formSalida.precioUnitario) || 0,
+          costo_unitario: parseFloat(producto?.costo_total_1_tinta) || 0,
+          notas: formSalida.notas
+        };
+        result = await createConsignacionConVenta(movimiento, datosVenta);
+      } else {
+        result = await createMovimientoStock(movimiento);
+      }
+
+      const { data, error } = result;
 
       if (error) {
         setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
@@ -3553,7 +3576,7 @@ const SalidasView = ({ isAdmin }) => {
         if (newMovs) setMovimientos(newMovs);
 
         // Resetear formulario
-        setFormSalida({ productoId: '', clienteId: '', tipoMovimiento: 'consignacion', cantidad: 0, notas: '' });
+        setFormSalida({ productoId: '', clienteId: '', tipoMovimiento: 'consignacion', cantidad: 0, precioUnitario: 0, notas: '' });
         setMostrarFormulario(false);
         setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
       }
@@ -3764,7 +3787,17 @@ const SalidasView = ({ isAdmin }) => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '12px', color: colors.sidebarBg, marginBottom: '5px' }}>Producto *</label>
-                <select value={formSalida.productoId} onChange={(e) => setFormSalida({ ...formSalida, productoId: e.target.value })} style={inputStyle}>
+                <select
+                  value={formSalida.productoId}
+                  onChange={(e) => {
+                    const prodId = e.target.value;
+                    const prod = productos.find(p => p.id === parseInt(prodId));
+                    // Auto-llenar precio sugerido (precio_venta o costo * 2 como margen base)
+                    const precioSugerido = prod?.precio_venta || (prod?.costo_total_1_tinta ? parseFloat(prod.costo_total_1_tinta) * 2 : 0);
+                    setFormSalida({ ...formSalida, productoId: prodId, precioUnitario: precioSugerido });
+                  }}
+                  style={inputStyle}
+                >
                   <option value="">Seleccionar producto...</option>
                   {productos.map(p => <option key={p.id} value={p.id}>{p.linea_nombre} ({p.stock || 0} en stock)</option>)}
                 </select>
@@ -3792,6 +3825,30 @@ const SalidasView = ({ isAdmin }) => {
                 <label style={{ display: 'block', fontSize: '12px', color: colors.sidebarBg, marginBottom: '5px' }}>Cantidad *</label>
                 <input type="number" min="1" value={formSalida.cantidad} onChange={(e) => setFormSalida({ ...formSalida, cantidad: e.target.value })} style={inputStyle} />
               </div>
+
+              {/* Precio unitario - solo para consignaciones */}
+              {formSalida.tipoMovimiento === 'consignacion' && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', color: colors.sidebarBg, marginBottom: '5px' }}>
+                    Precio de Venta Unitario *
+                    <span style={{ color: colors.camel, fontWeight: 'normal' }}> (para cuenta por cobrar)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formSalida.precioUnitario}
+                    onChange={(e) => setFormSalida({ ...formSalida, precioUnitario: e.target.value })}
+                    style={inputStyle}
+                    placeholder="Precio al que se venderá"
+                  />
+                  {formSalida.cantidad > 0 && formSalida.precioUnitario > 0 && (
+                    <div style={{ fontSize: '12px', color: colors.olive, marginTop: '5px', fontWeight: '600' }}>
+                      Total por cobrar: ${(parseFloat(formSalida.cantidad) * parseFloat(formSalida.precioUnitario)).toFixed(2)}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label style={{ display: 'block', fontSize: '12px', color: colors.sidebarBg, marginBottom: '5px' }}>Notas</label>

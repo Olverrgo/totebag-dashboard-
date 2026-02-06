@@ -1065,6 +1065,59 @@ export const createMovimientoStock = async (movimiento) => {
   return { data, error: handleRLSError(error) };
 };
 
+// Crear consignación con venta automática (para tracking de cuentas por cobrar)
+export const createConsignacionConVenta = async (movimiento, datosVenta) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  // 1. Crear el movimiento de stock
+  const { data: movData, error: movError } = await supabase
+    .from('movimientos_stock')
+    .insert([movimiento])
+    .select()
+    .single();
+
+  if (movError) return { data: null, error: handleRLSError(movError) };
+
+  // 2. Crear la venta asociada con estado pendiente
+  const venta = {
+    producto_id: datosVenta.producto_id,
+    cliente_id: datosVenta.cliente_id,
+    movimiento_id: movData.id, // Enlace al movimiento de stock
+    producto_nombre: datosVenta.producto_nombre,
+    producto_medidas: datosVenta.producto_medidas,
+    cliente_nombre: datosVenta.cliente_nombre,
+    cantidad: datosVenta.cantidad,
+    precio_unitario: datosVenta.precio_unitario,
+    total: datosVenta.cantidad * datosVenta.precio_unitario,
+    costo_unitario: datosVenta.costo_unitario || 0,
+    tipo_venta: 'consignacion',
+    estado_pago: 'pendiente',
+    monto_pagado: 0,
+    notas: datosVenta.notas || `Consignación automática - ${new Date().toLocaleDateString('es-MX')}`
+  };
+
+  const { data: ventaData, error: ventaError } = await supabase
+    .from('ventas')
+    .insert([venta])
+    .select()
+    .single();
+
+  if (ventaError) {
+    // Si falla la venta, el movimiento ya se creó pero logueamos el error
+    console.error('Error creando venta para consignación:', ventaError);
+    return {
+      data: { movimiento: movData, venta: null },
+      error: handleRLSError(ventaError),
+      warning: 'Movimiento creado pero venta no registrada'
+    };
+  }
+
+  return {
+    data: { movimiento: movData, venta: ventaData },
+    error: null
+  };
+};
+
 // Obtener resumen de stock por producto
 export const getResumenStock = async (productoId) => {
   if (!supabase) return { data: null, error: 'Supabase no configurado' };
