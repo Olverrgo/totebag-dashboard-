@@ -606,6 +606,18 @@ export const updateCategoria = async (id, updates) => {
   return { data, error: handleRLSError(error) };
 };
 
+// Eliminar categoría (soft delete)
+export const deleteCategoria = async (id) => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+
+  const { error } = await supabase
+    .from('categorias')
+    .update({ activo: false })
+    .eq('id', id);
+
+  return { error: handleRLSError(error) };
+};
+
 // =====================================================
 // FUNCIONES PARA SUBCATEGORÍAS
 // =====================================================
@@ -653,6 +665,18 @@ export const updateSubcategoria = async (id, updates) => {
     .single();
 
   return { data, error: handleRLSError(error) };
+};
+
+// Eliminar subcategoría (soft delete)
+export const deleteSubcategoria = async (id) => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+
+  const { error } = await supabase
+    .from('subcategorias')
+    .update({ activo: false })
+    .eq('id', id);
+
+  return { error: handleRLSError(error) };
 };
 
 // =====================================================

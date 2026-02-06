@@ -12,6 +12,7 @@ import {
   updateConfigEnvio,
   createProducto,
   updateProducto,
+  deleteProducto,
   getProductos,
   getClientes,
   createCliente,
@@ -25,7 +26,9 @@ import {
   getCategorias,
   getSubcategorias,
   getCamposCategoria,
-  createCategoria
+  createCategoria,
+  deleteCategoria,
+  deleteSubcategoria
 } from './supabaseClient';
 
 // ==================== DATOS ====================
@@ -1201,6 +1204,76 @@ const ProductosView = ({ isAdmin }) => {
     }
   };
 
+  // Eliminar categoría (solo admin)
+  const eliminarCategoriaHandler = async (categoriaId, categoriaNombre) => {
+    if (!isAdmin) return;
+
+    // No permitir eliminar Totebags (categoría base)
+    const cat = categorias.find(c => c.id === categoriaId);
+    if (cat?.slug === 'totebags') {
+      setMensaje({ tipo: 'error', texto: 'No se puede eliminar la categoría principal Totebags' });
+      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+      return;
+    }
+
+    if (!window.confirm(`¿Eliminar la categoría "${categoriaNombre}"? Los productos de esta categoría quedarán sin categoría.`)) {
+      return;
+    }
+
+    const { error } = await deleteCategoria(categoriaId);
+    if (error) {
+      setMensaje({ tipo: 'error', texto: 'Error al eliminar: ' + error.message });
+    } else {
+      setCategorias(categorias.filter(c => c.id !== categoriaId));
+      // Si la categoría eliminada era la activa, cambiar a la primera
+      if (categoriaActiva?.id === categoriaId) {
+        const nuevaActiva = categorias.find(c => c.id !== categoriaId);
+        if (nuevaActiva) cambiarCategoria(nuevaActiva);
+      }
+      setMensaje({ tipo: 'exito', texto: 'Categoría eliminada' });
+      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+    }
+  };
+
+  // Eliminar subcategoría (solo admin)
+  const eliminarSubcategoriaHandler = async (subcategoriaId, subcategoriaNombre) => {
+    if (!isAdmin) return;
+
+    if (!window.confirm(`¿Eliminar la subcategoría "${subcategoriaNombre}"?`)) {
+      return;
+    }
+
+    const { error } = await deleteSubcategoria(subcategoriaId);
+    if (error) {
+      setMensaje({ tipo: 'error', texto: 'Error al eliminar: ' + error.message });
+    } else {
+      setSubcategorias(subcategorias.filter(s => s.id !== subcategoriaId));
+      if (subcategoriaActiva?.id === subcategoriaId) {
+        setSubcategoriaActiva(null);
+      }
+      setMensaje({ tipo: 'exito', texto: 'Subcategoría eliminada' });
+      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+    }
+  };
+
+  // Eliminar producto (solo admin)
+  const eliminarProductoHandler = async (productoId, productoNombre) => {
+    if (!isAdmin) return;
+
+    if (!window.confirm(`¿Eliminar el producto "${productoNombre}"? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+
+    const { error } = await deleteProducto(productoId);
+    if (error) {
+      setMensaje({ tipo: 'error', texto: 'Error al eliminar: ' + error.message });
+    } else {
+      setProductosGuardados(productosGuardados.filter(p => p.id !== productoId));
+      setMensaje({ tipo: 'exito', texto: 'Producto eliminado' });
+      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+    }
+  };
+
   // Verificar si es categoría Totebags (usa formulario legacy)
   const esCategoriaLegacy = () => {
     return categoriaActiva?.slug === 'totebags';
@@ -1793,31 +1866,66 @@ const ProductosView = ({ isAdmin }) => {
         alignItems: 'center'
       }}>
         {categorias.map((cat) => (
-          <button
+          <div
             key={cat.id}
-            onClick={() => cambiarCategoria(cat)}
-            onMouseEnter={() => setHoverCategorias({ ...hoverCategorias, [cat.id]: true })}
-            onMouseLeave={() => setHoverCategorias({ ...hoverCategorias, [cat.id]: false })}
             style={{
-              padding: '10px 18px',
-              fontSize: '14px',
-              fontWeight: categoriaActiva?.id === cat.id ? '600' : '400',
-              background: categoriaActiva?.id === cat.id
-                ? colors.sidebarBg
-                : (hoverCategorias[cat.id] ? colors.sand : colors.cream),
-              color: categoriaActiva?.id === cat.id ? colors.sidebarText : colors.espresso,
-              border: `2px solid ${categoriaActiva?.id === cat.id ? colors.sidebarBg : colors.sand}`,
-              borderRadius: '25px',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px'
+              gap: '4px'
             }}
           >
-            <span>{cat.icono}</span>
-            <span>{cat.nombre}</span>
-          </button>
+            <button
+              onClick={() => cambiarCategoria(cat)}
+              onMouseEnter={() => setHoverCategorias({ ...hoverCategorias, [cat.id]: true })}
+              onMouseLeave={() => setHoverCategorias({ ...hoverCategorias, [cat.id]: false })}
+              style={{
+                padding: '10px 18px',
+                fontSize: '14px',
+                fontWeight: categoriaActiva?.id === cat.id ? '600' : '400',
+                background: categoriaActiva?.id === cat.id
+                  ? colors.sidebarBg
+                  : (hoverCategorias[cat.id] ? colors.sand : colors.cream),
+                color: categoriaActiva?.id === cat.id ? colors.sidebarText : colors.espresso,
+                border: `2px solid ${categoriaActiva?.id === cat.id ? colors.sidebarBg : colors.sand}`,
+                borderRadius: '25px',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <span>{cat.icono}</span>
+              <span>{cat.nombre}</span>
+            </button>
+            {/* Botón eliminar categoría (solo admin, no para Totebags) */}
+            {isAdmin && cat.slug !== 'totebags' && (
+              <button
+                onClick={(e) => { e.stopPropagation(); eliminarCategoriaHandler(cat.id, cat.nombre); }}
+                title="Eliminar categoría"
+                style={{
+                  width: '24px',
+                  height: '24px',
+                  padding: 0,
+                  background: colors.terracotta,
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '50%',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: 0.8,
+                  transition: 'opacity 0.2s'
+                }}
+                onMouseEnter={(e) => e.target.style.opacity = 1}
+                onMouseLeave={(e) => e.target.style.opacity = 0.8}
+              >
+                ×
+              </button>
+            )}
+          </div>
         ))}
 
         {/* Botón para agregar nueva categoría (solo admin) */}
@@ -1942,22 +2050,50 @@ const ProductosView = ({ isAdmin }) => {
             Todos
           </button>
           {subcategorias.map((subcat) => (
-            <button
-              key={subcat.id}
-              onClick={() => cambiarSubcategoria(subcat)}
-              style={{
-                padding: '8px 14px',
-                fontSize: '13px',
-                background: subcategoriaActiva?.id === subcat.id ? colors.olive : 'transparent',
-                color: subcategoriaActiva?.id === subcat.id ? 'white' : colors.espresso,
-                border: `1px solid ${subcategoriaActiva?.id === subcat.id ? colors.olive : colors.sand}`,
-                borderRadius: '20px',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease'
-              }}
-            >
-              {subcat.nombre}
-            </button>
+            <div key={subcat.id} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <button
+                onClick={() => cambiarSubcategoria(subcat)}
+                style={{
+                  padding: '8px 14px',
+                  fontSize: '13px',
+                  background: subcategoriaActiva?.id === subcat.id ? colors.olive : 'transparent',
+                  color: subcategoriaActiva?.id === subcat.id ? 'white' : colors.espresso,
+                  border: `1px solid ${subcategoriaActiva?.id === subcat.id ? colors.olive : colors.sand}`,
+                  borderRadius: '20px',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                {subcat.nombre}
+              </button>
+              {/* Botón eliminar subcategoría (solo admin) */}
+              {isAdmin && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); eliminarSubcategoriaHandler(subcat.id, subcat.nombre); }}
+                  title="Eliminar subcategoría"
+                  style={{
+                    width: '20px',
+                    height: '20px',
+                    padding: 0,
+                    background: colors.terracotta,
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '50%',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: 0.7,
+                    transition: 'opacity 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.target.style.opacity = 1}
+                  onMouseLeave={(e) => e.target.style.opacity = 0.7}
+                >
+                  ×
+                </button>
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -2934,23 +3070,45 @@ const ProductosView = ({ isAdmin }) => {
                         <span>3 tintas: ${prod.costo_total_3_tintas?.toFixed(2)}</span>
                         {prod.costo_total_4_tintas > 0 && <span>4 tintas: ${prod.costo_total_4_tintas?.toFixed(2)}</span>}
                       </div>
-                      <button
-                        onClick={() => editarProductoDirecto(prod)}
-                        onMouseEnter={() => setHoverEditar({ ...hoverEditar, [prod.id]: true })}
-                        onMouseLeave={() => setHoverEditar({ ...hoverEditar, [prod.id]: false })}
-                        style={{
-                          padding: '8px 18px',
-                          background: hoverEditar[prod.id] ? colors.sidebarText : colors.sidebarBg,
-                          color: hoverEditar[prod.id] ? colors.sidebarBg : colors.sidebarText,
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '13px',
-                          fontWeight: '500',
-                          transition: 'all 0.3s ease'
-                        }}>
-                        Editar
-                      </button>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          onClick={() => editarProductoDirecto(prod)}
+                          onMouseEnter={() => setHoverEditar({ ...hoverEditar, [prod.id]: true })}
+                          onMouseLeave={() => setHoverEditar({ ...hoverEditar, [prod.id]: false })}
+                          style={{
+                            padding: '8px 18px',
+                            background: hoverEditar[prod.id] ? colors.sidebarText : colors.sidebarBg,
+                            color: hoverEditar[prod.id] ? colors.sidebarBg : colors.sidebarText,
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            fontWeight: '500',
+                            transition: 'all 0.3s ease'
+                          }}>
+                          Editar
+                        </button>
+                        {/* Botón eliminar producto (solo admin) */}
+                        {isAdmin && (
+                          <button
+                            onClick={() => eliminarProductoHandler(prod.id, prod.linea_nombre)}
+                            onMouseEnter={() => setHoverEditar({ ...hoverEditar, [`del-${prod.id}`]: true })}
+                            onMouseLeave={() => setHoverEditar({ ...hoverEditar, [`del-${prod.id}`]: false })}
+                            style={{
+                              padding: '8px 14px',
+                              background: hoverEditar[`del-${prod.id}`] ? '#c0392b' : colors.terracotta,
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '13px',
+                              fontWeight: '500',
+                              transition: 'all 0.3s ease'
+                            }}>
+                            Eliminar
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
