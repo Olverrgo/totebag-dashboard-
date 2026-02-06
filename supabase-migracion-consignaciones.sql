@@ -32,9 +32,9 @@ SELECT
   p.linea_medidas as producto_medidas,
   c.nombre as cliente_nombre,
   consig.cantidad_neta as cantidad,
-  -- Usar precio_venta del producto o costo * 2 como estimado
-  COALESCE(p.precio_venta, p.costo_total_1_tinta * 2, 80) as precio_unitario,
-  consig.cantidad_neta * COALESCE(p.precio_venta, p.costo_total_1_tinta * 2, 80) as total,
+  -- Usar costo * 2 como precio estimado (margen 100%)
+  COALESCE(p.costo_total_1_tinta * 2, 80) as precio_unitario,
+  consig.cantidad_neta * COALESCE(p.costo_total_1_tinta * 2, 80) as total,
   COALESCE(p.costo_total_1_tinta, 0) as costo_unitario,
   'consignacion' as tipo_venta,
   'pendiente' as estado_pago,
