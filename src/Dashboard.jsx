@@ -4578,7 +4578,7 @@ export default function DashboardToteBag() {
   // Autenticacion y roles
   const { user, profile, isAdmin, logout } = useAuth();
 
-  const [seccionActiva, setSeccionActiva] = useState('dashboard');
+  const [seccionActiva, setSeccionActiva] = useState('productos');
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
   const [hoverHeader, setHoverHeader] = useState(false);
