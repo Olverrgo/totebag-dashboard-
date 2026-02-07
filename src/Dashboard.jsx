@@ -1117,18 +1117,13 @@ const ProductosView = ({ isAdmin }) => {
   const [historialPrecios, setHistorialPrecios] = useState([]);
   const [formConfigCorte, setFormConfigCorte] = useState({
     nombre: '',
-    sabana_plana_largo: 0,
-    sabana_plana_ancho: 0,
+    metros_sabana_plana: 0,
     incluye_sabana_plana: true,
-    sabana_cajon_largo: 0,
-    sabana_cajon_ancho: 0,
-    sabana_cajon_alto: 0,
+    metros_sabana_cajon: 0,
     incluye_sabana_cajon: true,
-    funda_largo: 0,
-    funda_ancho: 0,
+    metros_fundas: 0,
     cantidad_fundas: 2,
     incluye_fundas: true,
-    ancho_tela: 150,
     porcentaje_desperdicio: 10,
     precio_tela_metro: 0,
     costo_confeccion: 0,
@@ -1461,18 +1456,13 @@ const ProductosView = ({ isAdmin }) => {
       setConfigCorteActual(config);
       setFormConfigCorte({
         nombre: config.nombre || '',
-        sabana_plana_largo: config.sabana_plana_largo || 0,
-        sabana_plana_ancho: config.sabana_plana_ancho || 0,
+        metros_sabana_plana: config.metros_sabana_plana || 0,
         incluye_sabana_plana: config.incluye_sabana_plana ?? true,
-        sabana_cajon_largo: config.sabana_cajon_largo || 0,
-        sabana_cajon_ancho: config.sabana_cajon_ancho || 0,
-        sabana_cajon_alto: config.sabana_cajon_alto || 0,
+        metros_sabana_cajon: config.metros_sabana_cajon || 0,
         incluye_sabana_cajon: config.incluye_sabana_cajon ?? true,
-        funda_largo: config.funda_largo || 0,
-        funda_ancho: config.funda_ancho || 0,
+        metros_fundas: config.metros_fundas || 0,
         cantidad_fundas: config.cantidad_fundas || 2,
         incluye_fundas: config.incluye_fundas ?? true,
-        ancho_tela: config.ancho_tela || 150,
         porcentaje_desperdicio: config.porcentaje_desperdicio || 10,
         precio_tela_metro: config.precio_tela_metro || 0,
         costo_confeccion: config.costo_confeccion || 0,
@@ -1482,10 +1472,10 @@ const ProductosView = ({ isAdmin }) => {
       setConfigCorteActual(null);
       setFormConfigCorte({
         nombre: `${productoVariantes?.linea_nombre || ''} - ${variante.material || ''} ${variante.talla || ''}`.trim(),
-        sabana_plana_largo: 0, sabana_plana_ancho: 0, incluye_sabana_plana: true,
-        sabana_cajon_largo: 0, sabana_cajon_ancho: 0, sabana_cajon_alto: 0, incluye_sabana_cajon: true,
-        funda_largo: 0, funda_ancho: 0, cantidad_fundas: 2, incluye_fundas: true,
-        ancho_tela: 150, porcentaje_desperdicio: 10,
+        metros_sabana_plana: 0, incluye_sabana_plana: true,
+        metros_sabana_cajon: 0, incluye_sabana_cajon: true,
+        metros_fundas: 0, cantidad_fundas: 2, incluye_fundas: true,
+        porcentaje_desperdicio: 10,
         precio_tela_metro: 0, costo_confeccion: 0, costo_empaque: 0
       });
     }
@@ -1507,29 +1497,25 @@ const ProductosView = ({ isAdmin }) => {
   const calcularCorteTemporal = () => {
     const f = formConfigCorte;
 
-    // Metros cuadrados por pieza
-    const m2SabanaPlana = f.incluye_sabana_plana ? (f.sabana_plana_largo * f.sabana_plana_ancho) / 10000 : 0;
-    const m2SabanaCajon = f.incluye_sabana_cajon ?
-      ((parseFloat(f.sabana_cajon_largo) + 2 * parseFloat(f.sabana_cajon_alto)) *
-       (parseFloat(f.sabana_cajon_ancho) + 2 * parseFloat(f.sabana_cajon_alto))) / 10000 : 0;
-    const m2Fundas = f.incluye_fundas ? (f.funda_largo * f.funda_ancho * f.cantidad_fundas * 2) / 10000 : 0;
+    // Metros lineales por pieza
+    const mSabanaPlana = f.incluye_sabana_plana ? parseFloat(f.metros_sabana_plana) || 0 : 0;
+    const mSabanaCajon = f.incluye_sabana_cajon ? parseFloat(f.metros_sabana_cajon) || 0 : 0;
+    const mFundas = f.incluye_fundas ? (parseFloat(f.metros_fundas) || 0) * (parseInt(f.cantidad_fundas) || 1) : 0;
 
-    const totalM2 = m2SabanaPlana + m2SabanaCajon + m2Fundas;
-
-    // Metros lineales (considerando ancho de tela)
-    const anchoTelaM = f.ancho_tela / 100;
-    const metrosLineales = anchoTelaM > 0 ? (totalM2 / anchoTelaM) * (1 + f.porcentaje_desperdicio / 100) : 0;
+    // Total metros lineales (con desperdicio)
+    const subtotalMetros = mSabanaPlana + mSabanaCajon + mFundas;
+    const metrosConDesperdicio = subtotalMetros * (1 + (parseFloat(f.porcentaje_desperdicio) || 0) / 100);
 
     // Costos
-    const costoMaterial = metrosLineales * f.precio_tela_metro;
+    const costoMaterial = metrosConDesperdicio * (parseFloat(f.precio_tela_metro) || 0);
     const costoTotal = costoMaterial + parseFloat(f.costo_confeccion || 0) + parseFloat(f.costo_empaque || 0);
 
     return {
-      m2SabanaPlana: m2SabanaPlana.toFixed(3),
-      m2SabanaCajon: m2SabanaCajon.toFixed(3),
-      m2Fundas: m2Fundas.toFixed(3),
-      totalM2: totalM2.toFixed(3),
-      metrosLineales: metrosLineales.toFixed(3),
+      mSabanaPlana: mSabanaPlana.toFixed(2),
+      mSabanaCajon: mSabanaCajon.toFixed(2),
+      mFundas: mFundas.toFixed(2),
+      subtotalMetros: subtotalMetros.toFixed(2),
+      metrosConDesperdicio: metrosConDesperdicio.toFixed(2),
       costoMaterial: costoMaterial.toFixed(2),
       costoTotal: costoTotal.toFixed(2)
     };
@@ -1548,18 +1534,13 @@ const ProductosView = ({ isAdmin }) => {
         producto_id: productoVariantes.id,
         variante_id: varianteConfigCorte.id,
         nombre: formConfigCorte.nombre,
-        sabana_plana_largo: parseFloat(formConfigCorte.sabana_plana_largo) || 0,
-        sabana_plana_ancho: parseFloat(formConfigCorte.sabana_plana_ancho) || 0,
+        metros_sabana_plana: parseFloat(formConfigCorte.metros_sabana_plana) || 0,
         incluye_sabana_plana: formConfigCorte.incluye_sabana_plana,
-        sabana_cajon_largo: parseFloat(formConfigCorte.sabana_cajon_largo) || 0,
-        sabana_cajon_ancho: parseFloat(formConfigCorte.sabana_cajon_ancho) || 0,
-        sabana_cajon_alto: parseFloat(formConfigCorte.sabana_cajon_alto) || 0,
+        metros_sabana_cajon: parseFloat(formConfigCorte.metros_sabana_cajon) || 0,
         incluye_sabana_cajon: formConfigCorte.incluye_sabana_cajon,
-        funda_largo: parseFloat(formConfigCorte.funda_largo) || 0,
-        funda_ancho: parseFloat(formConfigCorte.funda_ancho) || 0,
-        cantidad_fundas: parseInt(formConfigCorte.cantidad_fundas) || 0,
+        metros_fundas: parseFloat(formConfigCorte.metros_fundas) || 0,
+        cantidad_fundas: parseInt(formConfigCorte.cantidad_fundas) || 2,
         incluye_fundas: formConfigCorte.incluye_fundas,
-        ancho_tela: parseFloat(formConfigCorte.ancho_tela) || 150,
         porcentaje_desperdicio: parseFloat(formConfigCorte.porcentaje_desperdicio) || 0,
         precio_tela_metro: parseFloat(formConfigCorte.precio_tela_metro) || 0,
         costo_confeccion: parseFloat(formConfigCorte.costo_confeccion) || 0,
@@ -3836,7 +3817,7 @@ const ProductosView = ({ isAdmin }) => {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-              {/* Columna izquierda: Dimensiones */}
+              {/* Columna izquierda: Metros Lineales */}
               <div>
                 {/* Sábana Plana */}
                 <div style={{ background: '#f8f8f8', padding: '15px', borderRadius: '8px', marginBottom: '15px' }}>
@@ -3852,25 +3833,16 @@ const ProductosView = ({ isAdmin }) => {
                     </label>
                   </div>
                   {formConfigCorte.incluye_sabana_plana && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                      <div>
-                        <label style={{ fontSize: '12px', color: '#666' }}>Largo (cm)</label>
-                        <input
-                          type="number"
-                          value={formConfigCorte.sabana_plana_largo}
-                          onChange={(e) => setFormConfigCorte({ ...formConfigCorte, sabana_plana_largo: e.target.value })}
-                          style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: '12px', color: '#666' }}>Ancho (cm)</label>
-                        <input
-                          type="number"
-                          value={formConfigCorte.sabana_plana_ancho}
-                          onChange={(e) => setFormConfigCorte({ ...formConfigCorte, sabana_plana_ancho: e.target.value })}
-                          style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                      </div>
+                    <div>
+                      <label style={{ fontSize: '12px', color: '#666' }}>Metros de tela</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formConfigCorte.metros_sabana_plana}
+                        onChange={(e) => setFormConfigCorte({ ...formConfigCorte, metros_sabana_plana: e.target.value })}
+                        placeholder="Ej: 2.5"
+                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '16px' }}
+                      />
                     </div>
                   )}
                 </div>
@@ -3889,34 +3861,16 @@ const ProductosView = ({ isAdmin }) => {
                     </label>
                   </div>
                   {formConfigCorte.incluye_sabana_cajon && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
-                      <div>
-                        <label style={{ fontSize: '12px', color: '#666' }}>Largo (cm)</label>
-                        <input
-                          type="number"
-                          value={formConfigCorte.sabana_cajon_largo}
-                          onChange={(e) => setFormConfigCorte({ ...formConfigCorte, sabana_cajon_largo: e.target.value })}
-                          style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: '12px', color: '#666' }}>Ancho (cm)</label>
-                        <input
-                          type="number"
-                          value={formConfigCorte.sabana_cajon_ancho}
-                          onChange={(e) => setFormConfigCorte({ ...formConfigCorte, sabana_cajon_ancho: e.target.value })}
-                          style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: '12px', color: '#666' }}>Alto/Profundidad (cm)</label>
-                        <input
-                          type="number"
-                          value={formConfigCorte.sabana_cajon_alto}
-                          onChange={(e) => setFormConfigCorte({ ...formConfigCorte, sabana_cajon_alto: e.target.value })}
-                          style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                      </div>
+                    <div>
+                      <label style={{ fontSize: '12px', color: '#666' }}>Metros de tela</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formConfigCorte.metros_sabana_cajon}
+                        onChange={(e) => setFormConfigCorte({ ...formConfigCorte, metros_sabana_cajon: e.target.value })}
+                        placeholder="Ej: 2.0"
+                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '16px' }}
+                      />
                     </div>
                   )}
                 </div>
@@ -3935,23 +3889,16 @@ const ProductosView = ({ isAdmin }) => {
                     </label>
                   </div>
                   {formConfigCorte.incluye_fundas && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '10px' }}>
                       <div>
-                        <label style={{ fontSize: '12px', color: '#666' }}>Largo (cm)</label>
+                        <label style={{ fontSize: '12px', color: '#666' }}>Metros por funda</label>
                         <input
                           type="number"
-                          value={formConfigCorte.funda_largo}
-                          onChange={(e) => setFormConfigCorte({ ...formConfigCorte, funda_largo: e.target.value })}
-                          style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                        />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: '12px', color: '#666' }}>Ancho (cm)</label>
-                        <input
-                          type="number"
-                          value={formConfigCorte.funda_ancho}
-                          onChange={(e) => setFormConfigCorte({ ...formConfigCorte, funda_ancho: e.target.value })}
-                          style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                          step="0.01"
+                          value={formConfigCorte.metros_fundas}
+                          onChange={(e) => setFormConfigCorte({ ...formConfigCorte, metros_fundas: e.target.value })}
+                          placeholder="Ej: 0.5"
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '16px' }}
                         />
                       </div>
                       <div>
@@ -3960,35 +3907,24 @@ const ProductosView = ({ isAdmin }) => {
                           type="number"
                           value={formConfigCorte.cantidad_fundas}
                           onChange={(e) => setFormConfigCorte({ ...formConfigCorte, cantidad_fundas: e.target.value })}
-                          style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '16px' }}
                         />
                       </div>
                     </div>
                   )}
                 </div>
 
-                {/* Configuración de Tela */}
+                {/* % Desperdicio */}
                 <div style={{ background: colors.cremaClaro, padding: '15px', borderRadius: '8px' }}>
-                  <h4 style={{ margin: '0 0 10px 0', color: colors.olivo }}>Configuración de Tela</h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    <div>
-                      <label style={{ fontSize: '12px', color: '#666' }}>Ancho de tela (cm)</label>
-                      <input
-                        type="number"
-                        value={formConfigCorte.ancho_tela}
-                        onChange={(e) => setFormConfigCorte({ ...formConfigCorte, ancho_tela: e.target.value })}
-                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: '12px', color: '#666' }}>% Desperdicio</label>
-                      <input
-                        type="number"
-                        value={formConfigCorte.porcentaje_desperdicio}
-                        onChange={(e) => setFormConfigCorte({ ...formConfigCorte, porcentaje_desperdicio: e.target.value })}
-                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                      />
-                    </div>
+                  <h4 style={{ margin: '0 0 10px 0', color: colors.olivo }}>Ajustes</h4>
+                  <div>
+                    <label style={{ fontSize: '12px', color: '#666' }}>% Desperdicio / Merma</label>
+                    <input
+                      type="number"
+                      value={formConfigCorte.porcentaje_desperdicio}
+                      onChange={(e) => setFormConfigCorte({ ...formConfigCorte, porcentaje_desperdicio: e.target.value })}
+                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                    />
                   </div>
                 </div>
               </div>
@@ -3997,31 +3933,34 @@ const ProductosView = ({ isAdmin }) => {
               <div>
                 {/* Cálculos en tiempo real */}
                 <div style={{ background: colors.sidebarBg, padding: '15px', borderRadius: '8px', marginBottom: '15px', color: 'white' }}>
-                  <h4 style={{ margin: '0 0 15px 0' }}>Cálculos de Material</h4>
+                  <h4 style={{ margin: '0 0 15px 0' }}>Resumen de Tela</h4>
                   {(() => {
                     const calc = calcularCorteTemporal();
                     return (
                       <div style={{ fontSize: '14px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', opacity: 0.9 }}>
                           <span>Sábana Plana:</span>
-                          <span>{calc.m2SabanaPlana} m²</span>
+                          <span>{calc.mSabanaPlana} m</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', opacity: 0.9 }}>
                           <span>Sábana Cajón:</span>
-                          <span>{calc.m2SabanaCajon} m²</span>
+                          <span>{calc.mSabanaCajon} m</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', opacity: 0.9 }}>
-                          <span>Fundas:</span>
-                          <span>{calc.m2Fundas} m²</span>
+                          <span>Fundas ({formConfigCorte.cantidad_fundas}x):</span>
+                          <span>{calc.mFundas} m</span>
                         </div>
                         <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.3)', margin: '10px 0' }} />
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontWeight: '600' }}>
-                          <span>Total m²:</span>
-                          <span>{calc.totalM2} m²</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                          <span>Subtotal:</span>
+                          <span>{calc.subtotalMetros} m</span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '700', fontSize: '16px' }}>
-                          <span>Metros Lineales:</span>
-                          <span>{calc.metrosLineales} m</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', opacity: 0.8, fontSize: '12px' }}>
+                          <span>+ {formConfigCorte.porcentaje_desperdicio}% desperdicio</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '700', fontSize: '18px', background: 'rgba(255,255,255,0.1)', padding: '8px', borderRadius: '4px' }}>
+                          <span>TOTAL:</span>
+                          <span>{calc.metrosConDesperdicio} m</span>
                         </div>
                       </div>
                     );
