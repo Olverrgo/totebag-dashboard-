@@ -740,7 +740,8 @@ export const getProductos = async (categoriaId = null, subcategoriaId = null) =>
       tipo_tela:tipos_tela(*),
       config_envio:config_envio(*),
       categoria:categorias(*),
-      subcategoria:subcategorias(*)
+      subcategoria:subcategorias(*),
+      variantes:variantes_producto(id, stock, stock_consignacion, costo_unitario, precio_venta, activo)
     `)
     .eq('activo', true)
     .order('created_at', { ascending: false });
@@ -754,6 +755,24 @@ export const getProductos = async (categoriaId = null, subcategoriaId = null) =>
   }
 
   const { data, error } = await query;
+
+  // Calcular stock total de variantes para cada producto
+  if (data) {
+    data.forEach(prod => {
+      const variantesActivas = (prod.variantes || []).filter(v => v.activo !== false);
+      if (variantesActivas.length > 0) {
+        // Usar stock de variantes
+        prod.stock_variantes = variantesActivas.reduce((sum, v) => sum + (v.stock || 0), 0);
+        prod.stock_consignacion_variantes = variantesActivas.reduce((sum, v) => sum + (v.stock_consignacion || 0), 0);
+        prod.tiene_variantes = true;
+      } else {
+        prod.stock_variantes = 0;
+        prod.stock_consignacion_variantes = 0;
+        prod.tiene_variantes = false;
+      }
+    });
+  }
+
   return { data, error: handleRLSError(error) };
 };
 
@@ -907,6 +926,169 @@ export const getResumenVariantes = async (productoId) => {
   });
 
   return { data: resumen, error: null };
+};
+
+// =====================================================
+// FUNCIONES PARA CONFIGURACIONES DE CORTE
+// =====================================================
+
+// Obtener configuraciones de corte de un producto
+export const getConfiguracionesCorte = async (productoId = null, varianteId = null, soloActual = false) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  let query = supabase
+    .from('configuraciones_corte')
+    .select(`
+      *,
+      producto:productos(id, linea_nombre, linea_medidas),
+      variante:variantes_producto(id, material, color, talla, sku)
+    `)
+    .eq('activo', true)
+    .order('fecha_vigencia', { ascending: false });
+
+  if (productoId) {
+    query = query.eq('producto_id', productoId);
+  }
+
+  if (varianteId) {
+    query = query.eq('variante_id', varianteId);
+  }
+
+  if (soloActual) {
+    query = query.eq('es_configuracion_actual', true);
+  }
+
+  const { data, error } = await query;
+  return { data, error: handleRLSError(error) };
+};
+
+// Obtener configuración actual de un producto/variante
+export const getConfiguracionActual = async (productoId, varianteId = null) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  let query = supabase
+    .from('configuraciones_corte')
+    .select('*')
+    .eq('producto_id', productoId)
+    .eq('es_configuracion_actual', true)
+    .eq('activo', true);
+
+  if (varianteId) {
+    query = query.eq('variante_id', varianteId);
+  } else {
+    query = query.is('variante_id', null);
+  }
+
+  const { data, error } = await query.single();
+  return { data, error: handleRLSError(error) };
+};
+
+// Crear configuración de corte
+export const createConfiguracionCorte = async (config) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('configuraciones_corte')
+    .insert([config])
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+// Actualizar configuración de corte
+export const updateConfiguracionCorte = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('configuraciones_corte')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+// Eliminar configuración de corte (soft delete)
+export const deleteConfiguracionCorte = async (id) => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+
+  const { error } = await supabase
+    .from('configuraciones_corte')
+    .update({ activo: false })
+    .eq('id', id);
+
+  return { error: handleRLSError(error) };
+};
+
+// Duplicar configuración con nuevo precio (para historial)
+export const duplicarConfiguracionConNuevoPrecio = async (configId, nuevoPrecioTela, nuevaFecha = null) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  // Obtener configuración original
+  const { data: configOriginal, error: errorGet } = await supabase
+    .from('configuraciones_corte')
+    .select('*')
+    .eq('id', configId)
+    .single();
+
+  if (errorGet) return { data: null, error: handleRLSError(errorGet) };
+
+  // Crear nueva configuración con el nuevo precio
+  const nuevaConfig = {
+    producto_id: configOriginal.producto_id,
+    variante_id: configOriginal.variante_id,
+    nombre: configOriginal.nombre,
+    descripcion: configOriginal.descripcion,
+    sabana_plana_largo: configOriginal.sabana_plana_largo,
+    sabana_plana_ancho: configOriginal.sabana_plana_ancho,
+    incluye_sabana_plana: configOriginal.incluye_sabana_plana,
+    sabana_cajon_largo: configOriginal.sabana_cajon_largo,
+    sabana_cajon_ancho: configOriginal.sabana_cajon_ancho,
+    sabana_cajon_alto: configOriginal.sabana_cajon_alto,
+    incluye_sabana_cajon: configOriginal.incluye_sabana_cajon,
+    funda_largo: configOriginal.funda_largo,
+    funda_ancho: configOriginal.funda_ancho,
+    cantidad_fundas: configOriginal.cantidad_fundas,
+    incluye_fundas: configOriginal.incluye_fundas,
+    piezas_adicionales: configOriginal.piezas_adicionales,
+    ancho_tela: configOriginal.ancho_tela,
+    porcentaje_desperdicio: configOriginal.porcentaje_desperdicio,
+    precio_tela_metro: nuevoPrecioTela,
+    costo_confeccion: configOriginal.costo_confeccion,
+    costo_empaque: configOriginal.costo_empaque,
+    fecha_vigencia: nuevaFecha || new Date().toISOString().split('T')[0],
+    es_configuracion_actual: true,
+    notas: `Actualización de precio desde $${configOriginal.precio_tela_metro} a $${nuevoPrecioTela}`
+  };
+
+  const { data, error } = await supabase
+    .from('configuraciones_corte')
+    .insert([nuevaConfig])
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+// Obtener historial de precios de un producto
+export const getHistorialPrecios = async (productoId, varianteId = null) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  let query = supabase
+    .from('configuraciones_corte')
+    .select('id, fecha_vigencia, precio_tela_metro, costo_material, costo_total, es_configuracion_actual, created_at')
+    .eq('producto_id', productoId)
+    .eq('activo', true)
+    .order('fecha_vigencia', { ascending: false });
+
+  if (varianteId) {
+    query = query.eq('variante_id', varianteId);
+  }
+
+  const { data, error } = await query;
+  return { data, error: handleRLSError(error) };
 };
 
 // =====================================================

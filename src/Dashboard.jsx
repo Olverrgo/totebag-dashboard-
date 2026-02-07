@@ -42,7 +42,14 @@ import {
   createVariante,
   updateVariante,
   deleteVariante,
-  updateStockVariante
+  updateStockVariante,
+  getConfiguracionesCorte,
+  getConfiguracionActual,
+  createConfiguracionCorte,
+  updateConfiguracionCorte,
+  deleteConfiguracionCorte,
+  duplicarConfiguracionConNuevoPrecio,
+  getHistorialPrecios
 } from './supabaseClient';
 
 // ==================== DATOS ====================
@@ -1103,6 +1110,31 @@ const ProductosView = ({ isAdmin }) => {
     precio_venta: 0
   });
 
+  // Estados para configuración de corte
+  const [mostrarConfigCorte, setMostrarConfigCorte] = useState(false);
+  const [varianteConfigCorte, setVarianteConfigCorte] = useState(null); // Variante para configurar corte
+  const [configCorteActual, setConfigCorteActual] = useState(null);
+  const [historialPrecios, setHistorialPrecios] = useState([]);
+  const [formConfigCorte, setFormConfigCorte] = useState({
+    nombre: '',
+    sabana_plana_largo: 0,
+    sabana_plana_ancho: 0,
+    incluye_sabana_plana: true,
+    sabana_cajon_largo: 0,
+    sabana_cajon_ancho: 0,
+    sabana_cajon_alto: 0,
+    incluye_sabana_cajon: true,
+    funda_largo: 0,
+    funda_ancho: 0,
+    cantidad_fundas: 2,
+    incluye_fundas: true,
+    ancho_tela: 150,
+    porcentaje_desperdicio: 10,
+    precio_tela_metro: 0,
+    costo_confeccion: 0,
+    costo_empaque: 0
+  });
+
   // Cargar datos de Supabase al montar
   useEffect(() => {
     const cargarDatos = async () => {
@@ -1413,6 +1445,196 @@ const ProductosView = ({ isAdmin }) => {
     const { error } = await updateStockVariante(varianteId, parseInt(nuevoStock) || 0);
     if (!error) {
       setVariantes(variantes.map(v => v.id === varianteId ? { ...v, stock: parseInt(nuevoStock) || 0 } : v));
+    }
+  };
+
+  // ==================== FUNCIONES PARA CONFIGURACIÓN DE CORTE ====================
+
+  // Abrir configuración de corte para una variante
+  const abrirConfigCorte = async (variante) => {
+    setVarianteConfigCorte(variante);
+    setMostrarConfigCorte(true);
+
+    // Cargar configuración actual si existe
+    const { data: config } = await getConfiguracionActual(productoVariantes.id, variante.id);
+    if (config) {
+      setConfigCorteActual(config);
+      setFormConfigCorte({
+        nombre: config.nombre || '',
+        sabana_plana_largo: config.sabana_plana_largo || 0,
+        sabana_plana_ancho: config.sabana_plana_ancho || 0,
+        incluye_sabana_plana: config.incluye_sabana_plana ?? true,
+        sabana_cajon_largo: config.sabana_cajon_largo || 0,
+        sabana_cajon_ancho: config.sabana_cajon_ancho || 0,
+        sabana_cajon_alto: config.sabana_cajon_alto || 0,
+        incluye_sabana_cajon: config.incluye_sabana_cajon ?? true,
+        funda_largo: config.funda_largo || 0,
+        funda_ancho: config.funda_ancho || 0,
+        cantidad_fundas: config.cantidad_fundas || 2,
+        incluye_fundas: config.incluye_fundas ?? true,
+        ancho_tela: config.ancho_tela || 150,
+        porcentaje_desperdicio: config.porcentaje_desperdicio || 10,
+        precio_tela_metro: config.precio_tela_metro || 0,
+        costo_confeccion: config.costo_confeccion || 0,
+        costo_empaque: config.costo_empaque || 0
+      });
+    } else {
+      setConfigCorteActual(null);
+      setFormConfigCorte({
+        nombre: `${productoVariantes?.linea_nombre || ''} - ${variante.material || ''} ${variante.talla || ''}`.trim(),
+        sabana_plana_largo: 0, sabana_plana_ancho: 0, incluye_sabana_plana: true,
+        sabana_cajon_largo: 0, sabana_cajon_ancho: 0, sabana_cajon_alto: 0, incluye_sabana_cajon: true,
+        funda_largo: 0, funda_ancho: 0, cantidad_fundas: 2, incluye_fundas: true,
+        ancho_tela: 150, porcentaje_desperdicio: 10,
+        precio_tela_metro: 0, costo_confeccion: 0, costo_empaque: 0
+      });
+    }
+
+    // Cargar historial de precios
+    const { data: historial } = await getHistorialPrecios(productoVariantes.id, variante.id);
+    setHistorialPrecios(historial || []);
+  };
+
+  // Cerrar configuración de corte
+  const cerrarConfigCorte = () => {
+    setMostrarConfigCorte(false);
+    setVarianteConfigCorte(null);
+    setConfigCorteActual(null);
+    setHistorialPrecios([]);
+  };
+
+  // Calcular metros y costos en tiempo real
+  const calcularCorteTemporal = () => {
+    const f = formConfigCorte;
+
+    // Metros cuadrados por pieza
+    const m2SabanaPlana = f.incluye_sabana_plana ? (f.sabana_plana_largo * f.sabana_plana_ancho) / 10000 : 0;
+    const m2SabanaCajon = f.incluye_sabana_cajon ?
+      ((parseFloat(f.sabana_cajon_largo) + 2 * parseFloat(f.sabana_cajon_alto)) *
+       (parseFloat(f.sabana_cajon_ancho) + 2 * parseFloat(f.sabana_cajon_alto))) / 10000 : 0;
+    const m2Fundas = f.incluye_fundas ? (f.funda_largo * f.funda_ancho * f.cantidad_fundas * 2) / 10000 : 0;
+
+    const totalM2 = m2SabanaPlana + m2SabanaCajon + m2Fundas;
+
+    // Metros lineales (considerando ancho de tela)
+    const anchoTelaM = f.ancho_tela / 100;
+    const metrosLineales = anchoTelaM > 0 ? (totalM2 / anchoTelaM) * (1 + f.porcentaje_desperdicio / 100) : 0;
+
+    // Costos
+    const costoMaterial = metrosLineales * f.precio_tela_metro;
+    const costoTotal = costoMaterial + parseFloat(f.costo_confeccion || 0) + parseFloat(f.costo_empaque || 0);
+
+    return {
+      m2SabanaPlana: m2SabanaPlana.toFixed(3),
+      m2SabanaCajon: m2SabanaCajon.toFixed(3),
+      m2Fundas: m2Fundas.toFixed(3),
+      totalM2: totalM2.toFixed(3),
+      metrosLineales: metrosLineales.toFixed(3),
+      costoMaterial: costoMaterial.toFixed(2),
+      costoTotal: costoTotal.toFixed(2)
+    };
+  };
+
+  // Guardar configuración de corte
+  const guardarConfigCorte = async () => {
+    if (!formConfigCorte.nombre) {
+      setMensaje({ tipo: 'error', texto: 'Ingresa un nombre para la configuración' });
+      return;
+    }
+
+    setGuardando(true);
+    try {
+      const configData = {
+        producto_id: productoVariantes.id,
+        variante_id: varianteConfigCorte.id,
+        nombre: formConfigCorte.nombre,
+        sabana_plana_largo: parseFloat(formConfigCorte.sabana_plana_largo) || 0,
+        sabana_plana_ancho: parseFloat(formConfigCorte.sabana_plana_ancho) || 0,
+        incluye_sabana_plana: formConfigCorte.incluye_sabana_plana,
+        sabana_cajon_largo: parseFloat(formConfigCorte.sabana_cajon_largo) || 0,
+        sabana_cajon_ancho: parseFloat(formConfigCorte.sabana_cajon_ancho) || 0,
+        sabana_cajon_alto: parseFloat(formConfigCorte.sabana_cajon_alto) || 0,
+        incluye_sabana_cajon: formConfigCorte.incluye_sabana_cajon,
+        funda_largo: parseFloat(formConfigCorte.funda_largo) || 0,
+        funda_ancho: parseFloat(formConfigCorte.funda_ancho) || 0,
+        cantidad_fundas: parseInt(formConfigCorte.cantidad_fundas) || 0,
+        incluye_fundas: formConfigCorte.incluye_fundas,
+        ancho_tela: parseFloat(formConfigCorte.ancho_tela) || 150,
+        porcentaje_desperdicio: parseFloat(formConfigCorte.porcentaje_desperdicio) || 0,
+        precio_tela_metro: parseFloat(formConfigCorte.precio_tela_metro) || 0,
+        costo_confeccion: parseFloat(formConfigCorte.costo_confeccion) || 0,
+        costo_empaque: parseFloat(formConfigCorte.costo_empaque) || 0,
+        es_configuracion_actual: true
+      };
+
+      let result;
+      if (configCorteActual) {
+        result = await updateConfiguracionCorte(configCorteActual.id, configData);
+      } else {
+        result = await createConfiguracionCorte(configData);
+      }
+
+      if (result.error) {
+        setMensaje({ tipo: 'error', texto: 'Error: ' + result.error.message });
+      } else {
+        setMensaje({ tipo: 'exito', texto: 'Configuración guardada' });
+        setConfigCorteActual(result.data);
+
+        // Actualizar costo en la variante
+        const calculos = calcularCorteTemporal();
+        await updateVariante(varianteConfigCorte.id, {
+          costo_unitario: parseFloat(calculos.costoTotal)
+        });
+        setVariantes(variantes.map(v =>
+          v.id === varianteConfigCorte.id ? { ...v, costo_unitario: parseFloat(calculos.costoTotal) } : v
+        ));
+
+        // Recargar historial
+        const { data: historial } = await getHistorialPrecios(productoVariantes.id, varianteConfigCorte.id);
+        setHistorialPrecios(historial || []);
+
+        setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+      }
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: 'Error: ' + err.message });
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  // Actualizar solo el precio (crear nueva entrada en historial)
+  const actualizarPrecioTela = async () => {
+    if (!configCorteActual) {
+      setMensaje({ tipo: 'error', texto: 'Primero guarda una configuración base' });
+      return;
+    }
+
+    const nuevoPrecio = parseFloat(formConfigCorte.precio_tela_metro);
+    if (nuevoPrecio === parseFloat(configCorteActual.precio_tela_metro)) {
+      setMensaje({ tipo: 'error', texto: 'El precio es igual al actual' });
+      return;
+    }
+
+    setGuardando(true);
+    try {
+      const { data, error } = await duplicarConfiguracionConNuevoPrecio(configCorteActual.id, nuevoPrecio);
+
+      if (error) {
+        setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
+      } else {
+        setMensaje({ tipo: 'exito', texto: 'Precio actualizado (historial guardado)' });
+        setConfigCorteActual(data);
+
+        // Recargar historial
+        const { data: historial } = await getHistorialPrecios(productoVariantes.id, varianteConfigCorte.id);
+        setHistorialPrecios(historial || []);
+
+        setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+      }
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: 'Error: ' + err.message });
+    } finally {
+      setGuardando(false);
     }
   };
 
@@ -2920,60 +3142,74 @@ const ProductosView = ({ isAdmin }) => {
                       borderRadius: '6px',
                       border: `1px solid ${colors.sand}`
                     }}>
-                      <div style={{
-                        flex: 1,
-                        textAlign: 'center',
-                        padding: '8px',
-                        background: colors.cotton,
-                        borderRadius: '4px',
-                        border: `1px solid ${(prod.stock || 0) > 0 ? colors.olive : colors.sand}`
-                      }}>
-                        <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '4px' }}>Stock Taller</div>
-                        <div style={{
-                          fontSize: '22px',
-                          fontWeight: '700',
-                          color: (prod.stock || 0) > 0 ? colors.olive : colors.camel
-                        }}>
-                          {prod.stock || 0}
-                        </div>
-                        <div style={{ fontSize: '10px', color: colors.camel }}>unidades</div>
-                      </div>
-                      <div style={{
-                        flex: 1,
-                        textAlign: 'center',
-                        padding: '8px',
-                        background: colors.cotton,
-                        borderRadius: '4px',
-                        border: `1px solid ${(prod.stock_consignacion || 0) > 0 ? colors.terracotta : colors.sand}`
-                      }}>
-                        <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '4px' }}>Consignacion</div>
-                        <div style={{
-                          fontSize: '22px',
-                          fontWeight: '700',
-                          color: (prod.stock_consignacion || 0) > 0 ? colors.terracotta : colors.camel
-                        }}>
-                          {prod.stock_consignacion || 0}
-                        </div>
-                        <div style={{ fontSize: '10px', color: colors.camel }}>unidades</div>
-                      </div>
-                      <div style={{
-                        flex: 1,
-                        textAlign: 'center',
-                        padding: '8px',
-                        background: (prod.stock || 0) + (prod.stock_consignacion || 0) > 0 ? 'rgba(171,213,94,0.15)' : colors.cotton,
-                        borderRadius: '4px',
-                        border: `1px solid ${colors.sidebarBg}`
-                      }}>
-                        <div style={{ fontSize: '11px', color: colors.sidebarBg, marginBottom: '4px' }}>Total</div>
-                        <div style={{
-                          fontSize: '22px',
-                          fontWeight: '700',
-                          color: colors.sidebarBg
-                        }}>
-                          {(prod.stock || 0) + (prod.stock_consignacion || 0)}
-                        </div>
-                        <div style={{ fontSize: '10px', color: colors.sidebarBg }}>disponible</div>
-                      </div>
+                      {(() => {
+                        // Usar stock de variantes si el producto tiene variantes
+                        const stockTaller = prod.tiene_variantes ? (prod.stock_variantes || 0) : (prod.stock || 0);
+                        const stockConsig = prod.tiene_variantes ? (prod.stock_consignacion_variantes || 0) : (prod.stock_consignacion || 0);
+                        const stockTotal = stockTaller + stockConsig;
+                        return (
+                          <>
+                            <div style={{
+                              flex: 1,
+                              textAlign: 'center',
+                              padding: '8px',
+                              background: colors.cotton,
+                              borderRadius: '4px',
+                              border: `1px solid ${stockTaller > 0 ? colors.olive : colors.sand}`
+                            }}>
+                              <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '4px' }}>
+                                Stock Taller {prod.tiene_variantes && <span style={{ fontSize: '9px' }}>(var)</span>}
+                              </div>
+                              <div style={{
+                                fontSize: '22px',
+                                fontWeight: '700',
+                                color: stockTaller > 0 ? colors.olive : colors.camel
+                              }}>
+                                {stockTaller}
+                              </div>
+                              <div style={{ fontSize: '10px', color: colors.camel }}>unidades</div>
+                            </div>
+                            <div style={{
+                              flex: 1,
+                              textAlign: 'center',
+                              padding: '8px',
+                              background: colors.cotton,
+                              borderRadius: '4px',
+                              border: `1px solid ${stockConsig > 0 ? colors.terracotta : colors.sand}`
+                            }}>
+                              <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '4px' }}>
+                                Consignacion {prod.tiene_variantes && <span style={{ fontSize: '9px' }}>(var)</span>}
+                              </div>
+                              <div style={{
+                                fontSize: '22px',
+                                fontWeight: '700',
+                                color: stockConsig > 0 ? colors.terracotta : colors.camel
+                              }}>
+                                {stockConsig}
+                              </div>
+                              <div style={{ fontSize: '10px', color: colors.camel }}>unidades</div>
+                            </div>
+                            <div style={{
+                              flex: 1,
+                              textAlign: 'center',
+                              padding: '8px',
+                              background: stockTotal > 0 ? 'rgba(171,213,94,0.15)' : colors.cotton,
+                              borderRadius: '4px',
+                              border: `1px solid ${colors.sidebarBg}`
+                            }}>
+                              <div style={{ fontSize: '11px', color: colors.sidebarBg, marginBottom: '4px' }}>Total</div>
+                              <div style={{
+                                fontSize: '22px',
+                                fontWeight: '700',
+                                color: colors.sidebarBg
+                              }}>
+                                {stockTotal}
+                              </div>
+                              <div style={{ fontSize: '10px', color: colors.sidebarBg }}>disponible</div>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
 
                     {/* Seccion de Archivos (Imagen y PDFs) */}
@@ -3510,7 +3746,13 @@ const ProductosView = ({ isAdmin }) => {
                       </div>
                     </div>
                     {isAdmin && (
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <button
+                          onClick={() => abrirConfigCorte(v)}
+                          style={{ padding: '6px 12px', background: '#16a085', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+                        >
+                          Corte
+                        </button>
                         <button
                           onClick={() => editarVarianteHandler(v)}
                           style={{ padding: '6px 12px', background: colors.sidebarBg, color: colors.sidebarText, border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
@@ -3559,6 +3801,362 @@ const ProductosView = ({ isAdmin }) => {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal Configuración de Corte */}
+      {mostrarConfigCorte && varianteConfigCorte && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center',
+          justifyContent: 'center', zIndex: 1100
+        }}>
+          <div style={{
+            background: 'white', borderRadius: '12px', width: '900px', maxHeight: '90vh',
+            overflow: 'auto', padding: '25px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, color: colors.olivo }}>
+                Configuración de Corte - {varianteConfigCorte.material} {varianteConfigCorte.talla}
+              </h3>
+              <button onClick={cerrarConfigCorte} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer' }}>×</button>
+            </div>
+
+            {/* Nombre de la configuración */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', color: colors.olivo }}>Nombre de configuración</label>
+              <input
+                type="text"
+                value={formConfigCorte.nombre}
+                onChange={(e) => setFormConfigCorte({ ...formConfigCorte, nombre: e.target.value })}
+                placeholder="Ej: Juego Matrimonial Franela Estándar"
+                style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px' }}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              {/* Columna izquierda: Dimensiones */}
+              <div>
+                {/* Sábana Plana */}
+                <div style={{ background: '#f8f8f8', padding: '15px', borderRadius: '8px', marginBottom: '15px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <h4 style={{ margin: 0, color: colors.olivo }}>Sábana Plana</h4>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={formConfigCorte.incluye_sabana_plana}
+                        onChange={(e) => setFormConfigCorte({ ...formConfigCorte, incluye_sabana_plana: e.target.checked })}
+                      />
+                      Incluir
+                    </label>
+                  </div>
+                  {formConfigCorte.incluye_sabana_plana && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      <div>
+                        <label style={{ fontSize: '12px', color: '#666' }}>Largo (cm)</label>
+                        <input
+                          type="number"
+                          value={formConfigCorte.sabana_plana_largo}
+                          onChange={(e) => setFormConfigCorte({ ...formConfigCorte, sabana_plana_largo: e.target.value })}
+                          style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '12px', color: '#666' }}>Ancho (cm)</label>
+                        <input
+                          type="number"
+                          value={formConfigCorte.sabana_plana_ancho}
+                          onChange={(e) => setFormConfigCorte({ ...formConfigCorte, sabana_plana_ancho: e.target.value })}
+                          style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Sábana de Cajón */}
+                <div style={{ background: '#f8f8f8', padding: '15px', borderRadius: '8px', marginBottom: '15px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <h4 style={{ margin: 0, color: colors.olivo }}>Sábana de Cajón (Ajustable)</h4>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={formConfigCorte.incluye_sabana_cajon}
+                        onChange={(e) => setFormConfigCorte({ ...formConfigCorte, incluye_sabana_cajon: e.target.checked })}
+                      />
+                      Incluir
+                    </label>
+                  </div>
+                  {formConfigCorte.incluye_sabana_cajon && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                      <div>
+                        <label style={{ fontSize: '12px', color: '#666' }}>Largo (cm)</label>
+                        <input
+                          type="number"
+                          value={formConfigCorte.sabana_cajon_largo}
+                          onChange={(e) => setFormConfigCorte({ ...formConfigCorte, sabana_cajon_largo: e.target.value })}
+                          style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '12px', color: '#666' }}>Ancho (cm)</label>
+                        <input
+                          type="number"
+                          value={formConfigCorte.sabana_cajon_ancho}
+                          onChange={(e) => setFormConfigCorte({ ...formConfigCorte, sabana_cajon_ancho: e.target.value })}
+                          style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '12px', color: '#666' }}>Alto/Profundidad (cm)</label>
+                        <input
+                          type="number"
+                          value={formConfigCorte.sabana_cajon_alto}
+                          onChange={(e) => setFormConfigCorte({ ...formConfigCorte, sabana_cajon_alto: e.target.value })}
+                          style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Fundas */}
+                <div style={{ background: '#f8f8f8', padding: '15px', borderRadius: '8px', marginBottom: '15px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <h4 style={{ margin: 0, color: colors.olivo }}>Fundas</h4>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={formConfigCorte.incluye_fundas}
+                        onChange={(e) => setFormConfigCorte({ ...formConfigCorte, incluye_fundas: e.target.checked })}
+                      />
+                      Incluir
+                    </label>
+                  </div>
+                  {formConfigCorte.incluye_fundas && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                      <div>
+                        <label style={{ fontSize: '12px', color: '#666' }}>Largo (cm)</label>
+                        <input
+                          type="number"
+                          value={formConfigCorte.funda_largo}
+                          onChange={(e) => setFormConfigCorte({ ...formConfigCorte, funda_largo: e.target.value })}
+                          style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '12px', color: '#666' }}>Ancho (cm)</label>
+                        <input
+                          type="number"
+                          value={formConfigCorte.funda_ancho}
+                          onChange={(e) => setFormConfigCorte({ ...formConfigCorte, funda_ancho: e.target.value })}
+                          style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '12px', color: '#666' }}>Cantidad</label>
+                        <input
+                          type="number"
+                          value={formConfigCorte.cantidad_fundas}
+                          onChange={(e) => setFormConfigCorte({ ...formConfigCorte, cantidad_fundas: e.target.value })}
+                          style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Configuración de Tela */}
+                <div style={{ background: colors.cremaClaro, padding: '15px', borderRadius: '8px' }}>
+                  <h4 style={{ margin: '0 0 10px 0', color: colors.olivo }}>Configuración de Tela</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div>
+                      <label style={{ fontSize: '12px', color: '#666' }}>Ancho de tela (cm)</label>
+                      <input
+                        type="number"
+                        value={formConfigCorte.ancho_tela}
+                        onChange={(e) => setFormConfigCorte({ ...formConfigCorte, ancho_tela: e.target.value })}
+                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', color: '#666' }}>% Desperdicio</label>
+                      <input
+                        type="number"
+                        value={formConfigCorte.porcentaje_desperdicio}
+                        onChange={(e) => setFormConfigCorte({ ...formConfigCorte, porcentaje_desperdicio: e.target.value })}
+                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Columna derecha: Cálculos y Costos */}
+              <div>
+                {/* Cálculos en tiempo real */}
+                <div style={{ background: colors.sidebarBg, padding: '15px', borderRadius: '8px', marginBottom: '15px', color: 'white' }}>
+                  <h4 style={{ margin: '0 0 15px 0' }}>Cálculos de Material</h4>
+                  {(() => {
+                    const calc = calcularCorteTemporal();
+                    return (
+                      <div style={{ fontSize: '14px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', opacity: 0.9 }}>
+                          <span>Sábana Plana:</span>
+                          <span>{calc.m2SabanaPlana} m²</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', opacity: 0.9 }}>
+                          <span>Sábana Cajón:</span>
+                          <span>{calc.m2SabanaCajon} m²</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', opacity: 0.9 }}>
+                          <span>Fundas:</span>
+                          <span>{calc.m2Fundas} m²</span>
+                        </div>
+                        <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.3)', margin: '10px 0' }} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontWeight: '600' }}>
+                          <span>Total m²:</span>
+                          <span>{calc.totalM2} m²</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '700', fontSize: '16px' }}>
+                          <span>Metros Lineales:</span>
+                          <span>{calc.metrosLineales} m</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Costos */}
+                <div style={{ background: '#f8f8f8', padding: '15px', borderRadius: '8px', marginBottom: '15px' }}>
+                  <h4 style={{ margin: '0 0 15px 0', color: colors.olivo }}>Costos</h4>
+                  <div style={{ display: 'grid', gap: '10px' }}>
+                    <div>
+                      <label style={{ fontSize: '12px', color: '#666' }}>Precio tela por metro ($)</label>
+                      <div style={{ display: 'flex', gap: '5px' }}>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={formConfigCorte.precio_tela_metro}
+                          onChange={(e) => setFormConfigCorte({ ...formConfigCorte, precio_tela_metro: e.target.value })}
+                          style={{ flex: 1, padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                        />
+                        {configCorteActual && (
+                          <button
+                            onClick={actualizarPrecioTela}
+                            disabled={guardando}
+                            style={{
+                              padding: '8px 12px', background: colors.camel, color: 'white',
+                              border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px'
+                            }}
+                            title="Actualizar precio (guarda historial)"
+                          >
+                            Actualizar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', color: '#666' }}>Costo confección ($)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formConfigCorte.costo_confeccion}
+                        onChange={(e) => setFormConfigCorte({ ...formConfigCorte, costo_confeccion: e.target.value })}
+                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', color: '#666' }}>Costo empaque ($)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formConfigCorte.costo_empaque}
+                        onChange={(e) => setFormConfigCorte({ ...formConfigCorte, costo_empaque: e.target.value })}
+                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Resumen de costos */}
+                  {(() => {
+                    const calc = calcularCorteTemporal();
+                    return (
+                      <div style={{ marginTop: '15px', padding: '10px', background: 'white', borderRadius: '6px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                          <span>Costo Material:</span>
+                          <span>${calc.costoMaterial}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                          <span>Confección:</span>
+                          <span>${formConfigCorte.costo_confeccion || 0}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                          <span>Empaque:</span>
+                          <span>${formConfigCorte.costo_empaque || 0}</span>
+                        </div>
+                        <hr style={{ margin: '8px 0' }} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '700', fontSize: '18px', color: colors.olivo }}>
+                          <span>COSTO TOTAL:</span>
+                          <span>${calc.costoTotal}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Historial de precios */}
+                {historialPrecios.length > 0 && (
+                  <div style={{ background: '#fff9e6', padding: '15px', borderRadius: '8px', border: '1px solid #ffd54f' }}>
+                    <h4 style={{ margin: '0 0 10px 0', color: colors.camel }}>Historial de Precios</h4>
+                    <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
+                      {historialPrecios.map((h, idx) => (
+                        <div key={idx} style={{
+                          display: 'flex', justifyContent: 'space-between', padding: '5px 0',
+                          borderBottom: idx < historialPrecios.length - 1 ? '1px solid #eee' : 'none',
+                          fontSize: '13px'
+                        }}>
+                          <span>{new Date(h.fecha_vigencia).toLocaleDateString()}</span>
+                          <span>${h.precio_tela_metro}/m</span>
+                          <span style={{ fontWeight: '600' }}>${h.costo_total}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Mensaje y botones */}
+            {mensaje.texto && (
+              <div style={{
+                marginTop: '15px', padding: '10px', borderRadius: '6px', textAlign: 'center',
+                background: mensaje.tipo === 'error' ? '#fee' : '#efe',
+                color: mensaje.tipo === 'error' ? '#c00' : '#060'
+              }}>
+                {mensaje.texto}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+              <button
+                onClick={cerrarConfigCorte}
+                style={{ padding: '10px 20px', background: '#ddd', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={guardarConfigCorte}
+                disabled={guardando}
+                style={{
+                  padding: '10px 25px', background: colors.olivo, color: 'white',
+                  border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600'
+                }}
+              >
+                {guardando ? 'Guardando...' : (configCorteActual ? 'Actualizar' : 'Guardar')}
+              </button>
+            </div>
           </div>
         </div>
       )}

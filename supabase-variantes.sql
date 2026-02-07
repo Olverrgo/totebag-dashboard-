@@ -84,6 +84,10 @@ CREATE TRIGGER trigger_generar_sku
 -- =====================================================
 ALTER TABLE variantes_producto ENABLE ROW LEVEL SECURITY;
 
+-- Eliminar políticas existentes si existen
+DROP POLICY IF EXISTS "Variantes: lectura para autenticados" ON variantes_producto;
+DROP POLICY IF EXISTS "Variantes: escritura para admin" ON variantes_producto;
+
 -- Lectura para usuarios autenticados
 CREATE POLICY "Variantes: lectura para autenticados" ON variantes_producto
   FOR SELECT USING (auth.role() = 'authenticated');
