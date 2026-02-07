@@ -4329,10 +4329,18 @@ const StocksView = ({ isAdmin }) => {
       {/* Lista de productos con stock */}
       {productosGuardados.length > 0 ? (
         <div style={{ display: 'grid', gap: '15px' }}>
-          {productosGuardados.map((prod) => (
+          {productosGuardados.map((prod) => {
+            // Determinar stock según si tiene variantes o no
+            const tieneVariantes = prod.tiene_variantes;
+            const stockTaller = tieneVariantes ? (prod.stock_variantes || 0) : (prod.stock || 0);
+            const stockConsig = tieneVariantes ? (prod.stock_consignacion_variantes || 0) : (prod.stock_consignacion || 0);
+            const stockTotal = stockTaller + stockConsig;
+            const numVariantes = prod.variantes?.filter(v => v.activo !== false)?.length || 0;
+
+            return (
             <div key={prod.id} style={{
               background: colors.cotton,
-              border: '2px solid #DA9F17',
+              border: `2px solid ${tieneVariantes ? '#16a085' : '#DA9F17'}`,
               padding: '20px',
               borderRadius: '8px',
               display: 'flex',
@@ -4343,87 +4351,125 @@ const StocksView = ({ isAdmin }) => {
             }}>
               {/* Info del producto */}
               <div style={{ flex: '1', minWidth: '200px' }}>
-                <h4 style={{ margin: 0, color: colors.sidebarBg, fontSize: '16px', fontWeight: '600' }}>
-                  {prod.linea_nombre}
-                </h4>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <h4 style={{ margin: 0, color: colors.sidebarBg, fontSize: '16px', fontWeight: '600' }}>
+                    {prod.linea_nombre}
+                  </h4>
+                  {tieneVariantes && (
+                    <span style={{
+                      background: '#16a085', color: 'white', padding: '2px 8px',
+                      borderRadius: '10px', fontSize: '10px', fontWeight: '600'
+                    }}>
+                      {numVariantes} variantes
+                    </span>
+                  )}
+                </div>
                 <p style={{ margin: '5px 0 0', color: colors.camel, fontSize: '13px' }}>
-                  {prod.linea_medidas} {prod.descripcion && `• ${prod.descripcion}`}
+                  {prod.categoria?.nombre && <span style={{ fontWeight: '500' }}>{prod.categoria.nombre}</span>}
+                  {prod.linea_medidas && ` • ${prod.linea_medidas}`}
                 </p>
               </div>
 
-              {/* Control de stock */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                {/* Stock actual (solo lectura) */}
-                <div style={{ textAlign: 'center' }}>
-                  <label style={{ display: 'block', fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>
-                    STOCK ACTUAL
-                  </label>
-                  <div style={{
-                    padding: '8px 12px',
-                    background: colors.sand,
-                    borderRadius: '6px',
-                    fontSize: '16px',
-                    fontWeight: '600',
-                    color: colors.sidebarBg,
-                    minWidth: '60px'
-                  }}>
-                    {prod.stock || 0}
-                  </div>
-                </div>
-
-                {/* Campo para agregar/restar */}
-                {isAdmin && (
+              {/* Stock para productos CON variantes */}
+              {tieneVariantes ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                   <div style={{ textAlign: 'center' }}>
-                    <label style={{ display: 'block', fontSize: '11px', color: colors.sidebarBg, marginBottom: '5px' }}>
-                      AGREGAR (+/-)
-                    </label>
-                    <input
-                      type="number"
-                      value={cantidadAgregar[prod.id] || 0}
-                      onChange={(e) => setCantidadAgregar({ ...cantidadAgregar, [prod.id]: e.target.value })}
-                      style={inputStyle}
-                      placeholder="0"
-                    />
+                    <label style={{ display: 'block', fontSize: '10px', color: colors.camel, marginBottom: '3px' }}>TALLER</label>
+                    <div style={{ padding: '6px 12px', background: colors.sand, borderRadius: '4px', fontSize: '16px', fontWeight: '600', color: colors.olive }}>
+                      {stockTaller}
+                    </div>
                   </div>
-                )}
+                  <div style={{ textAlign: 'center' }}>
+                    <label style={{ display: 'block', fontSize: '10px', color: colors.camel, marginBottom: '3px' }}>CONSIG.</label>
+                    <div style={{ padding: '6px 12px', background: colors.sand, borderRadius: '4px', fontSize: '16px', fontWeight: '600', color: colors.terracotta }}>
+                      {stockConsig}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <label style={{ display: 'block', fontSize: '10px', color: colors.camel, marginBottom: '3px' }}>TOTAL</label>
+                    <div style={{ padding: '6px 12px', background: colors.sidebarBg, borderRadius: '4px', fontSize: '16px', fontWeight: '600', color: 'white' }}>
+                      {stockTotal}
+                    </div>
+                  </div>
+                  <div style={{
+                    padding: '8px 12px', background: '#e8f8f5', color: '#16a085',
+                    borderRadius: '4px', fontSize: '11px', textAlign: 'center'
+                  }}>
+                    Editar stock<br/>desde Variantes
+                  </div>
+                  {/* Indicador visual */}
+                  <div style={{
+                    width: '12px', height: '12px', borderRadius: '50%',
+                    background: stockTotal > 10 ? colors.olive : stockTotal > 0 ? '#F7B731' : colors.terracotta
+                  }} title={stockTotal > 10 ? 'Stock OK' : stockTotal > 0 ? 'Stock bajo' : 'Sin stock'} />
+                </div>
+              ) : (
+                /* Stock para productos SIN variantes (original) */
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <label style={{ display: 'block', fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>
+                      STOCK ACTUAL
+                    </label>
+                    <div style={{
+                      padding: '8px 12px',
+                      background: colors.sand,
+                      borderRadius: '6px',
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      color: colors.sidebarBg,
+                      minWidth: '60px'
+                    }}>
+                      {prod.stock || 0}
+                    </div>
+                  </div>
 
-                {isAdmin && (
-                  <button
-                    onClick={() => guardarStock(prod.id)}
-                    onMouseEnter={() => setHoverGuardar({ ...hoverGuardar, [prod.id]: true })}
-                    onMouseLeave={() => setHoverGuardar({ ...hoverGuardar, [prod.id]: false })}
-                    disabled={guardando}
-                    style={{
-                      padding: '10px 20px',
-                      background: hoverGuardar[prod.id] ? colors.sidebarText : colors.sidebarBg,
-                      color: hoverGuardar[prod.id] ? colors.sidebarBg : colors.sidebarText,
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: guardando ? 'not-allowed' : 'pointer',
-                      fontSize: '13px',
-                      fontWeight: '500',
-                      transition: 'all 0.3s ease',
-                      opacity: guardando ? 0.7 : 1
-                    }}
-                  >
-                    Guardar
-                  </button>
-                )}
+                  {isAdmin && (
+                    <div style={{ textAlign: 'center' }}>
+                      <label style={{ display: 'block', fontSize: '11px', color: colors.sidebarBg, marginBottom: '5px' }}>
+                        AGREGAR (+/-)
+                      </label>
+                      <input
+                        type="number"
+                        value={cantidadAgregar[prod.id] || 0}
+                        onChange={(e) => setCantidadAgregar({ ...cantidadAgregar, [prod.id]: e.target.value })}
+                        style={inputStyle}
+                        placeholder="0"
+                      />
+                    </div>
+                  )}
 
-                {/* Indicador visual de stock */}
-                <div style={{
-                  width: '12px',
-                  height: '12px',
-                  borderRadius: '50%',
-                  background: (prod.stock || 0) > 10 ? colors.olive :
-                              (prod.stock || 0) > 0 ? '#F7B731' : colors.terracotta
-                }} title={
-                  (prod.stock || 0) > 10 ? 'Stock OK' :
-                  (prod.stock || 0) > 0 ? 'Stock bajo' : 'Sin stock'
-                } />
-              </div>
+                  {isAdmin && (
+                    <button
+                      onClick={() => guardarStock(prod.id)}
+                      onMouseEnter={() => setHoverGuardar({ ...hoverGuardar, [prod.id]: true })}
+                      onMouseLeave={() => setHoverGuardar({ ...hoverGuardar, [prod.id]: false })}
+                      disabled={guardando}
+                      style={{
+                        padding: '10px 20px',
+                        background: hoverGuardar[prod.id] ? colors.sidebarText : colors.sidebarBg,
+                        color: hoverGuardar[prod.id] ? colors.sidebarBg : colors.sidebarText,
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: guardando ? 'not-allowed' : 'pointer',
+                        fontSize: '13px',
+                        fontWeight: '500',
+                        transition: 'all 0.3s ease',
+                        opacity: guardando ? 0.7 : 1
+                      }}
+                    >
+                      Guardar
+                    </button>
+                  )}
+
+                  <div style={{
+                    width: '12px', height: '12px', borderRadius: '50%',
+                    background: (prod.stock || 0) > 10 ? colors.olive : (prod.stock || 0) > 0 ? '#F7B731' : colors.terracotta
+                  }} title={(prod.stock || 0) > 10 ? 'Stock OK' : (prod.stock || 0) > 0 ? 'Stock bajo' : 'Sin stock'} />
+                </div>
+              )}
             </div>
-          ))}
+          );
+          })}
         </div>
       ) : (
         <div style={{ background: colors.cotton, border: '2px solid #DA9F17', padding: '40px', textAlign: 'center', borderRadius: '8px' }}>
