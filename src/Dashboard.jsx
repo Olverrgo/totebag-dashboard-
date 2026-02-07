@@ -4307,6 +4307,67 @@ const StocksView = ({ isAdmin }) => {
         )}
       </div>
 
+      {/* Resumen de inventario */}
+      {productosGuardados.length > 0 && (() => {
+        let totalUnidades = 0;
+        let totalValor = 0;
+        let totalConsignacion = 0;
+
+        productosGuardados.forEach(prod => {
+          if (prod.tiene_variantes) {
+            // Sumar de variantes
+            const variantesActivas = (prod.variantes || []).filter(v => v.activo !== false);
+            variantesActivas.forEach(v => {
+              const stock = v.stock || 0;
+              const consig = v.stock_consignacion || 0;
+              const costo = parseFloat(v.costo_unitario) || 0;
+              totalUnidades += stock;
+              totalConsignacion += consig;
+              totalValor += (stock + consig) * costo;
+            });
+          } else {
+            // Producto sin variantes
+            const stock = prod.stock || 0;
+            const consig = prod.stock_consignacion || 0;
+            const costo = parseFloat(prod.costo_total_1_tinta) || 0;
+            totalUnidades += stock;
+            totalConsignacion += consig;
+            totalValor += (stock + consig) * costo;
+          }
+        });
+
+        return (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '15px',
+            marginBottom: '25px'
+          }}>
+            <div style={{
+              background: colors.sidebarBg, color: 'white', padding: '20px',
+              borderRadius: '10px', textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '5px' }}>UNIDADES EN TALLER</div>
+              <div style={{ fontSize: '32px', fontWeight: '700' }}>{totalUnidades}</div>
+            </div>
+            <div style={{
+              background: colors.terracotta, color: 'white', padding: '20px',
+              borderRadius: '10px', textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '12px', opacity: 0.9, marginBottom: '5px' }}>EN CONSIGNACIÓN</div>
+              <div style={{ fontSize: '32px', fontWeight: '700' }}>{totalConsignacion}</div>
+            </div>
+            <div style={{
+              background: 'linear-gradient(135deg, #16a085, #1abc9c)', color: 'white', padding: '20px',
+              borderRadius: '10px', textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '12px', opacity: 0.9, marginBottom: '5px' }}>VALOR TOTAL INVENTARIO</div>
+              <div style={{ fontSize: '32px', fontWeight: '700' }}>${totalValor.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Mensaje de estado */}
       {mensaje.texto && (
         <div style={{
@@ -4336,6 +4397,17 @@ const StocksView = ({ isAdmin }) => {
             const stockConsig = tieneVariantes ? (prod.stock_consignacion_variantes || 0) : (prod.stock_consignacion || 0);
             const stockTotal = stockTaller + stockConsig;
             const numVariantes = prod.variantes?.filter(v => v.activo !== false)?.length || 0;
+
+            // Calcular valor del inventario
+            let valorInventario = 0;
+            if (tieneVariantes) {
+              const variantesActivas = (prod.variantes || []).filter(v => v.activo !== false);
+              variantesActivas.forEach(v => {
+                valorInventario += ((v.stock || 0) + (v.stock_consignacion || 0)) * (parseFloat(v.costo_unitario) || 0);
+              });
+            } else {
+              valorInventario = stockTotal * (parseFloat(prod.costo_total_1_tinta) || 0);
+            }
 
             return (
             <div key={prod.id} style={{
@@ -4391,11 +4463,11 @@ const StocksView = ({ isAdmin }) => {
                       {stockTotal}
                     </div>
                   </div>
-                  <div style={{
-                    padding: '8px 12px', background: '#e8f8f5', color: '#16a085',
-                    borderRadius: '4px', fontSize: '11px', textAlign: 'center'
-                  }}>
-                    Editar stock<br/>desde Variantes
+                  <div style={{ textAlign: 'center' }}>
+                    <label style={{ display: 'block', fontSize: '10px', color: colors.camel, marginBottom: '3px' }}>VALOR</label>
+                    <div style={{ padding: '6px 12px', background: '#1abc9c', borderRadius: '4px', fontSize: '14px', fontWeight: '600', color: 'white' }}>
+                      ${valorInventario.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    </div>
                   </div>
                   {/* Indicador visual */}
                   <div style={{
@@ -4420,6 +4492,23 @@ const StocksView = ({ isAdmin }) => {
                       minWidth: '60px'
                     }}>
                       {prod.stock || 0}
+                    </div>
+                  </div>
+
+                  <div style={{ textAlign: 'center' }}>
+                    <label style={{ display: 'block', fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>
+                      VALOR
+                    </label>
+                    <div style={{
+                      padding: '8px 12px',
+                      background: '#1abc9c',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      color: 'white',
+                      minWidth: '80px'
+                    }}>
+                      ${valorInventario.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                     </div>
                   </div>
 
