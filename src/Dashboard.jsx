@@ -4307,62 +4307,100 @@ const StocksView = ({ isAdmin }) => {
         )}
       </div>
 
-      {/* Resumen de inventario */}
+      {/* Resumen de inventario por línea/categoría */}
       {productosGuardados.length > 0 && (() => {
-        let totalUnidades = 0;
-        let totalValor = 0;
-        let totalConsignacion = 0;
+        // Agrupar por categoría
+        const porCategoria = {};
+        let totalGeneral = { taller: 0, consignacion: 0, valorTaller: 0, valorConsig: 0 };
 
         productosGuardados.forEach(prod => {
+          const catNombre = prod.categoria?.nombre || 'Sin Categoría';
+          if (!porCategoria[catNombre]) {
+            porCategoria[catNombre] = { taller: 0, consignacion: 0, valorTaller: 0, valorConsig: 0 };
+          }
+
           if (prod.tiene_variantes) {
-            // Sumar de variantes
             const variantesActivas = (prod.variantes || []).filter(v => v.activo !== false);
             variantesActivas.forEach(v => {
               const stock = v.stock || 0;
               const consig = v.stock_consignacion || 0;
               const costo = parseFloat(v.costo_unitario) || 0;
-              totalUnidades += stock;
-              totalConsignacion += consig;
-              totalValor += (stock + consig) * costo;
+              porCategoria[catNombre].taller += stock;
+              porCategoria[catNombre].consignacion += consig;
+              porCategoria[catNombre].valorTaller += stock * costo;
+              porCategoria[catNombre].valorConsig += consig * costo;
+              totalGeneral.taller += stock;
+              totalGeneral.consignacion += consig;
+              totalGeneral.valorTaller += stock * costo;
+              totalGeneral.valorConsig += consig * costo;
             });
           } else {
-            // Producto sin variantes
             const stock = prod.stock || 0;
             const consig = prod.stock_consignacion || 0;
             const costo = parseFloat(prod.costo_total_1_tinta) || 0;
-            totalUnidades += stock;
-            totalConsignacion += consig;
-            totalValor += (stock + consig) * costo;
+            porCategoria[catNombre].taller += stock;
+            porCategoria[catNombre].consignacion += consig;
+            porCategoria[catNombre].valorTaller += stock * costo;
+            porCategoria[catNombre].valorConsig += consig * costo;
+            totalGeneral.taller += stock;
+            totalGeneral.consignacion += consig;
+            totalGeneral.valorTaller += stock * costo;
+            totalGeneral.valorConsig += consig * costo;
           }
         });
 
+        const categorias = Object.keys(porCategoria);
+
         return (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '15px',
-            marginBottom: '25px'
-          }}>
+          <div style={{ marginBottom: '25px' }}>
+            {/* Tabla de resumen por línea */}
             <div style={{
-              background: colors.sidebarBg, color: 'white', padding: '20px',
-              borderRadius: '10px', textAlign: 'center'
+              background: 'white',
+              borderRadius: '10px',
+              overflow: 'hidden',
+              border: `2px solid ${colors.sand}`
             }}>
-              <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '5px' }}>UNIDADES EN TALLER</div>
-              <div style={{ fontSize: '32px', fontWeight: '700' }}>{totalUnidades}</div>
-            </div>
-            <div style={{
-              background: colors.terracotta, color: 'white', padding: '20px',
-              borderRadius: '10px', textAlign: 'center'
-            }}>
-              <div style={{ fontSize: '12px', opacity: 0.9, marginBottom: '5px' }}>EN CONSIGNACIÓN</div>
-              <div style={{ fontSize: '32px', fontWeight: '700' }}>{totalConsignacion}</div>
-            </div>
-            <div style={{
-              background: 'linear-gradient(135deg, #16a085, #1abc9c)', color: 'white', padding: '20px',
-              borderRadius: '10px', textAlign: 'center'
-            }}>
-              <div style={{ fontSize: '12px', opacity: 0.9, marginBottom: '5px' }}>VALOR TOTAL INVENTARIO</div>
-              <div style={{ fontSize: '32px', fontWeight: '700' }}>${totalValor.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: colors.sidebarBg, color: 'white' }}>
+                    <th style={{ padding: '12px 15px', textAlign: 'left', fontWeight: '600' }}>LÍNEA</th>
+                    <th style={{ padding: '12px 15px', textAlign: 'center', fontWeight: '600' }}>TALLER</th>
+                    <th style={{ padding: '12px 15px', textAlign: 'center', fontWeight: '600' }}>VALOR TALLER</th>
+                    <th style={{ padding: '12px 15px', textAlign: 'center', fontWeight: '600' }}>CONSIG.</th>
+                    <th style={{ padding: '12px 15px', textAlign: 'center', fontWeight: '600' }}>VALOR CONSIG.</th>
+                    <th style={{ padding: '12px 15px', textAlign: 'center', fontWeight: '600', background: '#16a085' }}>TOTAL</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {categorias.map((cat, idx) => {
+                    const data = porCategoria[cat];
+                    const valorTotal = data.valorTaller + data.valorConsig;
+                    return (
+                      <tr key={cat} style={{ background: idx % 2 === 0 ? colors.cotton : 'white' }}>
+                        <td style={{ padding: '12px 15px', fontWeight: '600', color: colors.sidebarBg }}>{cat}</td>
+                        <td style={{ padding: '12px 15px', textAlign: 'center', color: colors.olive, fontWeight: '600' }}>{data.taller}</td>
+                        <td style={{ padding: '12px 15px', textAlign: 'center', color: colors.olive }}>${data.valorTaller.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+                        <td style={{ padding: '12px 15px', textAlign: 'center', color: colors.terracotta, fontWeight: '600' }}>{data.consignacion}</td>
+                        <td style={{ padding: '12px 15px', textAlign: 'center', color: colors.terracotta }}>${data.valorConsig.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+                        <td style={{ padding: '12px 15px', textAlign: 'center', fontWeight: '700', color: '#16a085', background: 'rgba(22,160,133,0.1)' }}>
+                          ${valorTotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {/* Fila de totales */}
+                  <tr style={{ background: colors.sidebarBg, color: 'white', fontWeight: '700' }}>
+                    <td style={{ padding: '12px 15px' }}>TOTAL GENERAL</td>
+                    <td style={{ padding: '12px 15px', textAlign: 'center' }}>{totalGeneral.taller}</td>
+                    <td style={{ padding: '12px 15px', textAlign: 'center' }}>${totalGeneral.valorTaller.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+                    <td style={{ padding: '12px 15px', textAlign: 'center' }}>{totalGeneral.consignacion}</td>
+                    <td style={{ padding: '12px 15px', textAlign: 'center' }}>${totalGeneral.valorConsig.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</td>
+                    <td style={{ padding: '12px 15px', textAlign: 'center', background: '#16a085', fontSize: '16px' }}>
+                      ${(totalGeneral.valorTaller + totalGeneral.valorConsig).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         );
