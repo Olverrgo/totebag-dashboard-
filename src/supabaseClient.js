@@ -898,6 +898,77 @@ export const updateStockVariante = async (id, stockTaller, stockConsignacion = n
   return { data, error: handleRLSError(error) };
 };
 
+// Subir imagen de variante a Supabase Storage
+export const uploadImagenVariante = async (file, varianteId) => {
+  if (!supabase) return { url: null, error: 'Supabase no configurado' };
+
+  try {
+    // Generar nombre único para el archivo
+    const fileExt = file.name.split('.').pop();
+    const fileName = `variante-${varianteId}-${Date.now()}.${fileExt}`;
+    const filePath = `variantes/${fileName}`;
+
+    // Subir archivo al bucket
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('variantes-imagenes')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true
+      });
+
+    if (uploadError) {
+      return { url: null, error: uploadError.message };
+    }
+
+    // Obtener URL pública
+    const { data: urlData } = supabase.storage
+      .from('variantes-imagenes')
+      .getPublicUrl(filePath);
+
+    const publicUrl = urlData?.publicUrl;
+
+    // Actualizar la variante con la URL de la imagen
+    if (publicUrl) {
+      await supabase
+        .from('variantes_producto')
+        .update({ imagen_url: publicUrl })
+        .eq('id', varianteId);
+    }
+
+    return { url: publicUrl, error: null };
+  } catch (err) {
+    return { url: null, error: err.message };
+  }
+};
+
+// Eliminar imagen de variante
+export const deleteImagenVariante = async (varianteId, imagenUrl) => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+
+  try {
+    // Extraer el path del archivo de la URL
+    const urlParts = imagenUrl.split('/variantes-imagenes/');
+    if (urlParts.length > 1) {
+      const filePath = urlParts[1];
+
+      // Eliminar del storage
+      await supabase.storage
+        .from('variantes-imagenes')
+        .remove([filePath]);
+    }
+
+    // Limpiar la URL en la variante
+    await supabase
+      .from('variantes_producto')
+      .update({ imagen_url: null })
+      .eq('id', varianteId);
+
+    return { error: null };
+  } catch (err) {
+    return { error: err.message };
+  }
+};
+
 // Obtener resumen de variantes por producto
 export const getResumenVariantes = async (productoId) => {
   if (!supabase) return { data: null, error: 'Supabase no configurado' };

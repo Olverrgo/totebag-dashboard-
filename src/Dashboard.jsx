@@ -43,6 +43,8 @@ import {
   updateVariante,
   deleteVariante,
   updateStockVariante,
+  uploadImagenVariante,
+  deleteImagenVariante,
   getConfiguracionesCorte,
   getConfiguracionActual,
   createConfiguracionCorte,
@@ -1107,8 +1109,10 @@ const ProductosView = ({ isAdmin }) => {
     talla: '',
     stock: 0,
     costo_unitario: 0,
-    precio_venta: 0
+    precio_venta: 0,
+    imagen_url: ''
   });
+  const [subiendoImagenVariante, setSubiendoImagenVariante] = useState(false);
 
   // Estados para configuración de corte
   const [mostrarConfigCorte, setMostrarConfigCorte] = useState(false);
@@ -1371,7 +1375,8 @@ const ProductosView = ({ isAdmin }) => {
       talla: variante.talla || '',
       stock: variante.stock || 0,
       costo_unitario: parseFloat(variante.costo_unitario) || 0,
-      precio_venta: parseFloat(variante.precio_venta) || 0
+      precio_venta: parseFloat(variante.precio_venta) || 0,
+      imagen_url: variante.imagen_url || ''
     });
     setMostrarFormVariante(true);
   };
@@ -3662,6 +3667,79 @@ const ProductosView = ({ isAdmin }) => {
                     />
                   </div>
                 </div>
+
+                {/* Imagen de la variante */}
+                <div style={{ marginTop: '15px', padding: '15px', background: colors.cotton, borderRadius: '8px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', color: colors.espresso, marginBottom: '10px', fontWeight: '600' }}>
+                    Imagen de la Variante
+                  </label>
+                  <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                    {/* Preview de imagen actual */}
+                    {formVariante.imagen_url && (
+                      <div style={{ position: 'relative' }}>
+                        <img
+                          src={formVariante.imagen_url}
+                          alt="Variante"
+                          style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '8px', border: `2px solid ${colors.sand}` }}
+                        />
+                        <button
+                          onClick={async () => {
+                            if (varianteEditando && formVariante.imagen_url) {
+                              await deleteImagenVariante(varianteEditando.id, formVariante.imagen_url);
+                              setFormVariante({ ...formVariante, imagen_url: '' });
+                              setVariantes(variantes.map(v => v.id === varianteEditando.id ? { ...v, imagen_url: null } : v));
+                            } else {
+                              setFormVariante({ ...formVariante, imagen_url: '' });
+                            }
+                          }}
+                          style={{
+                            position: 'absolute', top: '-8px', right: '-8px',
+                            background: colors.terracotta, color: 'white',
+                            border: 'none', borderRadius: '50%', width: '24px', height: '24px',
+                            cursor: 'pointer', fontSize: '14px', fontWeight: 'bold'
+                          }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )}
+                    {/* Input para subir imagen */}
+                    <div style={{ flex: 1, minWidth: '200px' }}>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        disabled={subiendoImagenVariante || !varianteEditando}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (file && varianteEditando) {
+                            setSubiendoImagenVariante(true);
+                            const { url, error } = await uploadImagenVariante(file, varianteEditando.id);
+                            if (url) {
+                              setFormVariante({ ...formVariante, imagen_url: url });
+                              setVariantes(variantes.map(v => v.id === varianteEditando.id ? { ...v, imagen_url: url } : v));
+                              setMensaje({ tipo: 'exito', texto: 'Imagen subida correctamente' });
+                            } else {
+                              setMensaje({ tipo: 'error', texto: 'Error al subir imagen: ' + (error || 'Desconocido') });
+                            }
+                            setSubiendoImagenVariante(false);
+                            setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+                          }
+                          e.target.value = '';
+                        }}
+                        style={{ display: 'block', marginBottom: '8px' }}
+                      />
+                      {subiendoImagenVariante && (
+                        <div style={{ color: colors.camel, fontSize: '12px' }}>Subiendo imagen...</div>
+                      )}
+                      {!varianteEditando && (
+                        <div style={{ color: colors.camel, fontSize: '12px' }}>
+                          Guarda la variante primero para poder subir imagen
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
                   <button
                     onClick={() => { setMostrarFormVariante(false); setVarianteEditando(null); }}
@@ -3690,6 +3768,28 @@ const ProductosView = ({ isAdmin }) => {
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     flexWrap: 'wrap', gap: '10px'
                   }}>
+                    {/* Imagen de la variante */}
+                    <div style={{ width: '70px', height: '70px', flexShrink: 0 }}>
+                      {v.imagen_url ? (
+                        <img
+                          src={v.imagen_url}
+                          alt={`${v.material || ''} ${v.color || ''}`}
+                          style={{
+                            width: '70px', height: '70px', objectFit: 'cover',
+                            borderRadius: '8px', border: `2px solid ${colors.sand}`
+                          }}
+                        />
+                      ) : (
+                        <div style={{
+                          width: '70px', height: '70px', background: colors.cotton,
+                          borderRadius: '8px', border: `2px dashed ${colors.sand}`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: '24px', color: colors.camel
+                        }}>
+                          📷
+                        </div>
+                      )}
+                    </div>
                     <div style={{ flex: 1, minWidth: '200px' }}>
                       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '5px' }}>
                         {v.material && (
