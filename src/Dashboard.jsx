@@ -4208,6 +4208,8 @@ const ProductosView = ({ isAdmin }) => {
 const StocksView = ({ isAdmin }) => {
   const [productosGuardados, setProductosGuardados] = useState([]);
   const [cantidadAgregar, setCantidadAgregar] = useState({});
+  const [cantidadVariante, setCantidadVariante] = useState({}); // Para variantes: { varianteId: cantidad }
+  const [expandido, setExpandido] = useState({}); // Productos expandidos para ver variantes
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
   const [hoverGuardar, setHoverGuardar] = useState({});
@@ -4221,15 +4223,71 @@ const StocksView = ({ isAdmin }) => {
           setProductosGuardados(data);
           // Inicializar cantidad a agregar en 0 para todos
           const cantidadInicial = {};
+          const cantidadVarianteInicial = {};
           data.forEach(prod => {
             cantidadInicial[prod.id] = 0;
+            // Inicializar cantidades de variantes
+            if (prod.variantes) {
+              prod.variantes.forEach(v => {
+                cantidadVarianteInicial[v.id] = 0;
+              });
+            }
           });
           setCantidadAgregar(cantidadInicial);
+          setCantidadVariante(cantidadVarianteInicial);
         }
       }
     };
     cargarProductos();
   }, []);
+
+  // Guardar stock de una variante
+  const guardarStockVariante = async (variante, productoId) => {
+    if (!isAdmin) {
+      setMensaje({ tipo: 'error', texto: 'Solo administradores pueden modificar el stock' });
+      return;
+    }
+
+    const cantidad = parseInt(cantidadVariante[variante.id]) || 0;
+    if (cantidad === 0) {
+      setMensaje({ tipo: 'info', texto: 'No hay cambios' });
+      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+      return;
+    }
+
+    const nuevoStock = (variante.stock || 0) + cantidad;
+    if (nuevoStock < 0) {
+      setMensaje({ tipo: 'error', texto: 'El stock no puede ser negativo' });
+      return;
+    }
+
+    setGuardando(true);
+    try {
+      const { error } = await updateStockVariante(variante.id, nuevoStock);
+      if (error) {
+        setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
+      } else {
+        setMensaje({ tipo: 'exito', texto: `Stock actualizado: ${variante.stock || 0} + ${cantidad} = ${nuevoStock}` });
+        // Actualizar lista local
+        setProductosGuardados(productosGuardados.map(p => {
+          if (p.id === productoId && p.variantes) {
+            return {
+              ...p,
+              variantes: p.variantes.map(v => v.id === variante.id ? { ...v, stock: nuevoStock } : v),
+              stock_variantes: (p.stock_variantes || 0) + cantidad
+            };
+          }
+          return p;
+        }));
+        setCantidadVariante({ ...cantidadVariante, [variante.id]: 0 });
+        setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+      }
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: 'Error: ' + err.message });
+    } finally {
+      setGuardando(false);
+    }
+  };
 
   // Guardar stock de un producto (suma al stock actual)
   const guardarStock = async (productoId) => {
@@ -4514,7 +4572,8 @@ const StocksView = ({ isAdmin }) => {
             }
 
             return (
-            <div key={prod.id} style={{
+            <React.Fragment key={prod.id}>
+            <div style={{
               background: colors.cotton,
               border: `2px solid ${tieneVariantes ? '#16a085' : '#DA9F17'}`,
               padding: '20px',
@@ -4573,6 +4632,19 @@ const StocksView = ({ isAdmin }) => {
                       ${valorInventario.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                     </div>
                   </div>
+                  {/* Botón expandir variantes */}
+                  {isAdmin && (
+                    <button
+                      onClick={() => setExpandido({ ...expandido, [prod.id]: !expandido[prod.id] })}
+                      style={{
+                        padding: '8px 15px', background: expandido[prod.id] ? colors.terracotta : '#16a085',
+                        color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer',
+                        fontSize: '12px', fontWeight: '500'
+                      }}
+                    >
+                      {expandido[prod.id] ? '▲ Cerrar' : '▼ Editar Stock'}
+                    </button>
+                  )}
                   {/* Indicador visual */}
                   <div style={{
                     width: '12px', height: '12px', borderRadius: '50%',
@@ -4661,6 +4733,77 @@ const StocksView = ({ isAdmin }) => {
                 </div>
               )}
             </div>
+
+            {/* Panel expandible de variantes */}
+            {tieneVariantes && expandido[prod.id] && (
+              <div style={{
+                background: '#f0faf8',
+                border: '2px solid #16a085',
+                borderTop: 'none',
+                borderRadius: '0 0 8px 8px',
+                padding: '15px',
+                marginTop: '-8px'
+              }}>
+                <div style={{ fontSize: '12px', fontWeight: '600', color: '#16a085', marginBottom: '10px' }}>
+                  Editar stock por variante:
+                </div>
+                <div style={{ display: 'grid', gap: '8px' }}>
+                  {(prod.variantes || []).filter(v => v.activo !== false).map(v => {
+                    const nombreVar = [v.material, v.color, v.talla].filter(Boolean).join(' / ') || 'Sin especificar';
+                    return (
+                      <div key={v.id} style={{
+                        display: 'flex', alignItems: 'center', gap: '12px',
+                        background: 'white', padding: '10px 12px', borderRadius: '6px',
+                        border: '1px solid #ddd'
+                      }}>
+                        {/* Imagen miniatura */}
+                        {v.imagen_url ? (
+                          <img src={v.imagen_url} alt="" style={{ width: '36px', height: '36px', borderRadius: '4px', objectFit: 'cover' }} />
+                        ) : (
+                          <div style={{ width: '36px', height: '36px', background: '#eee', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>📦</div>
+                        )}
+                        {/* Nombre variante */}
+                        <div style={{ flex: 1, minWidth: '120px' }}>
+                          <div style={{ fontWeight: '600', fontSize: '13px', color: colors.espresso }}>{nombreVar}</div>
+                          <div style={{ fontSize: '10px', color: colors.camel }}>SKU: {v.sku || '-'}</div>
+                        </div>
+                        {/* Stock actual */}
+                        <div style={{ textAlign: 'center', minWidth: '60px' }}>
+                          <div style={{ fontSize: '10px', color: colors.camel }}>ACTUAL</div>
+                          <div style={{ fontSize: '16px', fontWeight: '700', color: colors.olive }}>{v.stock || 0}</div>
+                        </div>
+                        {/* Input agregar */}
+                        <div style={{ textAlign: 'center' }}>
+                          <div style={{ fontSize: '10px', color: colors.sidebarBg }}>AGREGAR (+/-)</div>
+                          <input
+                            type="number"
+                            value={cantidadVariante[v.id] || 0}
+                            onChange={(e) => setCantidadVariante({ ...cantidadVariante, [v.id]: e.target.value })}
+                            style={{
+                              width: '70px', padding: '6px', border: '2px solid #16a085',
+                              borderRadius: '4px', fontSize: '14px', textAlign: 'center'
+                            }}
+                          />
+                        </div>
+                        {/* Botón guardar */}
+                        <button
+                          onClick={() => guardarStockVariante(v, prod.id)}
+                          disabled={guardando}
+                          style={{
+                            padding: '8px 12px', background: '#16a085', color: 'white',
+                            border: 'none', borderRadius: '4px', cursor: 'pointer',
+                            fontSize: '12px', fontWeight: '500'
+                          }}
+                        >
+                          Guardar
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </React.Fragment>
           );
           })}
         </div>
