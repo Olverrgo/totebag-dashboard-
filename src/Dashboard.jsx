@@ -4481,7 +4481,7 @@ const StocksView = ({ isAdmin }) => {
                               <tr key={vIdx} style={{ background: 'white' }}>
                                 <td style={{ padding: '6px 12px', paddingLeft: '45px', color: colors.camel, fontSize: '12px' }}>
                                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                                    {v.imagen && <img src={v.imagen} alt="" style={{ width: '24px', height: '24px', borderRadius: '4px', objectFit: 'cover' }} />}
+                                    {v.imagen && <img src={v.imagen} alt="" onClick={() => setImagenPopup({ url: v.imagen, nombre: v.nombre })} style={{ width: '24px', height: '24px', borderRadius: '4px', objectFit: 'cover', cursor: 'pointer' }} />}
                                     ↳ {v.nombre}
                                   </span>
                                 </td>
@@ -4758,7 +4758,7 @@ const StocksView = ({ isAdmin }) => {
                       }}>
                         {/* Imagen miniatura */}
                         {v.imagen_url ? (
-                          <img src={v.imagen_url} alt="" style={{ width: '36px', height: '36px', borderRadius: '4px', objectFit: 'cover' }} />
+                          <img src={v.imagen_url} alt="" onClick={() => setImagenPopup({ url: v.imagen_url, nombre: nombreVar })} style={{ width: '36px', height: '36px', borderRadius: '4px', objectFit: 'cover', cursor: 'pointer' }} />
                         ) : (
                           <div style={{ width: '36px', height: '36px', background: '#eee', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>📦</div>
                         )}
