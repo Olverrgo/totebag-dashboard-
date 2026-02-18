@@ -5281,10 +5281,10 @@ const SalidasView = ({ isAdmin }) => {
   };
 
   const tiposMovimiento = [
-    { id: 'consignacion', nombre: 'Consignación', desc: 'Entrega a negocio (siguen siendo tuyas)' },
-    { id: 'venta_directa', nombre: 'Venta Directa', desc: 'Venta al cliente (descuenta stock)' },
-    { id: 'venta_consignacion', nombre: 'Venta en Consignación', desc: 'El negocio vendió piezas' },
-    { id: 'devolucion', nombre: 'Devolución', desc: 'Regreso de piezas en consignación' }
+    { id: 'consignacion', nombre: 'Consignación', desc: 'Entregas producto al cliente, queda como cuenta por cobrar (pendiente de pago)' },
+    { id: 'venta_directa', nombre: 'Venta Directa', desc: 'El cliente paga al momento, se registra como venta cobrada' },
+    { id: 'venta_consignacion', nombre: 'Cobro de Consignación', desc: 'El cliente paga piezas que ya tenía en consignación (debe existir una consignación previa)' },
+    { id: 'devolucion', nombre: 'Devolución', desc: 'El cliente regresa piezas que tenía en consignación, vuelven al taller' }
   ];
 
   // Obtener historial de un cliente
