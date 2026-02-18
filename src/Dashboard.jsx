@@ -5022,8 +5022,34 @@ const SalidasView = ({ isAdmin }) => {
           cantidad: cantidad
         };
         result = await registrarDevolucionConsignacion(movimiento, datosDevolucion);
+      } else if (formSalida.tipoMovimiento === 'venta_directa') {
+        // Venta directa: crear movimiento + venta pagada
+        result = await createMovimientoStock(movimiento);
+
+        if (!result.error) {
+          const nombreVariante = variante ? [variante.material, variante.color, variante.talla].filter(Boolean).join(' / ') : '';
+          const ventaDirecta = {
+            producto_id: parseInt(formSalida.productoId),
+            cliente_id: parseInt(formSalida.clienteId),
+            movimiento_id: result.data?.id,
+            producto_nombre: (producto?.linea_nombre || 'Producto') + (nombreVariante ? ` - ${nombreVariante}` : ''),
+            producto_medidas: producto?.linea_medidas || '',
+            cliente_nombre: cliente?.nombre || 'Cliente',
+            cantidad: cantidad,
+            precio_unitario: parseFloat(formSalida.precioUnitario) || 0,
+            total: cantidad * (parseFloat(formSalida.precioUnitario) || 0),
+            costo_unitario: variante ? (parseFloat(variante.costo_unitario) || 0) : (parseFloat(producto?.costo_total_1_tinta) || 0),
+            tipo_venta: 'directa',
+            estado_pago: 'pagado',
+            monto_pagado: cantidad * (parseFloat(formSalida.precioUnitario) || 0),
+            metodo_pago: 'efectivo',
+            notas: formSalida.notas || `Venta directa - ${new Date().toLocaleDateString('es-MX')}`,
+            ...(formSalida.varianteId ? { variante_id: parseInt(formSalida.varianteId) } : {})
+          };
+          await createVenta(ventaDirecta);
+        }
       } else {
-        // Venta directa u otros: solo crear movimiento
+        // Otros: solo crear movimiento
         result = await createMovimientoStock(movimiento);
       }
 
@@ -5232,8 +5258,8 @@ const SalidasView = ({ isAdmin }) => {
         ));
       }
 
-      // 2. Si es consignación, eliminar la venta asociada
-      if (mov.tipo_movimiento === 'consignacion') {
+      // 2. Eliminar la venta asociada (consignación o venta directa)
+      if (mov.tipo_movimiento === 'consignacion' || mov.tipo_movimiento === 'venta_directa') {
         await deleteVentaPorMovimiento(mov.id);
       }
 
@@ -5498,12 +5524,14 @@ const SalidasView = ({ isAdmin }) => {
                 <input type="number" min="1" value={formSalida.cantidad} onChange={(e) => setFormSalida({ ...formSalida, cantidad: e.target.value })} style={inputStyle} />
               </div>
 
-              {/* Precio unitario - solo para consignaciones */}
-              {formSalida.tipoMovimiento === 'consignacion' && (
+              {/* Precio unitario - para consignaciones y ventas directas */}
+              {(formSalida.tipoMovimiento === 'consignacion' || formSalida.tipoMovimiento === 'venta_directa') && (
                 <div>
                   <label style={{ display: 'block', fontSize: '12px', color: colors.sidebarBg, marginBottom: '5px' }}>
                     Precio de Venta Unitario *
-                    <span style={{ color: colors.camel, fontWeight: 'normal' }}> (para cuenta por cobrar)</span>
+                    <span style={{ color: colors.camel, fontWeight: 'normal' }}>
+                      {formSalida.tipoMovimiento === 'consignacion' ? ' (para cuenta por cobrar)' : ' (precio de venta)'}
+                    </span>
                   </label>
                   <input
                     type="number"
@@ -5516,7 +5544,7 @@ const SalidasView = ({ isAdmin }) => {
                   />
                   {formSalida.cantidad > 0 && formSalida.precioUnitario > 0 && (
                     <div style={{ fontSize: '12px', color: colors.olive, marginTop: '5px', fontWeight: '600' }}>
-                      Total por cobrar: ${(parseFloat(formSalida.cantidad) * parseFloat(formSalida.precioUnitario)).toFixed(2)}
+                      {formSalida.tipoMovimiento === 'consignacion' ? 'Total por cobrar' : 'Total venta'}: ${(parseFloat(formSalida.cantidad) * parseFloat(formSalida.precioUnitario)).toFixed(2)}
                     </div>
                   )}
                 </div>
@@ -5851,9 +5879,9 @@ const SalidasView = ({ isAdmin }) => {
               <div style={{ fontSize: '13px', color: colors.camel }}>
                 Cantidad: {confirmEliminar.cantidad} pzas | Fecha: {new Date(confirmEliminar.fecha).toLocaleDateString('es-MX')}
               </div>
-              {confirmEliminar.tipo_movimiento === 'consignacion' && (
+              {(confirmEliminar.tipo_movimiento === 'consignacion' || confirmEliminar.tipo_movimiento === 'venta_directa') && (
                 <div style={{ fontSize: '12px', color: colors.terracotta, marginTop: '8px', fontWeight: '500' }}>
-                  Nota: También se eliminará la venta pendiente asociada a esta consignación.
+                  Nota: También se eliminará el registro de venta asociado.
                 </div>
               )}
             </div>
