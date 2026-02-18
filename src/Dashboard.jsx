@@ -5683,7 +5683,7 @@ const SalidasView = ({ isAdmin }) => {
                         {historial.consignaciones.map(mov => (
                           <div key={mov.id} style={{ background: '#FEF3E2', padding: '10px 15px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
-                              <div style={{ fontWeight: '500', color: colors.espresso, fontSize: '13px' }}>{mov.producto?.linea_nombre}</div>
+                              <div style={{ fontWeight: '500', color: colors.espresso, fontSize: '13px' }}>{mov.producto?.linea_nombre}{mov.variante && <span style={{ fontWeight: '400', color: colors.camel }}>{' - '}{[mov.variante.material, mov.variante.color, mov.variante.talla].filter(Boolean).join(' / ')}</span>}</div>
                               <div style={{ fontSize: '11px', color: colors.camel }}>{new Date(mov.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
                             </div>
                             <span style={{ fontWeight: '700', fontSize: '16px', color: '#F39C12' }}>{mov.cantidad} pzas</span>
@@ -5702,7 +5702,7 @@ const SalidasView = ({ isAdmin }) => {
                         {historial.ventasDirectas.map(mov => (
                           <div key={mov.id} style={{ background: '#E8F5E9', padding: '10px 15px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
-                              <div style={{ fontWeight: '500', color: colors.espresso, fontSize: '13px' }}>{mov.producto?.linea_nombre}</div>
+                              <div style={{ fontWeight: '500', color: colors.espresso, fontSize: '13px' }}>{mov.producto?.linea_nombre}{mov.variante && <span style={{ fontWeight: '400', color: colors.camel }}>{' - '}{[mov.variante.material, mov.variante.color, mov.variante.talla].filter(Boolean).join(' / ')}</span>}</div>
                               <div style={{ fontSize: '11px', color: colors.camel }}>{new Date(mov.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
                             </div>
                             <span style={{ fontWeight: '700', fontSize: '16px', color: colors.olive }}>{mov.cantidad} pzas</span>
@@ -5721,7 +5721,7 @@ const SalidasView = ({ isAdmin }) => {
                         {historial.ventasConsignacion.map(mov => (
                           <div key={mov.id} style={{ background: '#E3F2FD', padding: '10px 15px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
-                              <div style={{ fontWeight: '500', color: colors.espresso, fontSize: '13px' }}>{mov.producto?.linea_nombre}</div>
+                              <div style={{ fontWeight: '500', color: colors.espresso, fontSize: '13px' }}>{mov.producto?.linea_nombre}{mov.variante && <span style={{ fontWeight: '400', color: colors.camel }}>{' - '}{[mov.variante.material, mov.variante.color, mov.variante.talla].filter(Boolean).join(' / ')}</span>}</div>
                               <div style={{ fontSize: '11px', color: colors.camel }}>{new Date(mov.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
                             </div>
                             <span style={{ fontWeight: '700', fontSize: '16px', color: '#1976D2' }}>{mov.cantidad} pzas</span>
@@ -5740,7 +5740,7 @@ const SalidasView = ({ isAdmin }) => {
                         {historial.devoluciones.map(mov => (
                           <div key={mov.id} style={{ background: '#FFEBEE', padding: '10px 15px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
-                              <div style={{ fontWeight: '500', color: colors.espresso, fontSize: '13px' }}>{mov.producto?.linea_nombre}</div>
+                              <div style={{ fontWeight: '500', color: colors.espresso, fontSize: '13px' }}>{mov.producto?.linea_nombre}{mov.variante && <span style={{ fontWeight: '400', color: colors.camel }}>{' - '}{[mov.variante.material, mov.variante.color, mov.variante.talla].filter(Boolean).join(' / ')}</span>}</div>
                               <div style={{ fontSize: '11px', color: colors.camel }}>{new Date(mov.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
                             </div>
                             <span style={{ fontWeight: '700', fontSize: '16px', color: colors.terracotta }}>+{mov.cantidad} pzas</span>
@@ -5801,7 +5801,14 @@ const SalidasView = ({ isAdmin }) => {
                 gap: '10px'
               }}>
                 <div>
-                  <div style={{ fontWeight: '500', color: colors.espresso }}>{mov.producto?.linea_nombre}</div>
+                  <div style={{ fontWeight: '500', color: colors.espresso }}>
+                    {mov.producto?.linea_nombre}
+                    {mov.variante && (
+                      <span style={{ fontWeight: '400', color: colors.camel, fontSize: '13px' }}>
+                        {' - '}{[mov.variante.material, mov.variante.color, mov.variante.talla].filter(Boolean).join(' / ')}
+                      </span>
+                    )}
+                  </div>
                   <div style={{ fontSize: '12px', color: colors.camel }}>
                     <span
                       onClick={() => setClienteHistorial(mov.cliente)}

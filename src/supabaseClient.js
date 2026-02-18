@@ -1411,7 +1411,8 @@ export const getMovimientosStock = async () => {
     .select(`
       *,
       producto:productos(id, linea_nombre, linea_medidas),
-      cliente:clientes(id, nombre, tipo)
+      cliente:clientes(id, nombre, tipo),
+      variante:variantes_producto(id, material, color, talla, sku)
     `)
     .order('fecha', { ascending: false });
 
