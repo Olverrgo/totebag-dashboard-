@@ -4825,6 +4825,7 @@ const SalidasView = ({ isAdmin }) => {
   // Formulario de nueva salida
   const [formSalida, setFormSalida] = useState({
     productoId: '',
+    varianteId: '',
     clienteId: '',
     tipoMovimiento: 'consignacion',
     cantidad: 0,
@@ -4899,6 +4900,14 @@ const SalidasView = ({ isAdmin }) => {
       return;
     }
 
+    const producto = productos.find(p => p.id === parseInt(formSalida.productoId));
+
+    // Si tiene variantes, debe seleccionar una
+    if (producto?.tiene_variantes && !formSalida.varianteId) {
+      setMensaje({ tipo: 'error', texto: 'Selecciona una variante del producto' });
+      return;
+    }
+
     const cantidad = parseInt(formSalida.cantidad);
     if (cantidad <= 0) {
       setMensaje({ tipo: 'error', texto: 'La cantidad debe ser mayor a 0' });
@@ -4906,9 +4915,11 @@ const SalidasView = ({ isAdmin }) => {
     }
 
     // Verificar stock disponible segun tipo de movimiento
-    const producto = productos.find(p => p.id === parseInt(formSalida.productoId));
-    const stockTaller = producto?.tiene_variantes ? (producto?.stock_variantes || 0) : (producto?.stock || 0);
-    const stockConsignacion = producto?.tiene_variantes ? (producto?.stock_consignacion_variantes || 0) : (producto?.stock_consignacion || 0);
+    const variante = producto?.tiene_variantes
+      ? (producto.variantes || []).find(v => v.id === parseInt(formSalida.varianteId))
+      : null;
+    const stockTaller = variante ? (variante.stock || 0) : (producto?.stock || 0);
+    const stockConsignacion = variante ? (variante.stock_consignacion || 0) : (producto?.stock_consignacion || 0);
 
     // Validar segun tipo de movimiento
     if (formSalida.tipoMovimiento === 'consignacion' || formSalida.tipoMovimiento === 'venta_directa') {
@@ -4932,7 +4943,8 @@ const SalidasView = ({ isAdmin }) => {
         cliente_id: parseInt(formSalida.clienteId),
         tipo_movimiento: formSalida.tipoMovimiento,
         cantidad: cantidad,
-        notas: formSalida.notas
+        notas: formSalida.notas,
+        ...(formSalida.varianteId ? { variante_id: parseInt(formSalida.varianteId) } : {})
       };
 
       let result;
@@ -4941,16 +4953,18 @@ const SalidasView = ({ isAdmin }) => {
       // Manejar según tipo de movimiento
       if (formSalida.tipoMovimiento === 'consignacion') {
         // Consignación: crear movimiento + venta pendiente
+        const nombreVariante = variante ? [variante.material, variante.color, variante.talla].filter(Boolean).join(' / ') : '';
         const datosVenta = {
           producto_id: parseInt(formSalida.productoId),
           cliente_id: parseInt(formSalida.clienteId),
-          producto_nombre: producto?.linea_nombre || 'Producto',
+          producto_nombre: (producto?.linea_nombre || 'Producto') + (nombreVariante ? ` - ${nombreVariante}` : ''),
           producto_medidas: producto?.linea_medidas || '',
           cliente_nombre: cliente?.nombre || 'Cliente',
           cantidad: cantidad,
           precio_unitario: parseFloat(formSalida.precioUnitario) || 0,
-          costo_unitario: parseFloat(producto?.costo_total_1_tinta) || 0,
-          notas: formSalida.notas
+          costo_unitario: variante ? (parseFloat(variante.costo_unitario) || 0) : (parseFloat(producto?.costo_total_1_tinta) || 0),
+          notas: formSalida.notas,
+          ...(formSalida.varianteId ? { variante_id: parseInt(formSalida.varianteId) } : {})
         };
         result = await createConsignacionConVenta(movimiento, datosVenta);
       } else if (formSalida.tipoMovimiento === 'venta_consignacion') {
@@ -4979,53 +4993,84 @@ const SalidasView = ({ isAdmin }) => {
       if (error) {
         setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
       } else {
-        // Actualizar stock del producto segun tipo de movimiento
+        // Actualizar stock segun tipo de movimiento
         const productoId = parseInt(formSalida.productoId);
-        const stockActual = producto?.stock || 0;
-        const consignacionActual = producto?.stock_consignacion || 0;
 
-        if (formSalida.tipoMovimiento === 'venta_directa') {
-          // Venta directa: resta del stock en taller
-          await updateProducto(productoId, {
-            stock: stockActual - cantidad
-          });
-          setProductos(productos.map(p =>
-            p.id === productoId ? { ...p, stock: stockActual - cantidad } : p
-          ));
-        } else if (formSalida.tipoMovimiento === 'consignacion') {
-          // Consignacion: mueve de stock taller a stock consignacion
-          await updateProducto(productoId, {
-            stock: stockActual - cantidad,
-            stock_consignacion: consignacionActual + cantidad
-          });
-          setProductos(productos.map(p =>
-            p.id === productoId ? {
+        if (variante) {
+          // Producto CON variantes: actualizar stock de la variante
+          const vStockActual = variante.stock || 0;
+          const vConsigActual = variante.stock_consignacion || 0;
+          let nuevoStock = vStockActual;
+          let nuevaConsig = vConsigActual;
+
+          if (formSalida.tipoMovimiento === 'venta_directa') {
+            nuevoStock = vStockActual - cantidad;
+          } else if (formSalida.tipoMovimiento === 'consignacion') {
+            nuevoStock = vStockActual - cantidad;
+            nuevaConsig = vConsigActual + cantidad;
+          } else if (formSalida.tipoMovimiento === 'venta_consignacion') {
+            nuevaConsig = vConsigActual - cantidad;
+          } else if (formSalida.tipoMovimiento === 'devolucion') {
+            nuevoStock = vStockActual + cantidad;
+            nuevaConsig = vConsigActual - cantidad;
+          }
+
+          await updateStockVariante(variante.id, nuevoStock, nuevaConsig);
+
+          // Actualizar estado local
+          setProductos(productos.map(p => {
+            if (p.id !== productoId) return p;
+            const nuevasVariantes = (p.variantes || []).map(v =>
+              v.id === variante.id ? { ...v, stock: nuevoStock, stock_consignacion: nuevaConsig } : v
+            );
+            const variantesActivas = nuevasVariantes.filter(v => v.activo !== false);
+            return {
               ...p,
+              variantes: nuevasVariantes,
+              stock_variantes: variantesActivas.reduce((sum, v) => sum + (v.stock || 0), 0),
+              stock_consignacion_variantes: variantesActivas.reduce((sum, v) => sum + (v.stock_consignacion || 0), 0)
+            };
+          }));
+        } else {
+          // Producto SIN variantes: actualizar stock del producto
+          const stockActual = producto?.stock || 0;
+          const consignacionActual = producto?.stock_consignacion || 0;
+
+          if (formSalida.tipoMovimiento === 'venta_directa') {
+            await updateProducto(productoId, { stock: stockActual - cantidad });
+            setProductos(productos.map(p =>
+              p.id === productoId ? { ...p, stock: stockActual - cantidad } : p
+            ));
+          } else if (formSalida.tipoMovimiento === 'consignacion') {
+            await updateProducto(productoId, {
               stock: stockActual - cantidad,
               stock_consignacion: consignacionActual + cantidad
-            } : p
-          ));
-        } else if (formSalida.tipoMovimiento === 'venta_consignacion') {
-          // Venta en consignacion: resta del stock consignacion
-          await updateProducto(productoId, {
-            stock_consignacion: consignacionActual - cantidad
-          });
-          setProductos(productos.map(p =>
-            p.id === productoId ? { ...p, stock_consignacion: consignacionActual - cantidad } : p
-          ));
-        } else if (formSalida.tipoMovimiento === 'devolucion') {
-          // Devolucion: regresa de consignacion a taller
-          await updateProducto(productoId, {
-            stock: stockActual + cantidad,
-            stock_consignacion: consignacionActual - cantidad
-          });
-          setProductos(productos.map(p =>
-            p.id === productoId ? {
-              ...p,
+            });
+            setProductos(productos.map(p =>
+              p.id === productoId ? {
+                ...p,
+                stock: stockActual - cantidad,
+                stock_consignacion: consignacionActual + cantidad
+              } : p
+            ));
+          } else if (formSalida.tipoMovimiento === 'venta_consignacion') {
+            await updateProducto(productoId, { stock_consignacion: consignacionActual - cantidad });
+            setProductos(productos.map(p =>
+              p.id === productoId ? { ...p, stock_consignacion: consignacionActual - cantidad } : p
+            ));
+          } else if (formSalida.tipoMovimiento === 'devolucion') {
+            await updateProducto(productoId, {
               stock: stockActual + cantidad,
               stock_consignacion: consignacionActual - cantidad
-            } : p
-          ));
+            });
+            setProductos(productos.map(p =>
+              p.id === productoId ? {
+                ...p,
+                stock: stockActual + cantidad,
+                stock_consignacion: consignacionActual - cantidad
+              } : p
+            ));
+          }
         }
 
         setMensaje({ tipo: 'exito', texto: 'Salida registrada correctamente' });
@@ -5035,7 +5080,7 @@ const SalidasView = ({ isAdmin }) => {
         if (newMovs) setMovimientos(newMovs);
 
         // Resetear formulario
-        setFormSalida({ productoId: '', clienteId: '', tipoMovimiento: 'consignacion', cantidad: 0, precioUnitario: 0, notas: '' });
+        setFormSalida({ productoId: '', varianteId: '', clienteId: '', tipoMovimiento: 'consignacion', cantidad: 0, precioUnitario: 0, notas: '' });
         setMostrarFormulario(false);
         setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
       }
@@ -5253,14 +5298,45 @@ const SalidasView = ({ isAdmin }) => {
                     const prod = productos.find(p => p.id === parseInt(prodId));
                     // Auto-llenar precio sugerido desde precio_venta del producto
                     const precioSugerido = parseFloat(prod?.precio_venta) || (prod?.costo_total_1_tinta ? parseFloat(prod.costo_total_1_tinta) * 2 : 0);
-                    setFormSalida({ ...formSalida, productoId: prodId, precioUnitario: precioSugerido });
+                    setFormSalida({ ...formSalida, productoId: prodId, varianteId: '', precioUnitario: precioSugerido });
                   }}
                   style={inputStyle}
                 >
                   <option value="">Seleccionar producto...</option>
-                  {productos.map(p => <option key={p.id} value={p.id}>{p.linea_nombre} ({p.stock || 0} en stock)</option>)}
+                  {productos.map(p => {
+                    const stockDisp = p.tiene_variantes ? (p.stock_variantes || 0) : (p.stock || 0);
+                    return <option key={p.id} value={p.id}>{p.linea_nombre} ({stockDisp} en taller)</option>;
+                  })}
                 </select>
               </div>
+
+              {/* Selector de variante - solo si el producto tiene variantes */}
+              {(() => {
+                const prodSel = productos.find(p => p.id === parseInt(formSalida.productoId));
+                if (!prodSel?.tiene_variantes) return null;
+                const variantesActivas = (prodSel.variantes || []).filter(v => v.activo !== false);
+                return (
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: colors.sidebarBg, marginBottom: '5px' }}>Variante *</label>
+                    <select
+                      value={formSalida.varianteId}
+                      onChange={(e) => {
+                        const varId = e.target.value;
+                        const v = variantesActivas.find(va => va.id === parseInt(varId));
+                        const precioSugerido = parseFloat(v?.precio_venta) || parseFloat(v?.costo_unitario) * 2 || 0;
+                        setFormSalida({ ...formSalida, varianteId: varId, precioUnitario: precioSugerido });
+                      }}
+                      style={inputStyle}
+                    >
+                      <option value="">Seleccionar variante...</option>
+                      {variantesActivas.map(v => {
+                        const nombre = [v.material, v.color, v.talla].filter(Boolean).join(' / ') || 'Sin especificar';
+                        return <option key={v.id} value={v.id}>{nombre} (Taller: {v.stock || 0} | Consig: {v.stock_consignacion || 0})</option>;
+                      })}
+                    </select>
+                  </div>
+                );
+              })()}
 
               <div>
                 <label style={{ display: 'block', fontSize: '12px', color: colors.sidebarBg, marginBottom: '5px' }}>Cliente/Negocio *</label>
