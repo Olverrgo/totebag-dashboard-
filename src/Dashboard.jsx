@@ -4260,11 +4260,14 @@ const StocksView = ({ isAdmin }) => {
       return;
     }
 
-    const nuevoStock = (variante.stock || 0) + cantTaller;
+    // Consignación automática: sumar a consig resta del taller y viceversa
+    // cantTaller: ajuste directo al taller (ej: entrada de producción)
+    // cantConsig: mueve entre taller y consignación (+consig = -taller, -consig = +taller)
+    const nuevoStock = (variante.stock || 0) + cantTaller - cantConsig;
     const nuevaConsig = (variante.stock_consignacion || 0) + cantConsig;
 
     if (nuevoStock < 0) {
-      setMensaje({ tipo: 'error', texto: 'El stock en taller no puede ser negativo' });
+      setMensaje({ tipo: 'error', texto: `Stock insuficiente en taller. Disponible: ${variante.stock || 0}` });
       return;
     }
     if (nuevaConsig < 0) {
@@ -4279,8 +4282,8 @@ const StocksView = ({ isAdmin }) => {
         setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
       } else {
         const cambios = [];
-        if (cantTaller !== 0) cambios.push(`Taller: ${variante.stock || 0} → ${nuevoStock}`);
-        if (cantConsig !== 0) cambios.push(`Consig: ${variante.stock_consignacion || 0} → ${nuevaConsig}`);
+        cambios.push(`Taller: ${variante.stock || 0} → ${nuevoStock}`);
+        cambios.push(`Consig: ${variante.stock_consignacion || 0} → ${nuevaConsig}`);
         setMensaje({ tipo: 'exito', texto: `Stock actualizado. ${cambios.join(' | ')}` });
         // Actualizar lista local
         setProductosGuardados(productosGuardados.map(p => {
