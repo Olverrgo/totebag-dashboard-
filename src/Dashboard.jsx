@@ -5165,16 +5165,84 @@ const SalidasView = ({ isAdmin }) => {
 
     setGuardando(true);
     try {
-      // Si es consignación, eliminar la venta asociada primero
+      // 1. Revertir el stock antes de eliminar
+      const producto = productos.find(p => p.id === mov.producto_id);
+      const cantidad = mov.cantidad || 0;
+
+      if (mov.variante_id && producto?.tiene_variantes) {
+        // Revertir stock de la variante
+        const variante = (producto.variantes || []).find(v => v.id === mov.variante_id);
+        if (variante) {
+          let nuevoStock = variante.stock || 0;
+          let nuevaConsig = variante.stock_consignacion || 0;
+
+          if (mov.tipo_movimiento === 'venta_directa') {
+            nuevoStock += cantidad; // devolver al taller
+          } else if (mov.tipo_movimiento === 'consignacion') {
+            nuevoStock += cantidad; // devolver al taller
+            nuevaConsig -= cantidad; // quitar de consignación
+          } else if (mov.tipo_movimiento === 'venta_consignacion') {
+            nuevaConsig += cantidad; // devolver a consignación
+          } else if (mov.tipo_movimiento === 'devolucion') {
+            nuevoStock -= cantidad; // quitar del taller
+            nuevaConsig += cantidad; // devolver a consignación
+          }
+
+          await updateStockVariante(variante.id, Math.max(0, nuevoStock), Math.max(0, nuevaConsig));
+
+          // Actualizar estado local
+          setProductos(productos.map(p => {
+            if (p.id !== mov.producto_id) return p;
+            const nuevasVariantes = (p.variantes || []).map(v =>
+              v.id === variante.id ? { ...v, stock: Math.max(0, nuevoStock), stock_consignacion: Math.max(0, nuevaConsig) } : v
+            );
+            const variantesActivas = nuevasVariantes.filter(v => v.activo !== false);
+            return {
+              ...p,
+              variantes: nuevasVariantes,
+              stock_variantes: variantesActivas.reduce((sum, v) => sum + (v.stock || 0), 0),
+              stock_consignacion_variantes: variantesActivas.reduce((sum, v) => sum + (v.stock_consignacion || 0), 0)
+            };
+          }));
+        }
+      } else if (producto) {
+        // Revertir stock del producto padre
+        let nuevoStock = producto.stock || 0;
+        let nuevaConsig = producto.stock_consignacion || 0;
+
+        if (mov.tipo_movimiento === 'venta_directa') {
+          nuevoStock += cantidad;
+        } else if (mov.tipo_movimiento === 'consignacion') {
+          nuevoStock += cantidad;
+          nuevaConsig -= cantidad;
+        } else if (mov.tipo_movimiento === 'venta_consignacion') {
+          nuevaConsig += cantidad;
+        } else if (mov.tipo_movimiento === 'devolucion') {
+          nuevoStock -= cantidad;
+          nuevaConsig += cantidad;
+        }
+
+        await updateProducto(mov.producto_id, {
+          stock: Math.max(0, nuevoStock),
+          stock_consignacion: Math.max(0, nuevaConsig)
+        });
+
+        setProductos(productos.map(p =>
+          p.id === mov.producto_id ? { ...p, stock: Math.max(0, nuevoStock), stock_consignacion: Math.max(0, nuevaConsig) } : p
+        ));
+      }
+
+      // 2. Si es consignación, eliminar la venta asociada
       if (mov.tipo_movimiento === 'consignacion') {
         await deleteVentaPorMovimiento(mov.id);
       }
 
+      // 3. Eliminar el movimiento
       const { error } = await deleteMovimientoStock(mov.id);
       if (error) {
         setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
       } else {
-        setMensaje({ tipo: 'exito', texto: 'Movimiento eliminado correctamente' });
+        setMensaje({ tipo: 'exito', texto: 'Movimiento eliminado y stock revertido correctamente' });
         setMovimientos(movimientos.filter(m => m.id !== mov.id));
         setConfirmEliminar(null);
         setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
@@ -5790,7 +5858,7 @@ const SalidasView = ({ isAdmin }) => {
               )}
             </div>
             <p style={{ fontSize: '14px', color: colors.espresso, marginBottom: '20px' }}>
-              Este movimiento se eliminará permanentemente. El stock NO se ajustará automáticamente, deberás corregirlo manualmente si es necesario.
+              Este movimiento se eliminará permanentemente y el stock se revertirá automáticamente a su estado anterior.
             </p>
             <div style={{ display: 'flex', gap: '10px' }}>
               <button
