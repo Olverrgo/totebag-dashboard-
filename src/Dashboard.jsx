@@ -5942,6 +5942,7 @@ const VentasView = ({ isAdmin }) => {
   const [filtroCliente, setFiltroCliente] = useState('todos');
   const [ventaEditando, setVentaEditando] = useState(null);
   const [mostrarPago, setMostrarPago] = useState(null); // ID de venta para registrar pago
+  const [clienteDesglose, setClienteDesglose] = useState(null); // ID cliente para ver desglose de deuda
 
   // Formulario de nueva venta
   const [formVenta, setFormVenta] = useState({
@@ -6334,6 +6335,104 @@ const VentasView = ({ isAdmin }) => {
           </div>
         </div>
       )}
+
+      {/* Cuentas por Cobrar por Cliente */}
+      {(() => {
+        const ventasPendientes = ventas.filter(v => v.estado_pago === 'pendiente' || v.estado_pago === 'parcial');
+        if (ventasPendientes.length === 0) return null;
+
+        // Agrupar por cliente
+        const porCliente = {};
+        ventasPendientes.forEach(v => {
+          const cId = v.cliente_id || 0;
+          const cNombre = v.cliente_nombre || 'Sin cliente';
+          if (!porCliente[cId]) {
+            porCliente[cId] = { nombre: cNombre, piezas: 0, montoPorCobrar: 0, ventas: [], ultimaFecha: null };
+          }
+          const pendiente = (v.total || 0) - (v.monto_pagado || 0);
+          porCliente[cId].piezas += v.cantidad || 0;
+          porCliente[cId].montoPorCobrar += pendiente;
+          porCliente[cId].ventas.push(v);
+          const fecha = v.created_at;
+          if (!porCliente[cId].ultimaFecha || fecha > porCliente[cId].ultimaFecha) {
+            porCliente[cId].ultimaFecha = fecha;
+          }
+        });
+
+        const clientesOrdenados = Object.entries(porCliente).sort((a, b) => b[1].montoPorCobrar - a[1].montoPorCobrar);
+        const totalPiezas = clientesOrdenados.reduce((sum, [, c]) => sum + c.piezas, 0);
+        const totalMonto = clientesOrdenados.reduce((sum, [, c]) => sum + c.montoPorCobrar, 0);
+
+        return (
+          <div style={{ marginBottom: '25px' }}>
+            <h3 style={{ margin: '0 0 15px', fontSize: '16px', color: colors.terracotta, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              Cuentas por Cobrar
+              <span style={{ background: 'rgba(196,120,74,0.15)', padding: '2px 10px', borderRadius: '12px', fontSize: '13px' }}>
+                {clientesOrdenados.length} cliente{clientesOrdenados.length !== 1 ? 's' : ''}
+              </span>
+            </h3>
+            <div style={{ background: 'white', borderRadius: '10px', overflow: 'hidden', border: `2px solid ${colors.terracotta}` }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ background: colors.terracotta, color: 'white' }}>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: '600' }}>CLIENTE</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: '600', width: '80px' }}>PIEZAS</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: '600', width: '130px' }}>POR COBRAR</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: '600', width: '120px' }}>ÚLTIMA ACTIVIDAD</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: '600', width: '60px' }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clientesOrdenados.map(([cId, cliente]) => (
+                    <React.Fragment key={cId}>
+                      <tr
+                        style={{ borderBottom: `1px solid ${colors.sand}`, cursor: 'pointer' }}
+                        onClick={() => setClienteDesglose(clienteDesglose === cId ? null : cId)}
+                      >
+                        <td style={{ padding: '10px 12px', fontWeight: '500', color: colors.espresso }}>{cliente.nombre}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: '600', color: '#F39C12' }}>{cliente.piezas}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: '700', color: colors.terracotta }}>{formatearMoneda(cliente.montoPorCobrar)}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: '12px', color: colors.camel }}>{formatearFecha(cliente.ultimaFecha)}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: '14px' }}>{clienteDesglose === cId ? '▲' : '▼'}</td>
+                      </tr>
+                      {clienteDesglose === cId && (
+                        <tr>
+                          <td colSpan="5" style={{ padding: '0' }}>
+                            <div style={{ background: '#FFF8F0', padding: '12px 15px' }}>
+                              {cliente.ventas.map(v => (
+                                <div key={v.id} style={{
+                                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                  padding: '8px 10px', borderBottom: `1px solid ${colors.sand}`,
+                                  fontSize: '12px'
+                                }}>
+                                  <div>
+                                    <span style={{ fontWeight: '500', color: colors.espresso }}>{v.producto_nombre}</span>
+                                    <span style={{ color: colors.camel }}> • {v.cantidad} pzas • {formatearFecha(v.created_at)}</span>
+                                  </div>
+                                  <div style={{ fontWeight: '600', color: colors.terracotta }}>
+                                    {formatearMoneda((v.total || 0) - (v.monto_pagado || 0))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
+                  {/* Fila total */}
+                  <tr style={{ background: colors.terracotta }}>
+                    <td style={{ padding: '10px 12px', fontWeight: '700', color: 'white' }}>TOTAL</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: '700', color: 'white' }}>{totalPiezas}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: '700', color: 'white' }}>{formatearMoneda(totalMonto)}</td>
+                    <td colSpan="2"></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Filtros */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
