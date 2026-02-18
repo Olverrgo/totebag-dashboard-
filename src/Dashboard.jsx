@@ -5932,6 +5932,7 @@ const VentasView = ({ isAdmin }) => {
   const [hoverBtn, setHoverBtn] = useState({});
   const [filtroEstado, setFiltroEstado] = useState('todos');
   const [filtroPeriodo, setFiltroPeriodo] = useState('mes'); // hoy, semana, mes, todo
+  const [filtroCliente, setFiltroCliente] = useState('todos');
   const [ventaEditando, setVentaEditando] = useState(null);
   const [mostrarPago, setMostrarPago] = useState(null); // ID de venta para registrar pago
 
@@ -6349,6 +6350,16 @@ const VentasView = ({ isAdmin }) => {
           <option value="pendiente">Pendientes</option>
           <option value="parcial">Pago parcial</option>
         </select>
+        <select
+          value={filtroCliente}
+          onChange={(e) => setFiltroCliente(e.target.value)}
+          style={{ ...inputStyle, width: 'auto', minWidth: '150px' }}
+        >
+          <option value="todos">Todos los clientes</option>
+          {clientes.map(c => (
+            <option key={c.id} value={c.id}>{c.nombre}</option>
+          ))}
+        </select>
       </div>
 
       {/* Formulario nueva venta */}
@@ -6534,9 +6545,13 @@ const VentasView = ({ isAdmin }) => {
       )}
 
       {/* Lista de ventas */}
-      {ventas.length > 0 ? (
+      {(() => {
+        const ventasFiltradas = filtroCliente === 'todos'
+          ? ventas
+          : ventas.filter(v => v.cliente_id === parseInt(filtroCliente));
+        return ventasFiltradas.length > 0 ? (
         <div style={{ display: 'grid', gap: '12px' }}>
-          {ventas.map((venta) => (
+          {ventasFiltradas.map((venta) => (
             <div key={venta.id} style={{
               background: colors.cotton,
               border: `2px solid ${venta.estado_pago === 'pagado' ? colors.olive : venta.estado_pago === 'parcial' ? '#F7B731' : colors.terracotta}`,
@@ -6689,9 +6704,12 @@ const VentasView = ({ isAdmin }) => {
         <div style={{ background: colors.cotton, border: '2px solid #DA9F17', padding: '40px', textAlign: 'center', borderRadius: '8px' }}>
           <span style={{ fontSize: '48px' }}>💵</span>
           <h3 style={{ margin: '20px 0 10px', color: colors.espresso }}>Sin ventas registradas</h3>
-          <p style={{ color: colors.camel, fontSize: '14px' }}>Haz clic en "+ Nueva Venta" para registrar tu primera venta</p>
+          <p style={{ color: colors.camel, fontSize: '14px' }}>
+            {filtroCliente !== 'todos' ? 'No hay ventas para este cliente en el período seleccionado' : 'Haz clic en "+ Nueva Venta" para registrar tu primera venta'}
+          </p>
         </div>
-      )}
+      );
+      })()}
     </div>
   );
 };
