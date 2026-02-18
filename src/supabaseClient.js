@@ -1431,6 +1431,30 @@ export const createMovimientoStock = async (movimiento) => {
   return { data, error: handleRLSError(error) };
 };
 
+// Eliminar movimiento de stock (hard delete)
+export const deleteMovimientoStock = async (id) => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+
+  const { error } = await supabase
+    .from('movimientos_stock')
+    .delete()
+    .eq('id', id);
+
+  return { error: handleRLSError(error) };
+};
+
+// Eliminar venta asociada a un movimiento (hard delete)
+export const deleteVentaPorMovimiento = async (movimientoId) => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+
+  const { error } = await supabase
+    .from('ventas')
+    .delete()
+    .eq('movimiento_id', movimientoId);
+
+  return { error: handleRLSError(error) };
+};
+
 // Crear consignación con venta automática (para tracking de cuentas por cobrar)
 export const createConsignacionConVenta = async (movimiento, datosVenta) => {
   if (!supabase) return { data: null, error: 'Supabase no configurado' };

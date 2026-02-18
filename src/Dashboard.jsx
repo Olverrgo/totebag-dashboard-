@@ -51,7 +51,9 @@ import {
   updateConfiguracionCorte,
   deleteConfiguracionCorte,
   duplicarConfiguracionConNuevoPrecio,
-  getHistorialPrecios
+  getHistorialPrecios,
+  deleteMovimientoStock,
+  deleteVentaPorMovimiento
 } from './supabaseClient';
 
 // ==================== DATOS ====================
@@ -4857,6 +4859,7 @@ const SalidasView = ({ isAdmin }) => {
   const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
   const [hoverBtn, setHoverBtn] = useState({});
   const [clienteHistorial, setClienteHistorial] = useState(null); // Cliente para ver historial
+  const [confirmEliminar, setConfirmEliminar] = useState(null); // ID del movimiento a eliminar
 
   // Formulario de nueva salida
   const [formSalida, setFormSalida] = useState({
@@ -5145,6 +5148,36 @@ const SalidasView = ({ isAdmin }) => {
         setMostrarNuevoCliente(false);
         setMensaje({ tipo: 'exito', texto: 'Cliente agregado' });
         setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+      }
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: 'Error: ' + err.message });
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  // Eliminar movimiento de stock (y venta asociada si es consignación)
+  const eliminarMovimiento = async (mov) => {
+    if (!isAdmin) {
+      setMensaje({ tipo: 'error', texto: 'Solo administradores pueden eliminar movimientos' });
+      return;
+    }
+
+    setGuardando(true);
+    try {
+      // Si es consignación, eliminar la venta asociada primero
+      if (mov.tipo_movimiento === 'consignacion') {
+        await deleteVentaPorMovimiento(mov.id);
+      }
+
+      const { error } = await deleteMovimientoStock(mov.id);
+      if (error) {
+        setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
+      } else {
+        setMensaje({ tipo: 'exito', texto: 'Movimiento eliminado correctamente' });
+        setMovimientos(movimientos.filter(m => m.id !== mov.id));
+        setConfirmEliminar(null);
+        setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
       }
     } catch (err) {
       setMensaje({ tipo: 'error', texto: 'Error: ' + err.message });
@@ -5708,6 +5741,21 @@ const SalidasView = ({ isAdmin }) => {
                   <span style={{ fontWeight: '700', fontSize: '16px', color: colors.sidebarBg }}>
                     {mov.tipo_movimiento === 'devolucion' ? '+' : '-'}{mov.cantidad}
                   </span>
+                  {isAdmin && (
+                    <button
+                      onClick={() => setConfirmEliminar(mov)}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        fontSize: '16px', color: colors.terracotta, padding: '4px',
+                        opacity: 0.6, transition: 'opacity 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.target.style.opacity = 1}
+                      onMouseLeave={(e) => e.target.style.opacity = 0.6}
+                      title="Eliminar movimiento"
+                    >
+                      🗑
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -5719,6 +5767,58 @@ const SalidasView = ({ isAdmin }) => {
           </div>
         )}
       </div>
+
+      {/* Modal Confirmar Eliminación */}
+      {confirmEliminar && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: colors.cotton, borderRadius: '12px', padding: '30px', maxWidth: '450px', width: '90%' }}>
+            <h3 style={{ margin: '0 0 15px', color: colors.terracotta, fontSize: '18px' }}>Eliminar Movimiento</h3>
+            <div style={{ background: '#FFEBEE', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
+              <div style={{ fontWeight: '600', color: colors.espresso, marginBottom: '5px' }}>
+                {confirmEliminar.producto?.linea_nombre}
+              </div>
+              <div style={{ fontSize: '13px', color: colors.camel }}>
+                Cliente: {confirmEliminar.cliente?.nombre} | Tipo: {tiposMovimiento.find(t => t.id === confirmEliminar.tipo_movimiento)?.nombre}
+              </div>
+              <div style={{ fontSize: '13px', color: colors.camel }}>
+                Cantidad: {confirmEliminar.cantidad} pzas | Fecha: {new Date(confirmEliminar.fecha).toLocaleDateString('es-MX')}
+              </div>
+              {confirmEliminar.tipo_movimiento === 'consignacion' && (
+                <div style={{ fontSize: '12px', color: colors.terracotta, marginTop: '8px', fontWeight: '500' }}>
+                  Nota: También se eliminará la venta pendiente asociada a esta consignación.
+                </div>
+              )}
+            </div>
+            <p style={{ fontSize: '14px', color: colors.espresso, marginBottom: '20px' }}>
+              Este movimiento se eliminará permanentemente. El stock NO se ajustará automáticamente, deberás corregirlo manualmente si es necesario.
+            </p>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={() => setConfirmEliminar(null)}
+                style={{
+                  flex: 1, padding: '12px', background: 'transparent',
+                  border: `2px solid ${colors.camel}`, borderRadius: '6px',
+                  cursor: 'pointer', fontSize: '14px', color: colors.camel
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => eliminarMovimiento(confirmEliminar)}
+                disabled={guardando}
+                style={{
+                  flex: 1, padding: '12px', background: colors.terracotta,
+                  color: 'white', border: 'none', borderRadius: '6px',
+                  cursor: guardando ? 'not-allowed' : 'pointer', fontSize: '14px',
+                  fontWeight: '500', opacity: guardando ? 0.7 : 1
+                }}
+              >
+                {guardando ? 'Eliminando...' : 'Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
