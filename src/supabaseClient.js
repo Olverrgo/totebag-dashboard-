@@ -741,7 +741,7 @@ export const getProductos = async (categoriaId = null, subcategoriaId = null) =>
       config_envio:config_envio(*),
       categoria:categorias(*),
       subcategoria:subcategorias(*),
-      variantes:variantes_producto(id, stock, stock_consignacion, costo_unitario, precio_venta, activo)
+      variantes:variantes_producto(id, sku, material, color, talla, stock, stock_consignacion, costo_unitario, precio_venta, imagen_url, activo)
     `)
     .eq('activo', true)
     .order('created_at', { ascending: false });
