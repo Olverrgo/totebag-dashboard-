@@ -4652,38 +4652,29 @@ const StocksView = ({ isAdmin }) => {
                   }} title={stockTotal > 10 ? 'Stock OK' : stockTotal > 0 ? 'Stock bajo' : 'Sin stock'} />
                 </div>
               ) : (
-                /* Stock para productos SIN variantes (original) */
+                /* Stock para productos SIN variantes */
                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                   <div style={{ textAlign: 'center' }}>
-                    <label style={{ display: 'block', fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>
-                      STOCK ACTUAL
-                    </label>
-                    <div style={{
-                      padding: '8px 12px',
-                      background: colors.sand,
-                      borderRadius: '6px',
-                      fontSize: '16px',
-                      fontWeight: '600',
-                      color: colors.sidebarBg,
-                      minWidth: '60px'
-                    }}>
-                      {prod.stock || 0}
+                    <label style={{ display: 'block', fontSize: '10px', color: colors.camel, marginBottom: '3px' }}>TALLER</label>
+                    <div style={{ padding: '6px 12px', background: colors.sand, borderRadius: '4px', fontSize: '16px', fontWeight: '600', color: colors.olive }}>
+                      {stockTaller}
                     </div>
                   </div>
-
                   <div style={{ textAlign: 'center' }}>
-                    <label style={{ display: 'block', fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>
-                      VALOR
-                    </label>
-                    <div style={{
-                      padding: '8px 12px',
-                      background: '#1abc9c',
-                      borderRadius: '6px',
-                      fontSize: '14px',
-                      fontWeight: '600',
-                      color: 'white',
-                      minWidth: '80px'
-                    }}>
+                    <label style={{ display: 'block', fontSize: '10px', color: colors.camel, marginBottom: '3px' }}>CONSIG.</label>
+                    <div style={{ padding: '6px 12px', background: colors.sand, borderRadius: '4px', fontSize: '16px', fontWeight: '600', color: colors.terracotta }}>
+                      {stockConsig}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <label style={{ display: 'block', fontSize: '10px', color: colors.camel, marginBottom: '3px' }}>TOTAL</label>
+                    <div style={{ padding: '6px 12px', background: colors.sidebarBg, borderRadius: '4px', fontSize: '16px', fontWeight: '600', color: 'white' }}>
+                      {stockTotal}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <label style={{ display: 'block', fontSize: '10px', color: colors.camel, marginBottom: '3px' }}>VALOR</label>
+                    <div style={{ padding: '6px 12px', background: '#1abc9c', borderRadius: '4px', fontSize: '14px', fontWeight: '600', color: 'white' }}>
                       ${valorInventario.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                     </div>
                   </div>
@@ -4728,8 +4719,8 @@ const StocksView = ({ isAdmin }) => {
 
                   <div style={{
                     width: '12px', height: '12px', borderRadius: '50%',
-                    background: (prod.stock || 0) > 10 ? colors.olive : (prod.stock || 0) > 0 ? '#F7B731' : colors.terracotta
-                  }} title={(prod.stock || 0) > 10 ? 'Stock OK' : (prod.stock || 0) > 0 ? 'Stock bajo' : 'Sin stock'} />
+                    background: stockTotal > 10 ? colors.olive : stockTotal > 0 ? '#F7B731' : colors.terracotta
+                  }} title={stockTotal > 10 ? 'Stock OK' : stockTotal > 0 ? 'Stock bajo' : 'Sin stock'} />
                 </div>
               )}
             </div>
