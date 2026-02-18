@@ -4916,8 +4916,8 @@ const SalidasView = ({ isAdmin }) => {
 
     // Verificar stock disponible segun tipo de movimiento
     const producto = productos.find(p => p.id === parseInt(formSalida.productoId));
-    const stockTaller = producto?.stock || 0;
-    const stockConsignacion = producto?.stock_consignacion || 0;
+    const stockTaller = producto?.tiene_variantes ? (producto?.stock_variantes || 0) : (producto?.stock || 0);
+    const stockConsignacion = producto?.tiene_variantes ? (producto?.stock_consignacion_variantes || 0) : (producto?.stock_consignacion || 0);
 
     // Validar segun tipo de movimiento
     if (formSalida.tipoMovimiento === 'consignacion' || formSalida.tipoMovimiento === 'venta_directa') {
@@ -5200,8 +5200,8 @@ const SalidasView = ({ isAdmin }) => {
         <div style={{ display: 'grid', gap: '10px' }}>
           {productos.map(prod => {
             const resumen = calcularResumen(prod.id);
-            const stockTaller = prod.stock || 0;
-            const stockConsignacion = prod.stock_consignacion || 0;
+            const stockTaller = prod.tiene_variantes ? (prod.stock_variantes || 0) : (prod.stock || 0);
+            const stockConsignacion = prod.tiene_variantes ? (prod.stock_consignacion_variantes || 0) : (prod.stock_consignacion || 0);
             const disponible = stockTaller + stockConsignacion;
             return (
               <div key={prod.id} style={{
