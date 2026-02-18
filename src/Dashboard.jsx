@@ -4209,6 +4209,7 @@ const StocksView = ({ isAdmin }) => {
   const [productosGuardados, setProductosGuardados] = useState([]);
   const [cantidadAgregar, setCantidadAgregar] = useState({});
   const [cantidadVariante, setCantidadVariante] = useState({}); // Para variantes: { varianteId: cantidad }
+  const [cantidadConsigVariante, setCantidadConsigVariante] = useState({}); // Para consignación: { varianteId: cantidad }
   const [expandido, setExpandido] = useState({}); // Productos expandidos para ver variantes
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
@@ -4241,45 +4242,62 @@ const StocksView = ({ isAdmin }) => {
     cargarProductos();
   }, []);
 
-  // Guardar stock de una variante
+  // Guardar stock de una variante (taller y/o consignación)
   const guardarStockVariante = async (variante, productoId) => {
     if (!isAdmin) {
       setMensaje({ tipo: 'error', texto: 'Solo administradores pueden modificar el stock' });
       return;
     }
 
-    const cantidad = parseInt(cantidadVariante[variante.id]) || 0;
-    if (cantidad === 0) {
+    const cantTaller = parseInt(cantidadVariante[variante.id]) || 0;
+    const cantConsig = parseInt(cantidadConsigVariante[variante.id]) || 0;
+
+    if (cantTaller === 0 && cantConsig === 0) {
       setMensaje({ tipo: 'info', texto: 'No hay cambios' });
       setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
       return;
     }
 
-    const nuevoStock = (variante.stock || 0) + cantidad;
+    const nuevoStock = (variante.stock || 0) + cantTaller;
+    const nuevaConsig = (variante.stock_consignacion || 0) + cantConsig;
+
     if (nuevoStock < 0) {
-      setMensaje({ tipo: 'error', texto: 'El stock no puede ser negativo' });
+      setMensaje({ tipo: 'error', texto: 'El stock en taller no puede ser negativo' });
+      return;
+    }
+    if (nuevaConsig < 0) {
+      setMensaje({ tipo: 'error', texto: 'El stock en consignación no puede ser negativo' });
       return;
     }
 
     setGuardando(true);
     try {
-      const { error } = await updateStockVariante(variante.id, nuevoStock);
+      const { error } = await updateStockVariante(variante.id, nuevoStock, nuevaConsig);
       if (error) {
         setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
       } else {
-        setMensaje({ tipo: 'exito', texto: `Stock actualizado: ${variante.stock || 0} + ${cantidad} = ${nuevoStock}` });
+        const cambios = [];
+        if (cantTaller !== 0) cambios.push(`Taller: ${variante.stock || 0} → ${nuevoStock}`);
+        if (cantConsig !== 0) cambios.push(`Consig: ${variante.stock_consignacion || 0} → ${nuevaConsig}`);
+        setMensaje({ tipo: 'exito', texto: `Stock actualizado. ${cambios.join(' | ')}` });
         // Actualizar lista local
         setProductosGuardados(productosGuardados.map(p => {
           if (p.id === productoId && p.variantes) {
+            const nuevasVariantes = p.variantes.map(v =>
+              v.id === variante.id ? { ...v, stock: nuevoStock, stock_consignacion: nuevaConsig } : v
+            );
+            const variantesActivas = nuevasVariantes.filter(v => v.activo !== false);
             return {
               ...p,
-              variantes: p.variantes.map(v => v.id === variante.id ? { ...v, stock: nuevoStock } : v),
-              stock_variantes: (p.stock_variantes || 0) + cantidad
+              variantes: nuevasVariantes,
+              stock_variantes: variantesActivas.reduce((sum, v) => sum + (v.stock || 0), 0),
+              stock_consignacion_variantes: variantesActivas.reduce((sum, v) => sum + (v.stock_consignacion || 0), 0)
             };
           }
           return p;
         }));
         setCantidadVariante({ ...cantidadVariante, [variante.id]: 0 });
+        setCantidadConsigVariante({ ...cantidadConsigVariante, [variante.id]: 0 });
         setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
       }
     } catch (err) {
@@ -4758,20 +4776,38 @@ const StocksView = ({ isAdmin }) => {
                           <div style={{ fontWeight: '600', fontSize: '13px', color: colors.espresso }}>{nombreVar}</div>
                           <div style={{ fontSize: '10px', color: colors.camel }}>SKU: {v.sku || '-'}</div>
                         </div>
-                        {/* Stock actual */}
-                        <div style={{ textAlign: 'center', minWidth: '60px' }}>
-                          <div style={{ fontSize: '10px', color: colors.camel }}>ACTUAL</div>
+                        {/* Stock taller */}
+                        <div style={{ textAlign: 'center', minWidth: '50px' }}>
+                          <div style={{ fontSize: '10px', color: colors.camel }}>TALLER</div>
                           <div style={{ fontSize: '16px', fontWeight: '700', color: colors.olive }}>{v.stock || 0}</div>
                         </div>
-                        {/* Input agregar */}
+                        {/* Input agregar taller */}
                         <div style={{ textAlign: 'center' }}>
-                          <div style={{ fontSize: '10px', color: colors.sidebarBg }}>AGREGAR (+/-)</div>
+                          <div style={{ fontSize: '10px', color: colors.sidebarBg }}>+/- TALLER</div>
                           <input
                             type="number"
                             value={cantidadVariante[v.id] || 0}
                             onChange={(e) => setCantidadVariante({ ...cantidadVariante, [v.id]: e.target.value })}
                             style={{
-                              width: '70px', padding: '6px', border: '2px solid #16a085',
+                              width: '65px', padding: '6px', border: '2px solid #16a085',
+                              borderRadius: '4px', fontSize: '14px', textAlign: 'center'
+                            }}
+                          />
+                        </div>
+                        {/* Stock consignación */}
+                        <div style={{ textAlign: 'center', minWidth: '50px' }}>
+                          <div style={{ fontSize: '10px', color: colors.camel }}>CONSIG.</div>
+                          <div style={{ fontSize: '16px', fontWeight: '700', color: colors.terracotta }}>{v.stock_consignacion || 0}</div>
+                        </div>
+                        {/* Input agregar consignación */}
+                        <div style={{ textAlign: 'center' }}>
+                          <div style={{ fontSize: '10px', color: '#e67e22' }}>+/- CONSIG.</div>
+                          <input
+                            type="number"
+                            value={cantidadConsigVariante[v.id] || 0}
+                            onChange={(e) => setCantidadConsigVariante({ ...cantidadConsigVariante, [v.id]: e.target.value })}
+                            style={{
+                              width: '65px', padding: '6px', border: '2px solid #e67e22',
                               borderRadius: '4px', fontSize: '14px', textAlign: 'center'
                             }}
                           />
