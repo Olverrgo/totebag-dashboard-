@@ -1395,6 +1395,20 @@ export const registrarPagoVenta = async (ventaId, montoPago) => {
     .select()
     .single();
 
+  // Registrar ingreso automático en caja
+  if (!error && montoPago > 0) {
+    await supabase
+      .from('movimientos_caja')
+      .insert([{
+        tipo: 'ingreso',
+        monto: montoPago,
+        venta_id: ventaId,
+        categoria: 'pago_consignacion',
+        metodo_pago: 'efectivo',
+        descripcion: `Pago de consignación - Venta #${ventaId}`
+      }]);
+  }
+
   return { data, error: handleRLSError(error) };
 };
 
@@ -1565,6 +1579,20 @@ export const registrarVentaConsignacion = async (movimiento, datosVenta) => {
 
     if (!updateError) {
       ventasActualizadas.push(ventaActualizada);
+
+      // Registrar ingreso automático en caja
+      if (montoAPagar > 0) {
+        await supabase
+          .from('movimientos_caja')
+          .insert([{
+            tipo: 'ingreso',
+            monto: montoAPagar,
+            venta_id: venta.id,
+            categoria: 'venta',
+            metodo_pago: 'efectivo',
+            descripcion: `Venta consignación - ${cantidadAPagar} pzas - Venta #${venta.id}`
+          }]);
+      }
     }
 
     cantidadPorPagar -= cantidadAPagar;
@@ -1932,6 +1960,102 @@ export const deleteStorageFile = async (bucket, filePath) => {
     .remove([filePath]);
 
   return { error };
+};
+
+// =====================================================
+// FUNCIONES PARA MOVIMIENTOS DE CAJA
+// =====================================================
+
+// Obtener movimientos de caja con filtros
+export const getMovimientosCaja = async (filtros = {}) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  let query = supabase
+    .from('movimientos_caja')
+    .select('*')
+    .eq('activo', true)
+    .order('fecha', { ascending: false });
+
+  if (filtros.tipo) {
+    query = query.eq('tipo', filtros.tipo);
+  }
+
+  if (filtros.categoria) {
+    query = query.eq('categoria', filtros.categoria);
+  }
+
+  if (filtros.fechaInicio) {
+    query = query.gte('fecha', filtros.fechaInicio);
+  }
+
+  if (filtros.fechaFin) {
+    query = query.lte('fecha', filtros.fechaFin + 'T23:59:59');
+  }
+
+  const { data, error } = await query;
+  return { data, error: handleRLSError(error) };
+};
+
+// Crear movimiento de caja
+export const createMovimientoCaja = async (movimiento) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('movimientos_caja')
+    .insert([movimiento])
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+// Eliminar movimiento de caja (soft delete)
+export const deleteMovimientoCaja = async (id) => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+
+  const { error } = await supabase
+    .from('movimientos_caja')
+    .update({ activo: false })
+    .eq('id', id);
+
+  return { error: handleRLSError(error) };
+};
+
+// Obtener balance de caja (ingresos - egresos)
+export const getBalanceCaja = async (fechaInicio = null, fechaFin = null) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  let query = supabase
+    .from('movimientos_caja')
+    .select('tipo, monto')
+    .eq('activo', true);
+
+  if (fechaInicio) {
+    query = query.gte('fecha', fechaInicio);
+  }
+
+  if (fechaFin) {
+    query = query.lte('fecha', fechaFin + 'T23:59:59');
+  }
+
+  const { data, error } = await query;
+
+  if (error) return { data: null, error: handleRLSError(error) };
+
+  const resumen = { totalIngresos: 0, totalEgresos: 0, balance: 0 };
+
+  (data || []).forEach(mov => {
+    const monto = parseFloat(mov.monto) || 0;
+    if (mov.tipo === 'ingreso') {
+      resumen.totalIngresos += monto;
+    } else {
+      resumen.totalEgresos += monto;
+    }
+  });
+
+  resumen.balance = resumen.totalIngresos - resumen.totalEgresos;
+
+  return { data: resumen, error: null };
 };
 
 export default supabase;

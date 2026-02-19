@@ -53,7 +53,11 @@ import {
   duplicarConfiguracionConNuevoPrecio,
   getHistorialPrecios,
   deleteMovimientoStock,
-  deleteVentaPorMovimiento
+  deleteVentaPorMovimiento,
+  getMovimientosCaja,
+  createMovimientoCaja,
+  deleteMovimientoCaja,
+  getBalanceCaja
 } from './supabaseClient';
 
 // ==================== DATOS ====================
@@ -696,6 +700,7 @@ const Sidebar = ({ seccionActiva, setSeccionActiva, menuAbierto, setMenuAbierto,
     { id: 'stocks', nombre: 'Stocks', icon: '📋' },
     { id: 'salidas', nombre: 'Salidas', icon: '📤' },
     { id: 'ventas', nombre: 'Ventas', icon: '💵' },
+    { id: 'caja', nombre: 'Caja', icon: '🏦' },
     { id: 'mayoreo', nombre: 'Mayoreo', icon: '📦' },
     { id: 'ecommerce', nombre: 'E-commerce', icon: '🛒' },
     { id: 'promociones', nombre: 'Promociones', icon: '🎉' },
@@ -5049,7 +5054,19 @@ const SalidasView = ({ isAdmin }) => {
             notas: formSalida.notas || `Venta directa - ${new Date().toLocaleDateString('es-MX')}`,
             ...(formSalida.varianteId ? { variante_id: parseInt(formSalida.varianteId) } : {})
           };
-          await createVenta(ventaDirecta);
+          const ventaResult = await createVenta(ventaDirecta);
+
+          // Registrar ingreso automático en caja
+          if (!ventaResult.error && ventaDirecta.total > 0) {
+            await createMovimientoCaja({
+              tipo: 'ingreso',
+              monto: ventaDirecta.total,
+              venta_id: ventaResult.data?.id || null,
+              categoria: 'venta',
+              metodo_pago: 'efectivo',
+              descripcion: `Venta directa - ${ventaDirecta.producto_nombre} - ${cantidad} pzas`
+            });
+          }
         }
       } else {
         // Otros: solo crear movimiento
@@ -6165,6 +6182,18 @@ const VentasView = ({ isAdmin }) => {
       if (error) {
         setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
       } else {
+        // Registrar ingreso automático en caja si la venta está pagada
+        if (formVenta.estadoPago === 'pagado' && total > 0) {
+          await createMovimientoCaja({
+            tipo: 'ingreso',
+            monto: total,
+            venta_id: data?.id || null,
+            categoria: 'venta',
+            metodo_pago: formVenta.metodoPago || 'efectivo',
+            descripcion: `Venta - ${producto?.linea_nombre || 'Producto'} - ${formVenta.cantidad} pzas`
+          });
+        }
+
         setMensaje({ tipo: 'exito', texto: 'Venta registrada correctamente' });
         setMostrarFormulario(false);
         setFormVenta({
@@ -6189,7 +6218,7 @@ const VentasView = ({ isAdmin }) => {
   };
 
   // Registrar pago
-  const hacerPago = async (ventaId, monto) => {
+  const hacerPagoCliente = async (clienteId, monto, ventasCliente) => {
     if (!monto || monto <= 0) {
       setMensaje({ tipo: 'error', texto: 'Ingresa un monto válido' });
       return;
@@ -6197,15 +6226,27 @@ const VentasView = ({ isAdmin }) => {
 
     setGuardando(true);
     try {
-      const { error } = await registrarPagoVenta(ventaId, parseFloat(monto));
-      if (error) {
-        setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
-      } else {
-        setMensaje({ tipo: 'exito', texto: 'Pago registrado' });
-        setMostrarPago(null);
-        cargarDatos();
-        setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+      let montoRestante = parseFloat(monto);
+      const ventasOrdenadas = [...ventasCliente].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+      for (const venta of ventasOrdenadas) {
+        if (montoRestante <= 0) break;
+        const pendiente = (venta.total || 0) - (venta.monto_pagado || 0);
+        if (pendiente <= 0) continue;
+        const montoAplicar = Math.min(montoRestante, pendiente);
+        const { error } = await registrarPagoVenta(venta.id, montoAplicar);
+        if (error) {
+          setMensaje({ tipo: 'error', texto: 'Error en pago: ' + error.message });
+          cargarDatos();
+          return;
+        }
+        montoRestante -= montoAplicar;
       }
+
+      setMensaje({ tipo: 'exito', texto: 'Pago registrado' });
+      setMostrarPago(null);
+      cargarDatos();
+      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
     } catch (err) {
       setMensaje({ tipo: 'error', texto: 'Error: ' + err.message });
     } finally {
@@ -6396,7 +6437,25 @@ const VentasView = ({ isAdmin }) => {
                         <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: '600', color: '#F39C12' }}>{cliente.piezas}</td>
                         <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: '700', color: colors.terracotta }}>{formatearMoneda(cliente.montoPorCobrar)}</td>
                         <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: '12px', color: colors.camel }}>{formatearFecha(cliente.ultimaFecha)}</td>
-                        <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: '14px' }}>{clienteDesglose === cId ? '▲' : '▼'}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                          {isAdmin && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setMostrarPago(mostrarPago === cId ? null : cId); }}
+                              style={{
+                                padding: '4px 10px',
+                                background: '#27ae60',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '11px',
+                                fontWeight: '600'
+                              }}
+                            >
+                              Pagar
+                            </button>
+                          )}
+                        </td>
                       </tr>
                       {clienteDesglose === cId && (
                         <tr>
@@ -6417,6 +6476,61 @@ const VentasView = ({ isAdmin }) => {
                                   </div>
                                 </div>
                               ))}
+                              {mostrarPago === cId && (
+                                <div style={{
+                                  padding: '12px 10px',
+                                  background: colors.cream,
+                                  display: 'flex',
+                                  gap: '10px',
+                                  alignItems: 'center',
+                                  flexWrap: 'wrap'
+                                }}>
+                                  <span style={{ fontSize: '13px', color: colors.espresso, fontWeight: '500' }}>
+                                    Total: {formatearMoneda(cliente.montoPorCobrar)}
+                                  </span>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="Monto a pagar"
+                                    id={`pago-cliente-${cId}`}
+                                    defaultValue={cliente.montoPorCobrar.toFixed(2)}
+                                    style={{ ...inputStyle, width: '130px', fontSize: '13px' }}
+                                  />
+                                  <button
+                                    onClick={() => {
+                                      const input = document.getElementById(`pago-cliente-${cId}`);
+                                      hacerPagoCliente(cId, input.value, cliente.ventas);
+                                    }}
+                                    disabled={guardando}
+                                    style={{
+                                      padding: '8px 16px',
+                                      background: colors.sidebarBg,
+                                      color: colors.sidebarText,
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: 'pointer',
+                                      fontSize: '12px',
+                                      fontWeight: '600'
+                                    }}
+                                  >
+                                    {guardando ? 'Procesando...' : 'Confirmar'}
+                                  </button>
+                                  <button
+                                    onClick={() => setMostrarPago(null)}
+                                    style={{
+                                      padding: '8px 12px',
+                                      background: colors.sand,
+                                      color: colors.espresso,
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: 'pointer',
+                                      fontSize: '12px'
+                                    }}
+                                  >
+                                    Cancelar
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -6704,22 +6818,6 @@ const VentasView = ({ isAdmin }) => {
                 {/* Acciones */}
                 {isAdmin && (
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    {venta.estado_pago !== 'pagado' && (
-                      <button
-                        onClick={() => setMostrarPago(mostrarPago === venta.id ? null : venta.id)}
-                        style={{
-                          padding: '6px 12px',
-                          background: '#27ae60',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '12px'
-                        }}
-                      >
-                        Pagar
-                      </button>
-                    )}
                     <button
                       onClick={() => editarVenta(venta)}
                       style={{
@@ -6752,60 +6850,6 @@ const VentasView = ({ isAdmin }) => {
                 )}
               </div>
 
-              {/* Formulario de pago */}
-              {mostrarPago === venta.id && (
-                <div style={{
-                  marginTop: '15px',
-                  padding: '15px',
-                  background: colors.cream,
-                  borderRadius: '6px',
-                  display: 'flex',
-                  gap: '10px',
-                  alignItems: 'center',
-                  flexWrap: 'wrap'
-                }}>
-                  <span style={{ fontSize: '13px', color: colors.espresso }}>Registrar pago:</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="Monto"
-                    id={`pago-${venta.id}`}
-                    style={{ ...inputStyle, width: '120px' }}
-                  />
-                  <button
-                    onClick={() => {
-                      const input = document.getElementById(`pago-${venta.id}`);
-                      hacerPago(venta.id, input.value);
-                    }}
-                    disabled={guardando}
-                    style={{
-                      padding: '10px 20px',
-                      background: colors.sidebarBg,
-                      color: colors.sidebarText,
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '13px'
-                    }}
-                  >
-                    Confirmar
-                  </button>
-                  <button
-                    onClick={() => setMostrarPago(null)}
-                    style={{
-                      padding: '10px 15px',
-                      background: colors.sand,
-                      color: colors.espresso,
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '13px'
-                    }}
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              )}
             </div>
           ))}
         </div>
@@ -6819,6 +6863,521 @@ const VentasView = ({ isAdmin }) => {
         </div>
       );
       })()}
+    </div>
+  );
+};
+
+
+// Vista Caja
+const CajaView = ({ isAdmin }) => {
+  const [movimientos, setMovimientos] = useState([]);
+  const [balance, setBalance] = useState({ totalIngresos: 0, totalEgresos: 0, balance: 0 });
+  const [cargando, setCargando] = useState(true);
+  const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
+  const [guardando, setGuardando] = useState(false);
+  const [mostrarFormEgreso, setMostrarFormEgreso] = useState(false);
+  const [filtroPeriodo, setFiltroPeriodo] = useState('mes');
+  const [filtroTipo, setFiltroTipo] = useState('todos');
+
+  const [formEgreso, setFormEgreso] = useState({
+    monto: '',
+    categoria: 'gasto_operativo',
+    metodoPago: 'efectivo',
+    descripcion: '',
+    referencia: ''
+  });
+
+  const categoriasEgreso = [
+    { value: 'compra_material', label: 'Compra de material' },
+    { value: 'gasto_operativo', label: 'Gasto operativo' },
+    { value: 'gasto_envio', label: 'Gasto de envío' },
+    { value: 'gasto_produccion', label: 'Gasto de producción' },
+    { value: 'retiro', label: 'Retiro' },
+    { value: 'otro', label: 'Otro' }
+  ];
+
+  const categoriasLabel = {
+    venta: 'Venta',
+    pago_consignacion: 'Pago consignación',
+    pago_cliente: 'Pago cliente',
+    compra_material: 'Compra material',
+    gasto_operativo: 'Gasto operativo',
+    gasto_envio: 'Gasto envío',
+    gasto_produccion: 'Gasto producción',
+    retiro: 'Retiro',
+    otro: 'Otro'
+  };
+
+  const metodosPagoLabel = {
+    efectivo: 'Efectivo',
+    transferencia: 'Transferencia',
+    tarjeta: 'Tarjeta',
+    otro: 'Otro'
+  };
+
+  const getFiltroFechas = () => {
+    const hoy = new Date();
+    let fechaInicio = null;
+    let fechaFin = hoy.toISOString().split('T')[0];
+
+    switch (filtroPeriodo) {
+      case 'hoy':
+        fechaInicio = hoy.toISOString().split('T')[0];
+        break;
+      case 'semana': {
+        const hace7 = new Date(hoy.getTime() - 7 * 24 * 60 * 60 * 1000);
+        fechaInicio = hace7.toISOString().split('T')[0];
+        break;
+      }
+      case 'mes': {
+        const hace30 = new Date(hoy.getTime() - 30 * 24 * 60 * 60 * 1000);
+        fechaInicio = hace30.toISOString().split('T')[0];
+        break;
+      }
+      case 'todo':
+        fechaInicio = null;
+        fechaFin = null;
+        break;
+      default:
+        break;
+    }
+    return { fechaInicio, fechaFin };
+  };
+
+  const cargarDatos = async () => {
+    setCargando(true);
+    const { fechaInicio, fechaFin } = getFiltroFechas();
+
+    const filtros = {};
+    if (fechaInicio) filtros.fechaInicio = fechaInicio;
+    if (fechaFin) filtros.fechaFin = fechaFin;
+    if (filtroTipo !== 'todos') filtros.tipo = filtroTipo;
+
+    const [movRes, balRes] = await Promise.all([
+      getMovimientosCaja(filtros),
+      getBalanceCaja(fechaInicio, fechaFin)
+    ]);
+
+    setMovimientos(movRes.data || []);
+    if (balRes.data) setBalance(balRes.data);
+    setCargando(false);
+  };
+
+  useEffect(() => {
+    cargarDatos();
+  }, [filtroPeriodo, filtroTipo]);
+
+  const formatearMoneda = (monto) => {
+    return '$' + (parseFloat(monto) || 0).toLocaleString('es-MX', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
+
+  const formatearFecha = (fecha) => {
+    if (!fecha) return '-';
+    return new Date(fecha).toLocaleDateString('es-MX', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const handleRegistrarEgreso = async () => {
+    if (!formEgreso.monto || parseFloat(formEgreso.monto) <= 0) {
+      setMensaje({ tipo: 'error', texto: 'Ingresa un monto válido' });
+      return;
+    }
+    if (!formEgreso.descripcion.trim()) {
+      setMensaje({ tipo: 'error', texto: 'Ingresa una descripción' });
+      return;
+    }
+
+    setGuardando(true);
+    try {
+      const { error } = await createMovimientoCaja({
+        tipo: 'egreso',
+        monto: parseFloat(formEgreso.monto),
+        categoria: formEgreso.categoria,
+        metodo_pago: formEgreso.metodoPago,
+        descripcion: formEgreso.descripcion.trim(),
+        referencia: formEgreso.referencia.trim() || null
+      });
+
+      if (error) {
+        setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
+      } else {
+        setMensaje({ tipo: 'exito', texto: 'Egreso registrado' });
+        setMostrarFormEgreso(false);
+        setFormEgreso({ monto: '', categoria: 'gasto_operativo', metodoPago: 'efectivo', descripcion: '', referencia: '' });
+        cargarDatos();
+        setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+      }
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: 'Error: ' + err.message });
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const handleEliminar = async (id) => {
+    if (!window.confirm('¿Eliminar este movimiento de caja?')) return;
+
+    const { error } = await deleteMovimientoCaja(id);
+    if (error) {
+      setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
+    } else {
+      setMensaje({ tipo: 'exito', texto: 'Movimiento eliminado' });
+      cargarDatos();
+      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+    }
+  };
+
+  const inputStyle = {
+    width: '100%',
+    padding: '10px 12px',
+    border: `1px solid ${colors.sand}`,
+    borderRadius: '8px',
+    fontSize: '14px',
+    background: 'white',
+    boxSizing: 'border-box'
+  };
+
+  return (
+    <div>
+      <h2 style={{ color: colors.espresso, marginBottom: '20px' }}>Caja</h2>
+
+      {/* Mensaje */}
+      {mensaje.texto && (
+        <div style={{
+          padding: '12px 16px',
+          borderRadius: '8px',
+          marginBottom: '16px',
+          background: mensaje.tipo === 'exito' ? 'rgba(171,213,94,0.2)' : 'rgba(196,120,74,0.2)',
+          color: mensaje.tipo === 'exito' ? colors.olive : colors.terracotta,
+          border: `1px solid ${mensaje.tipo === 'exito' ? colors.olive : colors.terracotta}`
+        }}>
+          {mensaje.texto}
+        </div>
+      )}
+
+      {/* Tarjetas de resumen */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+        <div style={{
+          background: colors.cotton,
+          borderRadius: '12px',
+          padding: '20px',
+          border: `2px solid ${colors.sidebarBg}`,
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: '13px', color: colors.camel, marginBottom: '8px' }}>Balance</div>
+          <div style={{
+            fontSize: '28px',
+            fontWeight: '700',
+            color: balance.balance >= 0 ? colors.sidebarBg : colors.terracotta
+          }}>
+            {formatearMoneda(balance.balance)}
+          </div>
+        </div>
+
+        <div style={{
+          background: colors.cotton,
+          borderRadius: '12px',
+          padding: '20px',
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: '13px', color: colors.camel, marginBottom: '8px' }}>Ingresos</div>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: colors.olive }}>
+            {formatearMoneda(balance.totalIngresos)}
+          </div>
+        </div>
+
+        <div style={{
+          background: colors.cotton,
+          borderRadius: '12px',
+          padding: '20px',
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: '13px', color: colors.camel, marginBottom: '8px' }}>Egresos</div>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: colors.terracotta }}>
+            {formatearMoneda(balance.totalEgresos)}
+          </div>
+        </div>
+      </div>
+
+      {/* Controles */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '20px', alignItems: 'center' }}>
+        {isAdmin && (
+          <button
+            onClick={() => setMostrarFormEgreso(!mostrarFormEgreso)}
+            style={{
+              padding: '10px 20px',
+              background: colors.terracotta,
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontWeight: '600',
+              fontSize: '14px'
+            }}
+          >
+            {mostrarFormEgreso ? 'Cancelar' : '+ Registrar Egreso'}
+          </button>
+        )}
+
+        <div style={{ display: 'flex', gap: '4px', background: colors.cotton, borderRadius: '8px', padding: '4px' }}>
+          {[
+            { id: 'hoy', label: 'Hoy' },
+            { id: 'semana', label: 'Semana' },
+            { id: 'mes', label: 'Mes' },
+            { id: 'todo', label: 'Todo' }
+          ].map(p => (
+            <button
+              key={p.id}
+              onClick={() => setFiltroPeriodo(p.id)}
+              style={{
+                padding: '6px 14px',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: filtroPeriodo === p.id ? '700' : '400',
+                background: filtroPeriodo === p.id ? colors.sidebarBg : 'transparent',
+                color: filtroPeriodo === p.id ? 'white' : colors.espresso
+              }}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', gap: '4px', background: colors.cotton, borderRadius: '8px', padding: '4px' }}>
+          {[
+            { id: 'todos', label: 'Todos' },
+            { id: 'ingreso', label: 'Ingresos' },
+            { id: 'egreso', label: 'Egresos' }
+          ].map(t => (
+            <button
+              key={t.id}
+              onClick={() => setFiltroTipo(t.id)}
+              style={{
+                padding: '6px 14px',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: filtroTipo === t.id ? '700' : '400',
+                background: filtroTipo === t.id ? colors.sidebarBg : 'transparent',
+                color: filtroTipo === t.id ? 'white' : colors.espresso
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Formulario de Egreso */}
+      {mostrarFormEgreso && isAdmin && (
+        <div style={{
+          background: colors.cotton,
+          borderRadius: '12px',
+          padding: '20px',
+          marginBottom: '20px',
+          border: `1px solid ${colors.sand}`
+        }}>
+          <h3 style={{ color: colors.espresso, marginTop: 0, marginBottom: '16px' }}>Registrar Egreso</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+            <div>
+              <label style={{ fontSize: '13px', color: colors.camel, display: 'block', marginBottom: '4px' }}>Monto *</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={formEgreso.monto}
+                onChange={e => setFormEgreso({ ...formEgreso, monto: e.target.value })}
+                placeholder="0.00"
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: '13px', color: colors.camel, display: 'block', marginBottom: '4px' }}>Categoría</label>
+              <select
+                value={formEgreso.categoria}
+                onChange={e => setFormEgreso({ ...formEgreso, categoria: e.target.value })}
+                style={inputStyle}
+              >
+                {categoriasEgreso.map(c => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: '13px', color: colors.camel, display: 'block', marginBottom: '4px' }}>Método de pago</label>
+              <select
+                value={formEgreso.metodoPago}
+                onChange={e => setFormEgreso({ ...formEgreso, metodoPago: e.target.value })}
+                style={inputStyle}
+              >
+                <option value="efectivo">Efectivo</option>
+                <option value="transferencia">Transferencia</option>
+                <option value="tarjeta">Tarjeta</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: '13px', color: colors.camel, display: 'block', marginBottom: '4px' }}>Referencia</label>
+              <input
+                type="text"
+                value={formEgreso.referencia}
+                onChange={e => setFormEgreso({ ...formEgreso, referencia: e.target.value })}
+                placeholder="Nº factura, recibo, etc."
+                style={inputStyle}
+              />
+            </div>
+          </div>
+          <div style={{ marginTop: '12px' }}>
+            <label style={{ fontSize: '13px', color: colors.camel, display: 'block', marginBottom: '4px' }}>Descripción *</label>
+            <textarea
+              value={formEgreso.descripcion}
+              onChange={e => setFormEgreso({ ...formEgreso, descripcion: e.target.value })}
+              placeholder="Descripción del gasto..."
+              rows={2}
+              style={{ ...inputStyle, resize: 'vertical' }}
+            />
+          </div>
+          <div style={{ marginTop: '16px', display: 'flex', gap: '12px' }}>
+            <button
+              onClick={handleRegistrarEgreso}
+              disabled={guardando}
+              style={{
+                padding: '10px 24px',
+                background: colors.terracotta,
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: guardando ? 'not-allowed' : 'pointer',
+                fontWeight: '600',
+                opacity: guardando ? 0.6 : 1
+              }}
+            >
+              {guardando ? 'Guardando...' : 'Registrar Egreso'}
+            </button>
+            <button
+              onClick={() => setMostrarFormEgreso(false)}
+              style={{
+                padding: '10px 24px',
+                background: colors.sand,
+                color: colors.espresso,
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer'
+              }}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Tabla de movimientos */}
+      {cargando ? (
+        <div style={{ textAlign: 'center', padding: '40px', color: colors.camel }}>Cargando...</div>
+      ) : movimientos.length === 0 ? (
+        <div style={{
+          textAlign: 'center',
+          padding: '40px',
+          color: colors.camel,
+          background: colors.cotton,
+          borderRadius: '12px'
+        }}>
+          No hay movimientos en este periodo
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {movimientos.map(mov => (
+            <div key={mov.id} style={{
+              background: colors.cotton,
+              border: `1px solid ${mov.tipo === 'ingreso' ? 'rgba(171,213,94,0.4)' : 'rgba(196,120,74,0.4)'}`,
+              borderRadius: '10px',
+              padding: '14px 18px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '10px'
+            }}>
+              <div style={{ flex: 1, minWidth: '200px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <span style={{
+                    padding: '2px 10px',
+                    borderRadius: '10px',
+                    fontSize: '11px',
+                    fontWeight: '600',
+                    background: mov.tipo === 'ingreso' ? 'rgba(171,213,94,0.2)' : 'rgba(196,120,74,0.2)',
+                    color: mov.tipo === 'ingreso' ? colors.olive : colors.terracotta
+                  }}>
+                    {mov.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'}
+                  </span>
+                  <span style={{
+                    padding: '2px 8px',
+                    borderRadius: '10px',
+                    fontSize: '11px',
+                    background: colors.sand,
+                    color: colors.espresso
+                  }}>
+                    {categoriasLabel[mov.categoria] || mov.categoria}
+                  </span>
+                  <span style={{
+                    padding: '2px 8px',
+                    borderRadius: '10px',
+                    fontSize: '11px',
+                    background: 'rgba(0,95,132,0.1)',
+                    color: colors.sidebarBg
+                  }}>
+                    {metodosPagoLabel[mov.metodo_pago] || mov.metodo_pago}
+                  </span>
+                </div>
+                <div style={{ fontSize: '14px', color: colors.espresso }}>
+                  {mov.descripcion || '-'}
+                </div>
+                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '2px' }}>
+                  {formatearFecha(mov.fecha)}
+                  {mov.referencia ? ` • Ref: ${mov.referencia}` : ''}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  fontSize: '20px',
+                  fontWeight: '700',
+                  color: mov.tipo === 'ingreso' ? colors.olive : colors.terracotta
+                }}>
+                  {mov.tipo === 'ingreso' ? '+' : '-'}{formatearMoneda(mov.monto)}
+                </div>
+                {isAdmin && mov.tipo === 'egreso' && !mov.venta_id && (
+                  <button
+                    onClick={() => handleEliminar(mov.id)}
+                    style={{
+                      padding: '6px 12px',
+                      background: 'rgba(196,120,74,0.1)',
+                      color: colors.terracotta,
+                      border: `1px solid ${colors.terracotta}`,
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '12px'
+                    }}
+                  >
+                    Eliminar
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -8252,6 +8811,7 @@ export default function DashboardToteBag() {
       case 'stocks': return <StocksView isAdmin={isAdmin} />;
       case 'salidas': return <SalidasView isAdmin={isAdmin} />;
       case 'ventas': return <VentasView isAdmin={isAdmin} />;
+      case 'caja': return <CajaView isAdmin={isAdmin} />;
       case 'mayoreo': return <MayoreoView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} />;
       case 'ecommerce': return <EcommerceView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} datosDB={datosDB} costosAmazon={costosAmazon} setCostosAmazon={setCostosAmazon} isAdmin={isAdmin} />;
       case 'promociones': return <PromocionesView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} />;
