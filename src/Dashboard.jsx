@@ -1481,21 +1481,34 @@ const ProductosView = ({ isAdmin }) => {
     if (!nuevaCategoria.nombre.trim()) return;
 
     const slug = nuevaCategoria.nombre.toLowerCase().replace(/\s+/g, '-');
-    const { data, error } = await createCategoria({
-      nombre: nuevaCategoria.nombre,
-      slug,
-      icono: nuevaCategoria.icono,
-      orden: categorias.length + 1
-    });
+    try {
+      const { data, error } = await createCategoria({
+        nombre: nuevaCategoria.nombre,
+        slug,
+        icono: nuevaCategoria.icono,
+        orden: categorias.length + 1
+      });
 
-    if (data) {
+      if (error) {
+        console.error('Error al crear categoría:', error);
+        setMensaje({ tipo: 'error', texto: 'Error al crear categoría: ' + (error.message || JSON.stringify(error)) });
+        return;
+      }
+
+      if (!data) {
+        setMensaje({ tipo: 'error', texto: 'No se pudo crear la categoría. Verifica permisos de administrador.' });
+        return;
+      }
+
       setCategorias([...categorias, data]);
       setNuevaCategoria({ nombre: '', icono: '📦' });
       setMostrarAgregarCategoria(false);
+      cambiarCategoria(data);
       setMensaje({ tipo: 'exito', texto: 'Categoría creada correctamente' });
       setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
-    } else if (error) {
-      setMensaje({ tipo: 'error', texto: 'Error al crear categoría: ' + error.message });
+    } catch (err) {
+      console.error('Error inesperado al crear categoría:', err);
+      setMensaje({ tipo: 'error', texto: 'Error inesperado: ' + err.message });
     }
   };
 
