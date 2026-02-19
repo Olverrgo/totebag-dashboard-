@@ -62,3 +62,59 @@ CREATE POLICY "movimientos_caja_update" ON movimientos_caja
       WHERE id = auth.uid() AND rol = 'admin'
     )
   );
+
+-- =====================================================
+-- MIGRACIÓN: Importar ventas existentes ya cobradas
+-- Ejecutar UNA sola vez después de crear la tabla
+-- =====================================================
+
+-- 1. Ventas directas pagadas (monto_pagado completo)
+INSERT INTO movimientos_caja (tipo, monto, venta_id, categoria, metodo_pago, descripcion, fecha, created_at)
+SELECT
+  'ingreso',
+  v.monto_pagado,
+  v.id,
+  'venta',
+  COALESCE(v.metodo_pago, 'efectivo'),
+  'Venta directa - ' || COALESCE(v.producto_nombre, 'Producto') || ' - ' || v.cantidad || ' pzas',
+  COALESCE(v.fecha_pago, v.created_at),
+  COALESCE(v.fecha_pago, v.created_at)
+FROM ventas v
+WHERE v.activo = true
+  AND v.tipo_venta = 'directa'
+  AND v.estado_pago = 'pagado'
+  AND v.monto_pagado > 0;
+
+-- 2. Consignaciones totalmente pagadas
+INSERT INTO movimientos_caja (tipo, monto, venta_id, categoria, metodo_pago, descripcion, fecha, created_at)
+SELECT
+  'ingreso',
+  v.monto_pagado,
+  v.id,
+  'pago_consignacion',
+  COALESCE(v.metodo_pago, 'efectivo'),
+  'Pago consignación - ' || COALESCE(v.producto_nombre, 'Producto') || ' - ' || COALESCE(v.cliente_nombre, 'Cliente') || ' - ' || v.cantidad || ' pzas',
+  COALESCE(v.fecha_pago, v.created_at),
+  COALESCE(v.fecha_pago, v.created_at)
+FROM ventas v
+WHERE v.activo = true
+  AND v.tipo_venta = 'consignacion'
+  AND v.estado_pago = 'pagado'
+  AND v.monto_pagado > 0;
+
+-- 3. Consignaciones con pago parcial (registrar lo que ya se cobró)
+INSERT INTO movimientos_caja (tipo, monto, venta_id, categoria, metodo_pago, descripcion, fecha, created_at)
+SELECT
+  'ingreso',
+  v.monto_pagado,
+  v.id,
+  'pago_consignacion',
+  COALESCE(v.metodo_pago, 'efectivo'),
+  'Pago parcial consignación - ' || COALESCE(v.producto_nombre, 'Producto') || ' - ' || COALESCE(v.cliente_nombre, 'Cliente'),
+  v.created_at,
+  v.created_at
+FROM ventas v
+WHERE v.activo = true
+  AND v.tipo_venta = 'consignacion'
+  AND v.estado_pago = 'parcial'
+  AND v.monto_pagado > 0;
