@@ -1301,6 +1301,7 @@ const CampoDinamico = ({ campo, valor, onChange, colors }) => {
 
 // Vista Productos
 const ProductosView = ({ isAdmin }) => {
+  const isMobile = window.innerWidth <= 768;
   const [hoverAgregar, setHoverAgregar] = useState(false);
   const [mostrarPopup, setMostrarPopup] = useState(false);
   const [lineasProducto, setLineasProducto] = useState([
@@ -5184,6 +5185,7 @@ const StocksView = ({ isAdmin }) => {
 
 // Vista Salidas (Consignación y Pedidos Directos)
 const SalidasView = ({ isAdmin }) => {
+  const isMobile = window.innerWidth <= 768;
   const [productos, setProductos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [movimientos, setMovimientos] = useState([]);
@@ -6275,6 +6277,7 @@ const SalidasView = ({ isAdmin }) => {
 
 // Vista Ventas
 const VentasView = ({ isAdmin }) => {
+  const isMobile = window.innerWidth <= 768;
   const [ventas, setVentas] = useState([]);
   const [servicios, setServicios] = useState([]);
   const [productos, setProductos] = useState([]);
@@ -9035,6 +9038,7 @@ const MayoreoView = ({ productosActualizados, condicionesEco, condicionesEcoForr
 
 // Vista E-commerce - AMAZON
 const EcommerceView = ({ productosActualizados, costosAmazon, setCostosAmazon, isAdmin }) => {
+  const isMobile = window.innerWidth <= 768;
   const [editandoCostos, setEditandoCostos] = useState(false);
   const [editandoMayoreo, setEditandoMayoreo] = useState(false);
   const [guardandoCostos, setGuardandoCostos] = useState(false);
