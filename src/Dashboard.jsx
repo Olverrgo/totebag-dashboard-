@@ -1478,16 +1478,23 @@ const ProductosView = ({ isAdmin }) => {
 
   // Agregar nueva categoría
   const agregarCategoria = async () => {
-    if (!nuevaCategoria.nombre.trim()) return;
+    console.log('agregarCategoria llamada, nombre:', nuevaCategoria.nombre);
+    if (!nuevaCategoria.nombre.trim()) {
+      setMensaje({ tipo: 'error', texto: 'Ingresa un nombre para la categoría' });
+      return;
+    }
 
-    const slug = nuevaCategoria.nombre.toLowerCase().replace(/\s+/g, '-');
+    setGuardando(true);
+    const slug = nuevaCategoria.nombre.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
     try {
+      console.log('Creando categoría:', { nombre: nuevaCategoria.nombre, slug, icono: nuevaCategoria.icono });
       const { data, error } = await createCategoria({
         nombre: nuevaCategoria.nombre,
         slug,
         icono: nuevaCategoria.icono,
         orden: categorias.length + 1
       });
+      console.log('Resultado createCategoria:', { data, error });
 
       if (error) {
         console.error('Error al crear categoría:', error);
@@ -1504,11 +1511,13 @@ const ProductosView = ({ isAdmin }) => {
       setNuevaCategoria({ nombre: '', icono: '📦' });
       setMostrarAgregarCategoria(false);
       cambiarCategoria(data);
-      setMensaje({ tipo: 'exito', texto: 'Categoría creada correctamente' });
-      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+      setMensaje({ tipo: 'exito', texto: 'Categoría "' + data.nombre + '" creada correctamente' });
+      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
     } catch (err) {
       console.error('Error inesperado al crear categoría:', err);
       setMensaje({ tipo: 'error', texto: 'Error inesperado: ' + err.message });
+    } finally {
+      setGuardando(false);
     }
   };
 
