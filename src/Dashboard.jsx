@@ -7390,9 +7390,10 @@ const CajaView = ({ isAdmin }) => {
 };
 
 
-// Vista Balance - Cuentas por cobrar por cliente
+// Vista Balance - Cuentas por cobrar por cliente (ventas + servicios maquila)
 const BalanceView = ({ isAdmin }) => {
   const [ventas, setVentas] = useState([]);
+  const [servicios, setServicios] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [clienteSeleccionado, setClienteSeleccionado] = useState('todos');
@@ -7400,11 +7401,13 @@ const BalanceView = ({ isAdmin }) => {
 
   const cargarDatos = async () => {
     setCargando(true);
-    const [ventasRes, clientesRes] = await Promise.all([
+    const [ventasRes, serviciosRes, clientesRes] = await Promise.all([
       getVentas(),
+      getServiciosMaquila(),
       getClientes()
     ]);
     setVentas(ventasRes.data || []);
+    setServicios(serviciosRes.data || []);
     setClientes(clientesRes.data || []);
     setCargando(false);
   };
@@ -7429,10 +7432,11 @@ const BalanceView = ({ isAdmin }) => {
     });
   };
 
-  // Agrupar ventas por cliente
+  // Agrupar ventas + servicios por cliente
   const resumenPorCliente = () => {
     const mapa = {};
 
+    // Procesar ventas
     ventas.forEach(v => {
       const clienteId = v.cliente_id || 'sin_cliente';
       const clienteNombre = v.cliente_nombre || 'Venta directa (sin cliente)';
@@ -7441,22 +7445,58 @@ const BalanceView = ({ isAdmin }) => {
         mapa[clienteId] = {
           id: clienteId,
           nombre: clienteNombre,
-          ventas: [],
+          registros: [],
           totalVendido: 0,
           totalCobrado: 0,
           totalPendiente: 0,
-          numVentas: 0
+          totalServicios: 0,
+          totalServiciosPagado: 0,
+          totalServiciosPendiente: 0,
+          numVentas: 0,
+          numServicios: 0
         };
       }
 
-      mapa[clienteId].ventas.push(v);
+      mapa[clienteId].registros.push({ ...v, _tipo_registro: 'venta' });
       mapa[clienteId].numVentas += 1;
       mapa[clienteId].totalVendido += parseFloat(v.total) || 0;
       mapa[clienteId].totalCobrado += parseFloat(v.monto_pagado) || 0;
       mapa[clienteId].totalPendiente += Math.max(0, (parseFloat(v.total) || 0) - (parseFloat(v.monto_pagado) || 0));
     });
 
-    return Object.values(mapa).sort((a, b) => b.totalPendiente - a.totalPendiente);
+    // Procesar servicios de maquila
+    servicios.forEach(s => {
+      const clienteId = s.cliente_id || 'sin_cliente';
+      const clienteNombre = s.cliente_nombre || 'Sin cliente asignado';
+
+      if (!mapa[clienteId]) {
+        mapa[clienteId] = {
+          id: clienteId,
+          nombre: clienteNombre,
+          registros: [],
+          totalVendido: 0,
+          totalCobrado: 0,
+          totalPendiente: 0,
+          totalServicios: 0,
+          totalServiciosPagado: 0,
+          totalServiciosPendiente: 0,
+          numVentas: 0,
+          numServicios: 0
+        };
+      }
+
+      mapa[clienteId].registros.push({ ...s, _tipo_registro: 'servicio' });
+      mapa[clienteId].numServicios += 1;
+      mapa[clienteId].totalServicios += parseFloat(s.total) || 0;
+      mapa[clienteId].totalServiciosPagado += parseFloat(s.monto_pagado) || 0;
+      mapa[clienteId].totalServiciosPendiente += Math.max(0, (parseFloat(s.total) || 0) - (parseFloat(s.monto_pagado) || 0));
+    });
+
+    return Object.values(mapa).sort((a, b) => {
+      const deudaA = a.totalPendiente + a.totalServiciosPendiente;
+      const deudaB = b.totalPendiente + b.totalServiciosPendiente;
+      return deudaB - deudaA;
+    });
   };
 
   const clientesConDatos = resumenPorCliente();
@@ -7470,10 +7510,14 @@ const BalanceView = ({ isAdmin }) => {
   const totales = clientesConDatos.reduce((acc, c) => ({
     vendido: acc.vendido + c.totalVendido,
     cobrado: acc.cobrado + c.totalCobrado,
-    pendiente: acc.pendiente + c.totalPendiente
-  }), { vendido: 0, cobrado: 0, pendiente: 0 });
+    pendiente: acc.pendiente + c.totalPendiente,
+    servicios: acc.servicios + c.totalServicios,
+    serviciosPagado: acc.serviciosPagado + c.totalServiciosPagado,
+    serviciosPendiente: acc.serviciosPendiente + c.totalServiciosPendiente
+  }), { vendido: 0, cobrado: 0, pendiente: 0, servicios: 0, serviciosPagado: 0, serviciosPendiente: 0 });
 
-  const clientesConDeuda = clientesConDatos.filter(c => c.totalPendiente > 0).length;
+  const deudaTotal = totales.pendiente + totales.serviciosPendiente;
+  const clientesConDeuda = clientesConDatos.filter(c => (c.totalPendiente + c.totalServiciosPendiente) > 0).length;
 
   const estadoBadge = (estado) => {
     const estilos = {
@@ -7497,6 +7541,27 @@ const BalanceView = ({ isAdmin }) => {
     );
   };
 
+  const tipoBadge = (tipoRegistro, tipoVenta) => {
+    if (tipoRegistro === 'servicio') {
+      return (
+        <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '11px', background: 'rgba(156,175,136,0.2)', color: colors.sage }}>
+          Maquila
+        </span>
+      );
+    }
+    return (
+      <span style={{
+        padding: '2px 8px',
+        borderRadius: '10px',
+        fontSize: '11px',
+        background: tipoVenta === 'consignacion' ? 'rgba(0,95,132,0.1)' : 'rgba(171,213,94,0.15)',
+        color: tipoVenta === 'consignacion' ? colors.sidebarBg : colors.olive
+      }}>
+        {tipoVenta === 'consignacion' ? 'Consignación' : 'Directa'}
+      </span>
+    );
+  };
+
   if (cargando) {
     return <div style={{ textAlign: 'center', padding: '60px', color: colors.camel }}>Cargando...</div>;
   }
@@ -7506,52 +7571,36 @@ const BalanceView = ({ isAdmin }) => {
       <h2 style={{ color: colors.espresso, marginBottom: '20px' }}>Balance de Cuentas</h2>
 
       {/* Tarjetas resumen */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        <div style={{
-          background: colors.cotton,
-          borderRadius: '12px',
-          padding: '20px',
-          textAlign: 'center'
-        }}>
-          <div style={{ fontSize: '13px', color: colors.camel, marginBottom: '8px' }}>Total vendido</div>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: colors.sidebarBg }}>
-            {formatearMoneda(totales.vendido)}
-          </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+        <div style={{ background: colors.cotton, borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
+          <div style={{ fontSize: '13px', color: colors.camel, marginBottom: '8px' }}>Total ventas</div>
+          <div style={{ fontSize: '22px', fontWeight: '700', color: colors.sidebarBg }}>{formatearMoneda(totales.vendido)}</div>
         </div>
-
-        <div style={{
-          background: colors.cotton,
-          borderRadius: '12px',
-          padding: '20px',
-          textAlign: 'center'
-        }}>
-          <div style={{ fontSize: '13px', color: colors.camel, marginBottom: '8px' }}>Total cobrado</div>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: colors.olive }}>
-            {formatearMoneda(totales.cobrado)}
-          </div>
+        <div style={{ background: colors.cotton, borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
+          <div style={{ fontSize: '13px', color: colors.camel, marginBottom: '8px' }}>Cobrado ventas</div>
+          <div style={{ fontSize: '22px', fontWeight: '700', color: colors.olive }}>{formatearMoneda(totales.cobrado)}</div>
         </div>
-
-        <div style={{
-          background: colors.cotton,
-          borderRadius: '12px',
-          padding: '20px',
-          border: `2px solid ${colors.terracotta}`,
-          textAlign: 'center'
-        }}>
-          <div style={{ fontSize: '13px', color: colors.camel, marginBottom: '8px' }}>Por cobrar</div>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: colors.terracotta }}>
-            {formatearMoneda(totales.pendiente)}
-          </div>
+        <div style={{ background: colors.cotton, borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
+          <div style={{ fontSize: '13px', color: colors.camel, marginBottom: '8px' }}>Total maquila</div>
+          <div style={{ fontSize: '22px', fontWeight: '700', color: colors.sidebarBg }}>{formatearMoneda(totales.servicios)}</div>
         </div>
-
         <div style={{
-          background: colors.cotton,
-          borderRadius: '12px',
-          padding: '20px',
-          textAlign: 'center'
+          background: colors.cotton, borderRadius: '12px', padding: '20px', textAlign: 'center',
+          border: deudaTotal > 0 ? `2px solid ${colors.terracotta}` : `1px solid ${colors.sand}`
         }}>
+          <div style={{ fontSize: '13px', color: colors.camel, marginBottom: '8px' }}>Deuda total</div>
+          <div style={{ fontSize: '22px', fontWeight: '700', color: deudaTotal > 0 ? colors.terracotta : colors.olive }}>
+            {formatearMoneda(deudaTotal)}
+          </div>
+          {deudaTotal > 0 && (
+            <div style={{ fontSize: '11px', color: colors.camel, marginTop: '4px' }}>
+              Ventas: {formatearMoneda(totales.pendiente)} • Maquila: {formatearMoneda(totales.serviciosPendiente)}
+            </div>
+          )}
+        </div>
+        <div style={{ background: colors.cotton, borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
           <div style={{ fontSize: '13px', color: colors.camel, marginBottom: '8px' }}>Clientes con deuda</div>
-          <div style={{ fontSize: '24px', fontWeight: '700', color: clientesConDeuda > 0 ? colors.terracotta : colors.olive }}>
+          <div style={{ fontSize: '22px', fontWeight: '700', color: clientesConDeuda > 0 ? colors.terracotta : colors.olive }}>
             {clientesConDeuda}
           </div>
         </div>
@@ -7574,149 +7623,169 @@ const BalanceView = ({ isAdmin }) => {
           <option value="todos">Todos los clientes</option>
           {clientesConDatos
             .filter(c => c.id !== 'sin_cliente')
-            .map(c => (
-              <option key={c.id} value={String(c.id)}>
-                {c.nombre} {c.totalPendiente > 0 ? `(debe ${formatearMoneda(c.totalPendiente)})` : '(al corriente)'}
-              </option>
-            ))}
+            .map(c => {
+              const deuda = c.totalPendiente + c.totalServiciosPendiente;
+              return (
+                <option key={c.id} value={String(c.id)}>
+                  {c.nombre} {deuda > 0 ? `(debe ${formatearMoneda(deuda)})` : '(al corriente)'}
+                </option>
+              );
+            })}
         </select>
       </div>
 
-      {/* Lista de clientes con sus balances */}
+      {/* Lista de clientes */}
       {clientesFiltrados.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px', color: colors.camel, background: colors.cotton, borderRadius: '12px' }}>
           No hay datos para mostrar
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {clientesFiltrados.map(cliente => (
-            <div key={cliente.id} style={{
-              background: colors.cotton,
-              borderRadius: '12px',
-              border: `1px solid ${cliente.totalPendiente > 0 ? colors.terracotta : colors.sand}`,
-              overflow: 'hidden'
-            }}>
-              {/* Header del cliente */}
-              <div
-                onClick={() => setExpandido(expandido === cliente.id ? null : cliente.id)}
-                style={{
-                  padding: '16px 20px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: '10px',
-                  background: expandido === cliente.id ? colors.linen : 'transparent'
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: '16px', fontWeight: '600', color: colors.espresso }}>
-                    {cliente.nombre}
-                  </div>
-                  <div style={{ fontSize: '13px', color: colors.camel, marginTop: '2px' }}>
-                    {cliente.numVentas} venta{cliente.numVentas !== 1 ? 's' : ''} • Vendido: {formatearMoneda(cliente.totalVendido)}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '12px', color: colors.olive }}>
-                      Cobrado: {formatearMoneda(cliente.totalCobrado)}
+          {clientesFiltrados.map(cliente => {
+            const deudaCliente = cliente.totalPendiente + cliente.totalServiciosPendiente;
+            const totalGeneral = cliente.totalVendido + cliente.totalServicios;
+            const totalCobradoGeneral = cliente.totalCobrado + cliente.totalServiciosPagado;
+
+            return (
+              <div key={cliente.id} style={{
+                background: colors.cotton,
+                borderRadius: '12px',
+                border: `1px solid ${deudaCliente > 0 ? colors.terracotta : colors.sand}`,
+                overflow: 'hidden'
+              }}>
+                {/* Header */}
+                <div
+                  onClick={() => setExpandido(expandido === cliente.id ? null : cliente.id)}
+                  style={{
+                    padding: '16px 20px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '10px',
+                    background: expandido === cliente.id ? colors.linen : 'transparent'
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: '16px', fontWeight: '600', color: colors.espresso }}>
+                      {cliente.nombre}
                     </div>
-                    {cliente.totalPendiente > 0 && (
-                      <div style={{ fontSize: '16px', fontWeight: '700', color: colors.terracotta }}>
-                        Debe: {formatearMoneda(cliente.totalPendiente)}
-                      </div>
-                    )}
-                    {cliente.totalPendiente <= 0 && (
-                      <div style={{ fontSize: '14px', fontWeight: '600', color: colors.olive }}>
-                        Al corriente
-                      </div>
-                    )}
+                    <div style={{ fontSize: '13px', color: colors.camel, marginTop: '2px' }}>
+                      {cliente.numVentas > 0 && `${cliente.numVentas} venta${cliente.numVentas !== 1 ? 's' : ''}`}
+                      {cliente.numVentas > 0 && cliente.numServicios > 0 && ' • '}
+                      {cliente.numServicios > 0 && `${cliente.numServicios} servicio${cliente.numServicios !== 1 ? 's' : ''}`}
+                      {` • Total: ${formatearMoneda(totalGeneral)}`}
+                    </div>
                   </div>
-                  <span style={{ fontSize: '18px', color: colors.camel, transition: 'transform 0.2s', transform: expandido === cliente.id ? 'rotate(180deg)' : 'rotate(0)' }}>
-                    ▼
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '12px', color: colors.olive }}>
+                        Cobrado/Pagado: {formatearMoneda(totalCobradoGeneral)}
+                      </div>
+                      {deudaCliente > 0 ? (
+                        <div style={{ fontSize: '16px', fontWeight: '700', color: colors.terracotta }}>
+                          Debe: {formatearMoneda(deudaCliente)}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: '14px', fontWeight: '600', color: colors.olive }}>
+                          Al corriente
+                        </div>
+                      )}
+                    </div>
+                    <span style={{ fontSize: '18px', color: colors.camel, transition: 'transform 0.2s', transform: expandido === cliente.id ? 'rotate(180deg)' : 'rotate(0)' }}>
+                      ▼
+                    </span>
+                  </div>
                 </div>
+
+                {/* Detalle expandido */}
+                {expandido === cliente.id && (
+                  <div style={{ padding: '0 20px 16px' }}>
+                    {/* Barra de progreso */}
+                    {totalGeneral > 0 && (
+                      <div style={{ marginBottom: '16px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>
+                          <span>Progreso de cobro/pago</span>
+                          <span>{Math.round((totalCobradoGeneral / totalGeneral) * 100)}%</span>
+                        </div>
+                        <div style={{ background: colors.sand, borderRadius: '4px', height: '8px', overflow: 'hidden' }}>
+                          <div style={{
+                            width: `${Math.min(100, (totalCobradoGeneral / totalGeneral) * 100)}%`,
+                            height: '100%',
+                            background: deudaCliente > 0 ? colors.terracotta : colors.olive,
+                            borderRadius: '4px',
+                            transition: 'width 0.3s'
+                          }} />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Resumen por tipo si tiene ambos */}
+                    {cliente.numVentas > 0 && cliente.numServicios > 0 && (
+                      <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                        <div style={{ padding: '10px 16px', background: 'rgba(0,95,132,0.05)', borderRadius: '8px', fontSize: '13px' }}>
+                          <strong>Ventas:</strong> {formatearMoneda(cliente.totalVendido)} total • {formatearMoneda(cliente.totalCobrado)} cobrado • <span style={{ color: cliente.totalPendiente > 0 ? colors.terracotta : colors.olive }}>{formatearMoneda(cliente.totalPendiente)} pendiente</span>
+                        </div>
+                        <div style={{ padding: '10px 16px', background: 'rgba(156,175,136,0.1)', borderRadius: '8px', fontSize: '13px' }}>
+                          <strong>Maquila:</strong> {formatearMoneda(cliente.totalServicios)} total • {formatearMoneda(cliente.totalServiciosPagado)} pagado • <span style={{ color: cliente.totalServiciosPendiente > 0 ? colors.terracotta : colors.olive }}>{formatearMoneda(cliente.totalServiciosPendiente)} pendiente</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Tabla combinada */}
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                        <thead>
+                          <tr style={{ borderBottom: `2px solid ${colors.sand}` }}>
+                            <th style={{ padding: '8px', textAlign: 'left', color: colors.camel, fontWeight: '600' }}>Fecha</th>
+                            <th style={{ padding: '8px', textAlign: 'left', color: colors.camel, fontWeight: '600' }}>Concepto</th>
+                            <th style={{ padding: '8px', textAlign: 'center', color: colors.camel, fontWeight: '600' }}>Tipo</th>
+                            <th style={{ padding: '8px', textAlign: 'center', color: colors.camel, fontWeight: '600' }}>Cant.</th>
+                            <th style={{ padding: '8px', textAlign: 'right', color: colors.camel, fontWeight: '600' }}>Total</th>
+                            <th style={{ padding: '8px', textAlign: 'right', color: colors.camel, fontWeight: '600' }}>Pagado</th>
+                            <th style={{ padding: '8px', textAlign: 'right', color: colors.camel, fontWeight: '600' }}>Pendiente</th>
+                            <th style={{ padding: '8px', textAlign: 'center', color: colors.camel, fontWeight: '600' }}>Estado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cliente.registros
+                            .sort((a, b) => new Date(b.created_at || b.fecha) - new Date(a.created_at || a.fecha))
+                            .map(r => {
+                              const esServicio = r._tipo_registro === 'servicio';
+                              const total = parseFloat(r.total) || 0;
+                              const pagado = parseFloat(r.monto_pagado) || 0;
+                              const pendiente = Math.max(0, total - pagado);
+                              const fecha = esServicio ? r.fecha : r.created_at;
+                              const concepto = esServicio
+                                ? `${r.maquila} - ${r.tipo_producto}`
+                                : `${r.producto_nombre || '-'}${r.producto_medidas ? ` (${r.producto_medidas})` : ''}`;
+
+                              return (
+                                <tr key={`${r._tipo_registro}-${r.id}`} style={{ borderBottom: `1px solid ${colors.sand}` }}>
+                                  <td style={{ padding: '10px 8px', color: colors.espresso }}>{formatearFecha(fecha)}</td>
+                                  <td style={{ padding: '10px 8px', color: colors.espresso }}>{concepto}</td>
+                                  <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                                    {tipoBadge(r._tipo_registro, r.tipo_venta)}
+                                  </td>
+                                  <td style={{ padding: '10px 8px', textAlign: 'center', color: colors.espresso }}>{r.cantidad}</td>
+                                  <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: '600', color: colors.espresso }}>{formatearMoneda(total)}</td>
+                                  <td style={{ padding: '10px 8px', textAlign: 'right', color: colors.olive }}>{formatearMoneda(pagado)}</td>
+                                  <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: '600', color: pendiente > 0 ? colors.terracotta : colors.olive }}>
+                                    {pendiente > 0 ? formatearMoneda(pendiente) : '-'}
+                                  </td>
+                                  <td style={{ padding: '10px 8px', textAlign: 'center' }}>{estadoBadge(r.estado_pago)}</td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
-
-              {/* Detalle de ventas del cliente */}
-              {expandido === cliente.id && (
-                <div style={{ padding: '0 20px 16px' }}>
-                  {/* Barra de progreso de cobro */}
-                  {cliente.totalVendido > 0 && (
-                    <div style={{ marginBottom: '16px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>
-                        <span>Progreso de cobro</span>
-                        <span>{Math.round((cliente.totalCobrado / cliente.totalVendido) * 100)}%</span>
-                      </div>
-                      <div style={{ background: colors.sand, borderRadius: '4px', height: '8px', overflow: 'hidden' }}>
-                        <div style={{
-                          width: `${Math.min(100, (cliente.totalCobrado / cliente.totalVendido) * 100)}%`,
-                          height: '100%',
-                          background: cliente.totalPendiente > 0 ? colors.terracotta : colors.olive,
-                          borderRadius: '4px',
-                          transition: 'width 0.3s'
-                        }} />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Tabla de ventas */}
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                      <thead>
-                        <tr style={{ borderBottom: `2px solid ${colors.sand}` }}>
-                          <th style={{ padding: '8px', textAlign: 'left', color: colors.camel, fontWeight: '600' }}>Fecha</th>
-                          <th style={{ padding: '8px', textAlign: 'left', color: colors.camel, fontWeight: '600' }}>Producto</th>
-                          <th style={{ padding: '8px', textAlign: 'center', color: colors.camel, fontWeight: '600' }}>Tipo</th>
-                          <th style={{ padding: '8px', textAlign: 'center', color: colors.camel, fontWeight: '600' }}>Cant.</th>
-                          <th style={{ padding: '8px', textAlign: 'right', color: colors.camel, fontWeight: '600' }}>Total</th>
-                          <th style={{ padding: '8px', textAlign: 'right', color: colors.camel, fontWeight: '600' }}>Pagado</th>
-                          <th style={{ padding: '8px', textAlign: 'right', color: colors.camel, fontWeight: '600' }}>Pendiente</th>
-                          <th style={{ padding: '8px', textAlign: 'center', color: colors.camel, fontWeight: '600' }}>Estado</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {cliente.ventas
-                          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-                          .map(v => {
-                            const pendiente = Math.max(0, (parseFloat(v.total) || 0) - (parseFloat(v.monto_pagado) || 0));
-                            return (
-                              <tr key={v.id} style={{ borderBottom: `1px solid ${colors.sand}` }}>
-                                <td style={{ padding: '10px 8px', color: colors.espresso }}>{formatearFecha(v.created_at)}</td>
-                                <td style={{ padding: '10px 8px', color: colors.espresso }}>
-                                  {v.producto_nombre || '-'}
-                                  {v.producto_medidas ? ` (${v.producto_medidas})` : ''}
-                                </td>
-                                <td style={{ padding: '10px 8px', textAlign: 'center' }}>
-                                  <span style={{
-                                    padding: '2px 8px',
-                                    borderRadius: '10px',
-                                    fontSize: '11px',
-                                    background: v.tipo_venta === 'consignacion' ? 'rgba(0,95,132,0.1)' : 'rgba(171,213,94,0.15)',
-                                    color: v.tipo_venta === 'consignacion' ? colors.sidebarBg : colors.olive
-                                  }}>
-                                    {v.tipo_venta === 'consignacion' ? 'Consignación' : 'Directa'}
-                                  </span>
-                                </td>
-                                <td style={{ padding: '10px 8px', textAlign: 'center', color: colors.espresso }}>{v.cantidad}</td>
-                                <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: '600', color: colors.espresso }}>{formatearMoneda(v.total)}</td>
-                                <td style={{ padding: '10px 8px', textAlign: 'right', color: colors.olive }}>{formatearMoneda(v.monto_pagado)}</td>
-                                <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: '600', color: pendiente > 0 ? colors.terracotta : colors.olive }}>
-                                  {pendiente > 0 ? formatearMoneda(pendiente) : '-'}
-                                </td>
-                                <td style={{ padding: '10px 8px', textAlign: 'center' }}>{estadoBadge(v.estado_pago)}</td>
-                              </tr>
-                            );
-                          })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
