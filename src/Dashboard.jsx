@@ -2656,6 +2656,23 @@ const ProductosView = ({ isAdmin }) => {
         </div>
       )}
 
+      {/* Mensaje global (visible fuera del formulario de producto) */}
+      {mensaje.texto && !lineaSeleccionada && (
+        <div style={{
+          marginBottom: '15px',
+          padding: '12px 16px',
+          borderRadius: '8px',
+          background: mensaje.tipo === 'exito' ? 'rgba(171,213,94,0.15)' : 'rgba(196,120,74,0.15)',
+          border: `1px solid ${mensaje.tipo === 'exito' ? colors.olive : colors.terracotta}`,
+          color: mensaje.tipo === 'exito' ? colors.olive : colors.terracotta,
+          textAlign: 'center',
+          fontWeight: '500',
+          fontSize: '14px'
+        }}>
+          {mensaje.texto}
+        </div>
+      )}
+
       {/* Selector de Subcategorías (si existen) */}
       {subcategorias.length > 0 && (
         <div style={{
