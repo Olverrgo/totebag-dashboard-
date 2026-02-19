@@ -2888,6 +2888,43 @@ const ProductosView = ({ isAdmin }) => {
             </>
           )}
 
+          {/* Formulario básico para categorías nuevas sin campos dinámicos */}
+          {!esCategoriaLegacy() && camposCategoria.length === 0 && (
+            <div style={{ background: colors.sidebarBg, borderRadius: '8px', padding: '25px', color: colors.sidebarText }}>
+              <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '20px', letterSpacing: '1px' }}>
+                PRECIO DE VENTA
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: '150px' }}>
+                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>PRECIO DE VENTA</div>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formProducto.precioVenta}
+                    onChange={(e) => setFormProducto({ ...formProducto, precioVenta: parseFloat(e.target.value) || 0 })}
+                    disabled={!isAdmin}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      fontSize: '18px',
+                      fontWeight: '600',
+                      border: '2px solid rgba(255,255,255,0.3)',
+                      borderRadius: '6px',
+                      background: 'rgba(255,255,255,0.1)',
+                      color: colors.sidebarText,
+                      textAlign: 'center'
+                    }}
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              <div style={{ fontSize: '12px', opacity: 0.7, marginTop: '12px' }}>
+                Puedes agregar campos personalizados desde la configuración de categoría.
+              </div>
+            </div>
+          )}
+
           {/* Formulario legacy para Totebags */}
           {esCategoriaLegacy() && (
           <>
