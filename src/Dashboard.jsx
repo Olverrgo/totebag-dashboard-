@@ -6178,6 +6178,7 @@ const SalidasView = ({ isAdmin }) => {
 // Vista Ventas
 const VentasView = ({ isAdmin }) => {
   const [ventas, setVentas] = useState([]);
+  const [servicios, setServicios] = useState([]);
   const [productos, setProductos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [resumen, setResumen] = useState(null);
@@ -6231,7 +6232,7 @@ const VentasView = ({ isAdmin }) => {
 
     const fechas = getFechasPeriodo();
 
-    const [prodRes, cliRes, ventasRes, resumenRes] = await Promise.all([
+    const [prodRes, cliRes, ventasRes, resumenRes, serviciosRes] = await Promise.all([
       getProductos(),
       getClientes(),
       getVentas({
@@ -6239,13 +6240,15 @@ const VentasView = ({ isAdmin }) => {
         fechaFin: fechas.fin,
         estadoPago: filtroEstado !== 'todos' ? filtroEstado : null
       }),
-      getResumenVentas(fechas.inicio, fechas.fin)
+      getResumenVentas(fechas.inicio, fechas.fin),
+      getServiciosMaquila()
     ]);
 
     if (prodRes.data) setProductos(prodRes.data);
     if (cliRes.data) setClientes(cliRes.data);
     if (ventasRes.data) setVentas(ventasRes.data);
     if (resumenRes.data) setResumen(resumenRes.data);
+    if (serviciosRes.data) setServicios(serviciosRes.data);
   };
 
   useEffect(() => {
@@ -6576,42 +6579,51 @@ const VentasView = ({ isAdmin }) => {
       )}
 
       {/* Dashboard de resumen */}
-      {resumen && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px', marginBottom: '25px' }}>
-          <div style={{ ...cardStyle, borderColor: colors.sidebarBg }}>
-            <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>VENTAS HOY</div>
-            <div style={{ fontSize: '24px', fontWeight: '700', color: colors.sidebarBg }}>{formatearMoneda(resumen.ventasHoy)}</div>
-            <div style={{ fontSize: '12px', color: colors.camel }}>{resumen.piezasHoy} piezas</div>
+      {resumen && (() => {
+        const serviciosTotales = servicios.reduce((acc, s) => ({
+          total: acc.total + (parseFloat(s.total) || 0),
+          cobrado: acc.cobrado + (parseFloat(s.monto_pagado) || 0),
+          pendiente: acc.pendiente + Math.max(0, (parseFloat(s.total) || 0) - (parseFloat(s.monto_pagado) || 0))
+        }), { total: 0, cobrado: 0, pendiente: 0 });
+
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px', marginBottom: '25px' }}>
+            <div style={{ ...cardStyle, borderColor: colors.sidebarBg }}>
+              <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>VENTAS HOY</div>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: colors.sidebarBg }}>{formatearMoneda(resumen.ventasHoy)}</div>
+              <div style={{ fontSize: '12px', color: colors.camel }}>{resumen.piezasHoy} piezas</div>
+            </div>
+            <div style={{ ...cardStyle, borderColor: colors.olive }}>
+              <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>VENTAS PERÍODO</div>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: colors.olive }}>{formatearMoneda(resumen.totalVentas)}</div>
+              <div style={{ fontSize: '12px', color: colors.camel }}>{resumen.totalPiezas} piezas</div>
+            </div>
+            <div style={{ ...cardStyle, borderColor: colors.sage }}>
+              <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>SERVICIOS MAQUILA</div>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: colors.sage }}>{formatearMoneda(serviciosTotales.total)}</div>
+              <div style={{ fontSize: '12px', color: colors.camel }}>{servicios.length} servicios</div>
+            </div>
+            <div style={{ ...cardStyle, borderColor: '#27ae60' }}>
+              <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>COBRADO</div>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: '#27ae60' }}>{formatearMoneda(resumen.totalCobrado + serviciosTotales.cobrado)}</div>
+            </div>
+            <div style={{ ...cardStyle, borderColor: colors.terracotta }}>
+              <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>POR COBRAR</div>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: colors.terracotta }}>{formatearMoneda(resumen.totalPorCobrar + serviciosTotales.pendiente)}</div>
+            </div>
+            <div style={{ ...cardStyle, borderColor: '#9b59b6' }}>
+              <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>UTILIDAD</div>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: '#9b59b6' }}>{formatearMoneda(resumen.totalUtilidad)}</div>
+            </div>
           </div>
-          <div style={{ ...cardStyle, borderColor: colors.olive }}>
-            <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>VENTAS PERÍODO</div>
-            <div style={{ fontSize: '24px', fontWeight: '700', color: colors.olive }}>{formatearMoneda(resumen.totalVentas)}</div>
-            <div style={{ fontSize: '12px', color: colors.camel }}>{resumen.totalPiezas} piezas</div>
-          </div>
-          <div style={{ ...cardStyle, borderColor: '#27ae60' }}>
-            <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>COBRADO</div>
-            <div style={{ fontSize: '24px', fontWeight: '700', color: '#27ae60' }}>{formatearMoneda(resumen.totalCobrado)}</div>
-          </div>
-          <div style={{ ...cardStyle, borderColor: colors.terracotta }}>
-            <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>POR COBRAR</div>
-            <div style={{ fontSize: '24px', fontWeight: '700', color: colors.terracotta }}>{formatearMoneda(resumen.totalPorCobrar)}</div>
-          </div>
-          <div style={{ ...cardStyle, borderColor: '#9b59b6' }}>
-            <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>UTILIDAD</div>
-            <div style={{ fontSize: '24px', fontWeight: '700', color: '#9b59b6' }}>{formatearMoneda(resumen.totalUtilidad)}</div>
-          </div>
-          <div style={{ ...cardStyle, borderColor: colors.camel }}>
-            <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>TICKET PROM.</div>
-            <div style={{ fontSize: '24px', fontWeight: '700', color: colors.espresso }}>{formatearMoneda(resumen.ticketPromedio)}</div>
-            <div style={{ fontSize: '12px', color: colors.camel }}>{resumen.numVentas} ventas</div>
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Cuentas por Cobrar por Cliente */}
       {(() => {
         const ventasPendientes = ventas.filter(v => v.estado_pago === 'pendiente' || v.estado_pago === 'parcial');
-        if (ventasPendientes.length === 0) return null;
+        const serviciosPendientes = servicios.filter(s => s.estado_pago === 'pendiente' || s.estado_pago === 'parcial');
+        if (ventasPendientes.length === 0 && serviciosPendientes.length === 0) return null;
 
         // Agrupar por cliente
         const porCliente = {};
@@ -6626,6 +6638,28 @@ const VentasView = ({ isAdmin }) => {
           porCliente[cId].montoPorCobrar += pendiente;
           porCliente[cId].ventas.push(v);
           const fecha = v.created_at;
+          if (!porCliente[cId].ultimaFecha || fecha > porCliente[cId].ultimaFecha) {
+            porCliente[cId].ultimaFecha = fecha;
+          }
+        });
+
+        // Agregar servicios pendientes
+        serviciosPendientes.forEach(s => {
+          const cId = s.cliente_id || 0;
+          const cNombre = s.cliente_nombre || 'Sin cliente';
+          if (!porCliente[cId]) {
+            porCliente[cId] = { nombre: cNombre, piezas: 0, montoPorCobrar: 0, ventas: [], ultimaFecha: null };
+          }
+          const pendiente = (parseFloat(s.total) || 0) - (parseFloat(s.monto_pagado) || 0);
+          porCliente[cId].piezas += s.cantidad || 0;
+          porCliente[cId].montoPorCobrar += pendiente;
+          // Agregar como venta virtual para mostrar en el desglose
+          porCliente[cId].ventas.push({
+            ...s,
+            producto_nombre: `Maquila: ${s.maquila} - ${s.tipo_producto}`,
+            _es_servicio: true
+          });
+          const fecha = s.fecha || s.created_at;
           if (!porCliente[cId].ultimaFecha || fecha > porCliente[cId].ultimaFecha) {
             porCliente[cId].ultimaFecha = fecha;
           }
@@ -6995,91 +7029,128 @@ const VentasView = ({ isAdmin }) => {
         </div>
       )}
 
-      {/* Lista de ventas */}
+      {/* Lista de ventas + servicios */}
       {(() => {
-        const ventasFiltradas = filtroCliente === 'todos'
-          ? ventas
-          : ventas.filter(v => v.cliente_id === parseInt(filtroCliente));
-        return ventasFiltradas.length > 0 ? (
-        <div style={{ display: 'grid', gap: '12px' }}>
-          {ventasFiltradas.map((venta) => (
-            <div key={venta.id} style={{
-              background: colors.cotton,
-              border: `2px solid ${venta.estado_pago === 'pagado' ? colors.olive : venta.estado_pago === 'parcial' ? '#F7B731' : colors.terracotta}`,
-              borderRadius: '8px',
-              padding: '15px'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px' }}>
-                {/* Info */}
-                <div style={{ flex: 1, minWidth: '200px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px' }}>
-                    <span style={{ fontWeight: '600', color: colors.espresso }}>{venta.producto_nombre}</span>
-                    <span style={{
-                      padding: '2px 8px',
-                      borderRadius: '10px',
-                      fontSize: '11px',
-                      background: venta.estado_pago === 'pagado' ? 'rgba(171,213,94,0.2)' :
-                                  venta.estado_pago === 'parcial' ? 'rgba(247,183,49,0.2)' : 'rgba(196,120,74,0.2)',
-                      color: venta.estado_pago === 'pagado' ? colors.olive :
-                             venta.estado_pago === 'parcial' ? '#F7B731' : colors.terracotta
-                    }}>
-                      {venta.estado_pago === 'pagado' ? 'Pagado' : venta.estado_pago === 'parcial' ? 'Parcial' : 'Pendiente'}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '13px', color: colors.camel }}>
-                    {venta.cliente_nombre || 'Venta directa'} • {venta.cantidad} pzas • {formatearFecha(venta.created_at)}
-                  </div>
-                  {venta.notas && <div style={{ fontSize: '12px', color: colors.camel, marginTop: '5px', fontStyle: 'italic' }}>{venta.notas}</div>}
-                </div>
+        // Combinar ventas y servicios
+        const registrosVentas = ventas.map(v => ({ ...v, _tipo_registro: 'venta' }));
+        const registrosServicios = servicios
+          .filter(s => {
+            if (filtroEstado !== 'todos' && s.estado_pago !== filtroEstado) return false;
+            return true;
+          })
+          .map(s => ({
+            ...s,
+            _tipo_registro: 'servicio',
+            producto_nombre: `Maquila: ${s.maquila} - ${s.tipo_producto}`,
+            created_at: s.fecha || s.created_at
+          }));
 
-                {/* Montos */}
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '20px', fontWeight: '700', color: colors.sidebarBg }}>{formatearMoneda(venta.total)}</div>
-                  {venta.estado_pago !== 'pagado' && (
-                    <div style={{ fontSize: '12px', color: colors.terracotta }}>
-                      Pendiente: {formatearMoneda((venta.total || 0) - (venta.monto_pagado || 0))}
+        const todosRegistros = [...registrosVentas, ...registrosServicios];
+        const registrosFiltrados = filtroCliente === 'todos'
+          ? todosRegistros
+          : todosRegistros.filter(r => r.cliente_id === parseInt(filtroCliente));
+
+        // Ordenar por fecha más reciente
+        registrosFiltrados.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+        return registrosFiltrados.length > 0 ? (
+        <div style={{ display: 'grid', gap: '12px' }}>
+          {registrosFiltrados.map((registro) => {
+            const esServicio = registro._tipo_registro === 'servicio';
+            const pendiente = (parseFloat(registro.total) || 0) - (parseFloat(registro.monto_pagado) || 0);
+            return (
+              <div key={`${registro._tipo_registro}-${registro.id}`} style={{
+                background: colors.cotton,
+                border: `2px solid ${registro.estado_pago === 'pagado' ? colors.olive : registro.estado_pago === 'parcial' ? '#F7B731' : colors.terracotta}`,
+                borderRadius: '8px',
+                padding: '15px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px' }}>
+                  {/* Info */}
+                  <div style={{ flex: 1, minWidth: '200px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px' }}>
+                      <span style={{ fontWeight: '600', color: colors.espresso }}>{registro.producto_nombre}</span>
+                      {esServicio && (
+                        <span style={{
+                          padding: '2px 8px',
+                          borderRadius: '10px',
+                          fontSize: '11px',
+                          background: 'rgba(156,175,136,0.2)',
+                          color: colors.sage
+                        }}>
+                          Servicio
+                        </span>
+                      )}
+                      <span style={{
+                        padding: '2px 8px',
+                        borderRadius: '10px',
+                        fontSize: '11px',
+                        background: registro.estado_pago === 'pagado' ? 'rgba(171,213,94,0.2)' :
+                                    registro.estado_pago === 'parcial' ? 'rgba(247,183,49,0.2)' : 'rgba(196,120,74,0.2)',
+                        color: registro.estado_pago === 'pagado' ? colors.olive :
+                               registro.estado_pago === 'parcial' ? '#F7B731' : colors.terracotta
+                      }}>
+                        {registro.estado_pago === 'pagado' ? 'Pagado' : registro.estado_pago === 'parcial' ? 'Parcial' : 'Pendiente'}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '13px', color: colors.camel }}>
+                      {registro.cliente_nombre || 'Venta directa'} • {registro.cantidad} pzas • {formatearFecha(registro.created_at)}
+                    </div>
+                    {registro.notas && <div style={{ fontSize: '12px', color: colors.camel, marginTop: '5px', fontStyle: 'italic' }}>{registro.notas}</div>}
+                  </div>
+
+                  {/* Montos */}
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '20px', fontWeight: '700', color: colors.sidebarBg }}>{formatearMoneda(registro.total)}</div>
+                    {registro.estado_pago !== 'pagado' && (
+                      <div style={{ fontSize: '12px', color: colors.terracotta }}>
+                        Pendiente: {formatearMoneda(pendiente)}
+                      </div>
+                    )}
+                    {!esServicio && <div style={{ fontSize: '11px', color: '#9b59b6' }}>Utilidad: {formatearMoneda(registro.utilidad)}</div>}
+                    {esServicio && registro.estado_pago === 'parcial' && (
+                      <div style={{ fontSize: '11px', color: colors.olive }}>Pagado: {formatearMoneda(registro.monto_pagado)}</div>
+                    )}
+                  </div>
+
+                  {/* Acciones */}
+                  {isAdmin && !esServicio && (
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <button
+                        onClick={() => editarVenta(registro)}
+                        style={{
+                          padding: '6px 12px',
+                          background: colors.sidebarBg,
+                          color: colors.sidebarText,
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '12px'
+                        }}
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => eliminarVentaHandler(registro.id)}
+                        style={{
+                          padding: '6px 12px',
+                          background: colors.terracotta,
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '12px'
+                        }}
+                      >
+                        Eliminar
+                      </button>
                     </div>
                   )}
-                  <div style={{ fontSize: '11px', color: '#9b59b6' }}>Utilidad: {formatearMoneda(venta.utilidad)}</div>
                 </div>
 
-                {/* Acciones */}
-                {isAdmin && (
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <button
-                      onClick={() => editarVenta(venta)}
-                      style={{
-                        padding: '6px 12px',
-                        background: colors.sidebarBg,
-                        color: colors.sidebarText,
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '12px'
-                      }}
-                    >
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => eliminarVentaHandler(venta.id)}
-                      style={{
-                        padding: '6px 12px',
-                        background: colors.terracotta,
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '12px'
-                      }}
-                    >
-                      Eliminar
-                    </button>
-                  </div>
-                )}
               </div>
-
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div style={{ background: colors.cotton, border: '2px solid #DA9F17', padding: '40px', textAlign: 'center', borderRadius: '8px' }}>
