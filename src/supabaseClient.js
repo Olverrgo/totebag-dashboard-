@@ -2066,16 +2066,16 @@ export const registrarPagoServicio = async (servicioId, montoPago) => {
     .select()
     .single();
 
-  // Registrar egreso en caja
+  // Registrar ingreso en caja (el cliente nos paga por el servicio)
   if (!error && montoPago > 0) {
     await supabase
       .from('movimientos_caja')
       .insert([{
-        tipo: 'egreso',
+        tipo: 'ingreso',
         monto: montoPago,
-        categoria: 'gasto_produccion',
+        categoria: 'venta',
         metodo_pago: 'efectivo',
-        descripcion: `Pago maquila - Servicio #${servicioId}`
+        descripcion: `Cobro servicio maquila - Servicio #${servicioId}`
       }]);
   }
 

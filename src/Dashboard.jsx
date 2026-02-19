@@ -8203,14 +8203,14 @@ const ServiciosView = ({ isAdmin }) => {
       if (result.error) {
         setMensaje({ tipo: 'error', texto: 'Error: ' + result.error.message });
       } else {
-        // Si se pagó al crear, registrar egreso en caja
+        // Si se cobró al crear, registrar ingreso en caja
         if (!editando && form.estadoPago === 'pagado' && total > 0) {
           await createMovimientoCaja({
-            tipo: 'egreso',
+            tipo: 'ingreso',
             monto: total,
-            categoria: 'gasto_produccion',
+            categoria: 'venta',
             metodo_pago: form.metodoPago,
-            descripcion: `Maquila - ${form.maquila} - ${form.tipoProducto} - ${form.cantidad} pzas`
+            descripcion: `Cobro servicio maquila - ${form.maquila} - ${form.tipoProducto} - ${form.cantidad} pzas`
           });
         }
 
