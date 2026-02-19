@@ -893,10 +893,10 @@ const DashboardView = ({ productosActualizados }) => {
       ventasPendientes += Math.max(0, total - pagado);
     });
 
-    // Servicios pendientes de pago (deuda con maquilas)
-    let deudaMaquila = 0;
+    // Servicios de maquila por cobrar a clientes
+    let porCobrarMaquila = 0;
     serviciosData.forEach(s => {
-      deudaMaquila += Math.max(0, (parseFloat(s.total) || 0) - (parseFloat(s.monto_pagado) || 0));
+      porCobrarMaquila += Math.max(0, (parseFloat(s.total) || 0) - (parseFloat(s.monto_pagado) || 0));
     });
 
     // Utilidad neta = utilidad bruta - egresos de caja
@@ -913,7 +913,7 @@ const DashboardView = ({ productosActualizados }) => {
       piezasVendidas,
       ventasCobradas,
       ventasPendientes,
-      deudaMaquila,
+      porCobrarMaquila,
       numVentas: ventasData.length
     });
   };
@@ -992,7 +992,7 @@ const DashboardView = ({ productosActualizados }) => {
               }}>
                 <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Egresos</div>
                 <div style={{ fontSize: '26px', fontWeight: '700', color: colors.terracotta }}>{formatearMonedaDash(posEcon.egresos)}</div>
-                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Gastos operativos + maquila</div>
+                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Gastos operativos</div>
               </div>
 
               <div style={{
@@ -1010,7 +1010,7 @@ const DashboardView = ({ productosActualizados }) => {
               </div>
             </div>
 
-            {/* Fila secundaria: Cobrado, Por cobrar, Deuda maquila, Balance caja */}
+            {/* Fila secundaria: Cobrado, Por cobrar, Por cobrar maquila, Balance caja */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
               <div style={{ background: colors.cotton, borderRadius: '10px', padding: '14px', textAlign: 'center' }}>
                 <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Cobrado</div>
@@ -1023,9 +1023,9 @@ const DashboardView = ({ productosActualizados }) => {
                 </div>
               </div>
               <div style={{ background: colors.cotton, borderRadius: '10px', padding: '14px', textAlign: 'center' }}>
-                <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Deuda maquila</div>
-                <div style={{ fontSize: '18px', fontWeight: '600', color: posEcon.deudaMaquila > 0 ? colors.terracotta : colors.olive }}>
-                  {formatearMonedaDash(posEcon.deudaMaquila)}
+                <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Por cobrar maquila</div>
+                <div style={{ fontSize: '18px', fontWeight: '600', color: posEcon.porCobrarMaquila > 0 ? colors.terracotta : colors.olive }}>
+                  {formatearMonedaDash(posEcon.porCobrarMaquila)}
                 </div>
               </div>
               <div style={{ background: colors.cotton, borderRadius: '10px', padding: '14px', textAlign: 'center' }}>
@@ -2696,7 +2696,7 @@ const ProductosView = ({ isAdmin }) => {
           zIndex: 1000
         }}>
           <div style={{
-            background: colors.cotton, borderRadius: '12px', padding: '30px',
+            background: colors.cotton, borderRadius: '12px', padding: isMobile ? '16px' : '30px',
             maxWidth: '500px', width: '90%', maxHeight: '80vh', overflowY: 'auto',
             boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
           }}>
@@ -2787,7 +2787,7 @@ const ProductosView = ({ isAdmin }) => {
 
       {/* Formulario de producto */}
       {lineaSeleccionada ? (
-        <div style={{ background: colors.cotton, border: `1px solid ${colors.sand}`, padding: '30px', borderRadius: '8px' }}>
+        <div style={{ background: colors.cotton, border: `1px solid ${colors.sand}`, padding: isMobile ? '16px' : '30px', borderRadius: '8px' }}>
           {/* Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
             <div>
@@ -3790,7 +3790,7 @@ const ProductosView = ({ isAdmin }) => {
           justifyContent: 'center', zIndex: 1000
         }}>
           <div style={{
-            background: colors.cotton, borderRadius: '12px', padding: '25px',
+            background: colors.cotton, borderRadius: '12px', padding: isMobile ? '16px' : '25px',
             maxWidth: '800px', width: '95%', maxHeight: '90vh', overflowY: 'auto'
           }}>
             {/* Header */}
@@ -4129,8 +4129,8 @@ const ProductosView = ({ isAdmin }) => {
           justifyContent: 'center', zIndex: 1100
         }}>
           <div style={{
-            background: 'white', borderRadius: '12px', width: '900px', maxHeight: '90vh',
-            overflow: 'auto', padding: '25px'
+            background: 'white', borderRadius: '12px', width: '900px', maxWidth: '95vw', maxHeight: '90vh',
+            overflow: 'auto', padding: isMobile ? '16px' : '25px'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h3 style={{ margin: 0, color: colors.olivo }}>
@@ -4694,6 +4694,7 @@ const StocksView = ({ isAdmin }) => {
               overflow: 'hidden',
               border: `2px solid ${colors.sand}`
             }}>
+            <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                 <thead>
                   <tr style={{ background: colors.sidebarBg, color: 'white' }}>
@@ -4781,6 +4782,7 @@ const StocksView = ({ isAdmin }) => {
                   </tr>
                 </tbody>
               </table>
+            </div>
             </div>
           </div>
         );
@@ -5693,7 +5695,7 @@ const SalidasView = ({ isAdmin }) => {
       {/* Modal Nueva Salida */}
       {mostrarFormulario && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: colors.cotton, borderRadius: '12px', padding: '30px', maxWidth: '500px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div style={{ background: colors.cotton, borderRadius: '12px', padding: isMobile ? '16px' : '30px', maxWidth: '500px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h3 style={{ margin: 0, color: colors.sidebarBg }}>Nueva Salida</h3>
               <button onClick={() => setMostrarFormulario(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: colors.camel }}>×</button>
@@ -5824,7 +5826,7 @@ const SalidasView = ({ isAdmin }) => {
       {/* Modal Nuevo Cliente */}
       {mostrarNuevoCliente && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: colors.cotton, borderRadius: '12px', padding: '30px', maxWidth: '400px', width: '90%' }}>
+          <div style={{ background: colors.cotton, borderRadius: '12px', padding: isMobile ? '16px' : '30px', maxWidth: '400px', width: '90%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h3 style={{ margin: 0, color: colors.sidebarBg }}>Nuevo Cliente</h3>
               <button onClick={() => setMostrarNuevoCliente(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: colors.camel }}>×</button>
@@ -5869,7 +5871,7 @@ const SalidasView = ({ isAdmin }) => {
       {/* Modal Historial del Cliente */}
       {clienteHistorial && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: colors.cotton, borderRadius: '12px', padding: '30px', maxWidth: '700px', width: '95%', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div style={{ background: colors.cotton, borderRadius: '12px', padding: isMobile ? '16px' : '30px', maxWidth: '700px', width: '95%', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <div>
                 <h3 style={{ margin: 0, color: colors.sidebarBg }}>{clienteHistorial.nombre}</h3>
@@ -6122,7 +6124,7 @@ const SalidasView = ({ isAdmin }) => {
       {/* Modal Confirmar Eliminación */}
       {confirmEliminar && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: colors.cotton, borderRadius: '12px', padding: '30px', maxWidth: '450px', width: '90%' }}>
+          <div style={{ background: colors.cotton, borderRadius: '12px', padding: isMobile ? '16px' : '30px', maxWidth: '450px', width: '90%' }}>
             <h3 style={{ margin: '0 0 15px', color: colors.terracotta, fontSize: '18px' }}>Eliminar Movimiento</h3>
             <div style={{ background: '#FFEBEE', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
               <div style={{ fontWeight: '600', color: colors.espresso, marginBottom: '5px' }}>
@@ -6678,6 +6680,7 @@ const VentasView = ({ isAdmin }) => {
               </span>
             </h3>
             <div style={{ background: 'white', borderRadius: '10px', overflow: 'hidden', border: `2px solid ${colors.terracotta}` }}>
+            <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                 <thead>
                   <tr style={{ background: colors.terracotta, color: 'white' }}>
@@ -6809,6 +6812,7 @@ const VentasView = ({ isAdmin }) => {
                 </tbody>
               </table>
             </div>
+            </div>
           </div>
         );
       })()}
@@ -6856,7 +6860,7 @@ const VentasView = ({ isAdmin }) => {
           zIndex: 1000
         }}>
           <div style={{
-            background: colors.cotton, borderRadius: '12px', padding: '30px',
+            background: colors.cotton, borderRadius: '12px', padding: isMobile ? '16px' : '30px',
             maxWidth: '500px', width: '90%', maxHeight: '90vh', overflowY: 'auto'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
@@ -7880,7 +7884,7 @@ const BalanceView = ({ isAdmin }) => {
           background: colors.cotton, borderRadius: '12px', padding: '20px', textAlign: 'center',
           border: deudaTotal > 0 ? `2px solid ${colors.terracotta}` : `1px solid ${colors.sand}`
         }}>
-          <div style={{ fontSize: '13px', color: colors.camel, marginBottom: '8px' }}>Deuda total</div>
+          <div style={{ fontSize: '13px', color: colors.camel, marginBottom: '8px' }}>Total por cobrar</div>
           <div style={{ fontSize: '22px', fontWeight: '700', color: deudaTotal > 0 ? colors.terracotta : colors.olive }}>
             {formatearMoneda(deudaTotal)}
           </div>
@@ -8158,7 +8162,7 @@ const ServiciosView = ({ isAdmin }) => {
 
   const handleGuardar = async () => {
     if (!form.maquila.trim()) {
-      setMensaje({ tipo: 'error', texto: 'Ingresa el nombre de la maquila' });
+      setMensaje({ tipo: 'error', texto: 'Ingresa la descripción del servicio' });
       return;
     }
     if (!form.tipoProducto.trim()) {
@@ -8349,7 +8353,7 @@ const ServiciosView = ({ isAdmin }) => {
           background: colors.cotton, borderRadius: '12px', padding: '20px', textAlign: 'center',
           border: totales.pendiente > 0 ? `2px solid ${colors.terracotta}` : `1px solid ${colors.sand}`
         }}>
-          <div style={{ fontSize: '13px', color: colors.camel, marginBottom: '8px' }}>Por pagar</div>
+          <div style={{ fontSize: '13px', color: colors.camel, marginBottom: '8px' }}>Por cobrar</div>
           <div style={{ fontSize: '24px', fontWeight: '700', color: totales.pendiente > 0 ? colors.terracotta : colors.olive }}>
             {formatearMoneda(totales.pendiente)}
           </div>
@@ -8438,12 +8442,12 @@ const ServiciosView = ({ isAdmin }) => {
           </h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
             <div>
-              <label style={{ fontSize: '13px', color: colors.camel, display: 'block', marginBottom: '4px' }}>Maquila *</label>
+              <label style={{ fontSize: '13px', color: colors.camel, display: 'block', marginBottom: '4px' }}>Servicio *</label>
               <input
                 type="text"
                 value={form.maquila}
                 onChange={e => setForm({ ...form, maquila: e.target.value })}
-                placeholder="Nombre del taller / proveedor"
+                placeholder="Descripción del servicio"
                 style={inputStyle}
               />
             </div>
@@ -8482,7 +8486,7 @@ const ServiciosView = ({ isAdmin }) => {
               />
             </div>
             <div>
-              <label style={{ fontSize: '13px', color: colors.camel, display: 'block', marginBottom: '4px' }}>Costo por unidad *</label>
+              <label style={{ fontSize: '13px', color: colors.camel, display: 'block', marginBottom: '4px' }}>Precio por unidad *</label>
               <input
                 type="number"
                 step="0.01"
@@ -8849,6 +8853,7 @@ const MayoreoView = ({ productosActualizados, condicionesEco, condicionesEcoForr
         <h3 style={{ margin: '0 0 15px', fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>
           ESCENARIOS DE PRECIO MAYOREO — {linea.nombre}
         </h3>
+        <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
           <thead>
             <tr style={{ background: linea.colorLight }}>
@@ -8873,6 +8878,7 @@ const MayoreoView = ({ productosActualizados, condicionesEco, condicionesEcoForr
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Escala por volumen */}
@@ -8880,6 +8886,7 @@ const MayoreoView = ({ productosActualizados, condicionesEco, condicionesEcoForr
         <h3 style={{ margin: '0 0 15px', fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>
           DESCUENTOS POR VOLUMEN (Base: ${linea.precioMayoreo})
         </h3>
+        <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
           <thead>
             <tr style={{ background: linea.colorLight }}>
@@ -8908,6 +8915,7 @@ const MayoreoView = ({ productosActualizados, condicionesEco, condicionesEcoForr
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Casos de uso */}
@@ -9039,6 +9047,7 @@ const EcommerceView = ({ productosActualizados, costosAmazon, setCostosAmazon, i
         <h3 style={{ margin: '0 0 15px', fontSize: '14px', letterSpacing: '1px', color: '#232F3E' }}>
           ANÁLISIS DE RENTABILIDAD POR PRECIO — Amazon FBA
         </h3>
+        <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
           <thead>
             <tr style={{ background: '#232F3E', color: 'white' }}>
@@ -9063,6 +9072,7 @@ const EcommerceView = ({ productosActualizados, costosAmazon, setCostosAmazon, i
             ))}
           </tbody>
         </table>
+        </div>
         <div style={{ marginTop: '15px', padding: '10px', background: '#FFF3CD', borderRadius: '4px', fontSize: '11px', color: '#856404' }}>
           <strong>Nota:</strong> Costo FBA y envío a bodega prorrateados por {costos.piezasPorEnvioFBA} piezas. Para mejor margen, envía lotes de 20+ piezas.
         </div>
@@ -9181,7 +9191,7 @@ const EcommerceView = ({ productosActualizados, costosAmazon, setCostosAmazon, i
                             newVol[i] = { ...newVol[i], cantidad: parseInt(e.target.value) || 0 };
                             setCostosTemp({ ...costosTemp, volumenesMayoreo: newVol });
                           }}
-                          style={{ ...inputStyle, width: '60px', padding: '6px' }}
+                          style={{ ...inputStyle, width: isMobile ? '45px' : '60px', padding: '6px' }}
                         />
                       </td>
                       <td style={{ padding: '8px', textAlign: 'center' }}>
@@ -9193,7 +9203,7 @@ const EcommerceView = ({ productosActualizados, costosAmazon, setCostosAmazon, i
                             newVol[i] = { ...newVol[i], segmento: e.target.value };
                             setCostosTemp({ ...costosTemp, volumenesMayoreo: newVol });
                           }}
-                          style={{ ...inputStyle, width: '90px', padding: '6px' }}
+                          style={{ ...inputStyle, width: isMobile ? '65px' : '90px', padding: '6px' }}
                         />
                       </td>
                       <td style={{ padding: '8px', textAlign: 'center' }}>
@@ -9206,7 +9216,7 @@ const EcommerceView = ({ productosActualizados, costosAmazon, setCostosAmazon, i
                             newVol[i] = { ...newVol[i], descuento: parseFloat(e.target.value) || 0 };
                             setCostosTemp({ ...costosTemp, volumenesMayoreo: newVol });
                           }}
-                          style={{ ...inputStyle, width: '50px', padding: '6px' }}
+                          style={{ ...inputStyle, width: isMobile ? '40px' : '50px', padding: '6px' }}
                         />
                       </td>
                     </>
@@ -9578,6 +9588,7 @@ const PromocionesView = ({ productosActualizados }) => {
       {/* Escenarios de venta */}
       <div style={{ background: colors.cotton, padding: '20px', border: `1px solid ${colors.sand}`, marginBottom: '25px' }}>
         <h3 style={{ margin: '0 0 15px', fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>PROYECCIÓN DE VENTAS MENSUALES</h3>
+        <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
           <thead>
             <tr style={{ background: colors.cream }}>
@@ -9605,6 +9616,7 @@ const PromocionesView = ({ productosActualizados }) => {
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Personalización */}
@@ -9637,6 +9649,7 @@ const CostosView = ({ productosActualizados, condicionesEco, condicionesEcoForro
       {/* Comparativa de costos por producto */}
       <div style={{ background: colors.cotton, padding: '20px', border: `1px solid ${colors.sand}`, marginBottom: '25px' }}>
         <h3 style={{ margin: '0 0 15px', fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>DESGLOSE DE COSTOS POR LÍNEA</h3>
+        <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
           <thead>
             <tr style={{ background: colors.cream }}>
@@ -9666,12 +9679,14 @@ const CostosView = ({ productosActualizados, condicionesEco, condicionesEcoForro
             </tr>
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Costos de envío */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '25px' }}>
         <div style={{ background: colors.cotton, padding: '20px', border: `1px solid ${colors.sand}` }}>
           <h3 style={{ margin: '0 0 15px', fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>🏍️ ENVÍO LOCAL — PUEBLA</h3>
+          <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
               <tr style={{ background: colors.cream }}>
@@ -9690,10 +9705,12 @@ const CostosView = ({ productosActualizados, condicionesEco, condicionesEcoForro
               ))}
             </tbody>
           </table>
+          </div>
         </div>
 
         <div style={{ background: colors.cotton, padding: '20px', border: `1px solid ${colors.sand}` }}>
           <h3 style={{ margin: '0 0 15px', fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>📦 ENVÍO NACIONAL</h3>
+          <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
               <tr style={{ background: colors.cream }}>
@@ -9712,6 +9729,7 @@ const CostosView = ({ productosActualizados, condicionesEco, condicionesEcoForro
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 
