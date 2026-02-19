@@ -821,8 +821,229 @@ const DashboardView = ({ productosActualizados }) => {
   const totalUtilidad = proyeccionData[9].acumulado;
   const roi = ((totalUtilidad - 15000) / 15000 * 100).toFixed(1);
 
+  // Estado para posición económica real
+  const [posEcon, setPosEcon] = useState(null);
+  const [periodoEcon, setPeriodoEcon] = useState('mes');
+
+  const formatearMonedaDash = (monto) => {
+    return '$' + (parseFloat(monto) || 0).toLocaleString('es-MX', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
+
+  const cargarPosicionEconomica = async () => {
+    const hoy = new Date();
+    let fechaInicio = null;
+    let fechaFin = hoy.toISOString().split('T')[0];
+
+    switch (periodoEcon) {
+      case 'hoy':
+        fechaInicio = hoy.toISOString().split('T')[0];
+        break;
+      case 'semana': {
+        const hace7 = new Date(hoy.getTime() - 7 * 24 * 60 * 60 * 1000);
+        fechaInicio = hace7.toISOString().split('T')[0];
+        break;
+      }
+      case 'mes': {
+        const hace30 = new Date(hoy.getTime() - 30 * 24 * 60 * 60 * 1000);
+        fechaInicio = hace30.toISOString().split('T')[0];
+        break;
+      }
+      case 'todo':
+        fechaInicio = null;
+        fechaFin = null;
+        break;
+      default:
+        break;
+    }
+
+    const filtrosVentas = {};
+    if (fechaInicio) filtrosVentas.fechaInicio = fechaInicio;
+    if (fechaFin) filtrosVentas.fechaFin = fechaFin;
+
+    const [ventasRes, cajaRes, serviciosRes] = await Promise.all([
+      getVentas(filtrosVentas),
+      getBalanceCaja(fechaInicio, fechaFin),
+      getServiciosMaquila()
+    ]);
+
+    const ventasData = ventasRes.data || [];
+    const cajaData = cajaRes.data || { totalIngresos: 0, totalEgresos: 0, balance: 0 };
+    const serviciosData = serviciosRes.data || [];
+
+    // Calcular utilidad bruta de ventas (ventas - costos de producto)
+    let ingresoVentas = 0;
+    let costoVentas = 0;
+    let utilidadBruta = 0;
+    let piezasVendidas = 0;
+    let ventasCobradas = 0;
+    let ventasPendientes = 0;
+
+    ventasData.forEach(v => {
+      const total = parseFloat(v.total) || 0;
+      const costo = (parseFloat(v.costo_unitario) || 0) * (v.cantidad || 0);
+      const pagado = parseFloat(v.monto_pagado) || 0;
+      ingresoVentas += total;
+      costoVentas += costo;
+      utilidadBruta += total - costo;
+      piezasVendidas += v.cantidad || 0;
+      ventasCobradas += pagado;
+      ventasPendientes += Math.max(0, total - pagado);
+    });
+
+    // Servicios pendientes de pago (deuda con maquilas)
+    let deudaMaquila = 0;
+    serviciosData.forEach(s => {
+      deudaMaquila += Math.max(0, (parseFloat(s.total) || 0) - (parseFloat(s.monto_pagado) || 0));
+    });
+
+    // Utilidad neta = utilidad bruta - egresos de caja
+    const utilidadNeta = utilidadBruta - cajaData.totalEgresos;
+
+    setPosEcon({
+      ingresoVentas,
+      costoVentas,
+      utilidadBruta,
+      egresos: cajaData.totalEgresos,
+      ingresosCaja: cajaData.totalIngresos,
+      utilidadNeta,
+      balanceCaja: cajaData.balance,
+      piezasVendidas,
+      ventasCobradas,
+      ventasPendientes,
+      deudaMaquila,
+      numVentas: ventasData.length
+    });
+  };
+
+  useEffect(() => {
+    cargarPosicionEconomica();
+  }, [periodoEcon]);
+
   return (
     <div>
+      {/* POSICIÓN ECONÓMICA */}
+      <div style={{ marginBottom: '30px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+          <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '300', letterSpacing: '2px', color: colors.espresso }}>
+            Posición Económica
+          </h2>
+          <div style={{ display: 'flex', gap: '4px', background: colors.cotton, borderRadius: '8px', padding: '4px' }}>
+            {[
+              { id: 'hoy', label: 'Hoy' },
+              { id: 'semana', label: 'Semana' },
+              { id: 'mes', label: 'Mes' },
+              { id: 'todo', label: 'Todo' }
+            ].map(p => (
+              <button
+                key={p.id}
+                onClick={() => setPeriodoEcon(p.id)}
+                style={{
+                  padding: '6px 14px',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: periodoEcon === p.id ? '700' : '400',
+                  background: periodoEcon === p.id ? colors.sidebarBg : 'transparent',
+                  color: periodoEcon === p.id ? 'white' : colors.espresso
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {posEcon ? (
+          <>
+            {/* Fila principal: Utilidad Bruta, Egresos, Utilidad Neta */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+              <div style={{
+                background: colors.cotton,
+                borderRadius: '12px',
+                padding: '20px',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Ventas totales</div>
+                <div style={{ fontSize: '26px', fontWeight: '700', color: colors.sidebarBg }}>{formatearMonedaDash(posEcon.ingresoVentas)}</div>
+                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>{posEcon.numVentas} ventas • {posEcon.piezasVendidas} pzas</div>
+              </div>
+
+              <div style={{
+                background: colors.cotton,
+                borderRadius: '12px',
+                padding: '20px',
+                textAlign: 'center',
+                border: `2px solid ${colors.olive}`
+              }}>
+                <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Utilidad bruta</div>
+                <div style={{ fontSize: '26px', fontWeight: '700', color: colors.olive }}>{formatearMonedaDash(posEcon.utilidadBruta)}</div>
+                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Ventas - Costo de producto</div>
+              </div>
+
+              <div style={{
+                background: colors.cotton,
+                borderRadius: '12px',
+                padding: '20px',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Egresos</div>
+                <div style={{ fontSize: '26px', fontWeight: '700', color: colors.terracotta }}>{formatearMonedaDash(posEcon.egresos)}</div>
+                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Gastos operativos + maquila</div>
+              </div>
+
+              <div style={{
+                background: posEcon.utilidadNeta >= 0 ? 'rgba(171,213,94,0.08)' : 'rgba(196,120,74,0.08)',
+                borderRadius: '12px',
+                padding: '20px',
+                textAlign: 'center',
+                border: `2px solid ${posEcon.utilidadNeta >= 0 ? colors.olive : colors.terracotta}`
+              }}>
+                <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Utilidad neta</div>
+                <div style={{ fontSize: '28px', fontWeight: '700', color: posEcon.utilidadNeta >= 0 ? colors.olive : colors.terracotta }}>
+                  {formatearMonedaDash(posEcon.utilidadNeta)}
+                </div>
+                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Utilidad bruta - Egresos</div>
+              </div>
+            </div>
+
+            {/* Fila secundaria: Cobrado, Por cobrar, Deuda maquila, Balance caja */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
+              <div style={{ background: colors.cotton, borderRadius: '10px', padding: '14px', textAlign: 'center' }}>
+                <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Cobrado</div>
+                <div style={{ fontSize: '18px', fontWeight: '600', color: colors.olive }}>{formatearMonedaDash(posEcon.ventasCobradas)}</div>
+              </div>
+              <div style={{ background: colors.cotton, borderRadius: '10px', padding: '14px', textAlign: 'center' }}>
+                <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Por cobrar</div>
+                <div style={{ fontSize: '18px', fontWeight: '600', color: posEcon.ventasPendientes > 0 ? colors.terracotta : colors.olive }}>
+                  {formatearMonedaDash(posEcon.ventasPendientes)}
+                </div>
+              </div>
+              <div style={{ background: colors.cotton, borderRadius: '10px', padding: '14px', textAlign: 'center' }}>
+                <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Deuda maquila</div>
+                <div style={{ fontSize: '18px', fontWeight: '600', color: posEcon.deudaMaquila > 0 ? colors.terracotta : colors.olive }}>
+                  {formatearMonedaDash(posEcon.deudaMaquila)}
+                </div>
+              </div>
+              <div style={{ background: colors.cotton, borderRadius: '10px', padding: '14px', textAlign: 'center' }}>
+                <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Balance caja</div>
+                <div style={{ fontSize: '18px', fontWeight: '600', color: posEcon.balanceCaja >= 0 ? colors.sidebarBg : colors.terracotta }}>
+                  {formatearMonedaDash(posEcon.balanceCaja)}
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '30px', color: colors.camel, background: colors.cotton, borderRadius: '12px' }}>
+            Cargando posición económica...
+          </div>
+        )}
+      </div>
+
+      {/* PROYECCIONES */}
       <h2 style={{ margin: '0 0 25px', fontSize: '24px', fontWeight: '300', letterSpacing: '2px', color: colors.espresso }}>
         Proyección de Crecimiento — 10 Meses
       </h2>
