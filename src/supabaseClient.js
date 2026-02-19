@@ -1963,6 +1963,126 @@ export const deleteStorageFile = async (bucket, filePath) => {
 };
 
 // =====================================================
+// FUNCIONES PARA SERVICIOS DE MAQUILA
+// =====================================================
+
+// Obtener servicios de maquila con filtros
+export const getServiciosMaquila = async (filtros = {}) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  let query = supabase
+    .from('servicios_maquila')
+    .select(`
+      *,
+      cliente:clientes(id, nombre)
+    `)
+    .eq('activo', true)
+    .order('fecha', { ascending: false });
+
+  if (filtros.estadoPago) {
+    query = query.eq('estado_pago', filtros.estadoPago);
+  }
+
+  if (filtros.clienteId) {
+    query = query.eq('cliente_id', filtros.clienteId);
+  }
+
+  if (filtros.maquila) {
+    query = query.ilike('maquila', `%${filtros.maquila}%`);
+  }
+
+  const { data, error } = await query;
+  return { data, error: handleRLSError(error) };
+};
+
+// Crear servicio de maquila
+export const createServicioMaquila = async (servicio) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('servicios_maquila')
+    .insert([servicio])
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+// Actualizar servicio de maquila
+export const updateServicioMaquila = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('servicios_maquila')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+// Eliminar servicio de maquila (soft delete)
+export const deleteServicioMaquila = async (id) => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+
+  const { error } = await supabase
+    .from('servicios_maquila')
+    .update({ activo: false })
+    .eq('id', id);
+
+  return { error: handleRLSError(error) };
+};
+
+// Registrar pago de servicio de maquila
+export const registrarPagoServicio = async (servicioId, montoPago) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data: servicio, error: errorGet } = await supabase
+    .from('servicios_maquila')
+    .select('total, monto_pagado')
+    .eq('id', servicioId)
+    .single();
+
+  if (errorGet) return { data: null, error: handleRLSError(errorGet) };
+
+  const nuevoMontoPagado = (parseFloat(servicio.monto_pagado) || 0) + montoPago;
+  const total = parseFloat(servicio.total) || 0;
+
+  let nuevoEstado = 'parcial';
+  if (nuevoMontoPagado >= total) {
+    nuevoEstado = 'pagado';
+  } else if (nuevoMontoPagado <= 0) {
+    nuevoEstado = 'pendiente';
+  }
+
+  const { data, error } = await supabase
+    .from('servicios_maquila')
+    .update({
+      monto_pagado: nuevoMontoPagado,
+      estado_pago: nuevoEstado
+    })
+    .eq('id', servicioId)
+    .select()
+    .single();
+
+  // Registrar egreso en caja
+  if (!error && montoPago > 0) {
+    await supabase
+      .from('movimientos_caja')
+      .insert([{
+        tipo: 'egreso',
+        monto: montoPago,
+        categoria: 'gasto_produccion',
+        metodo_pago: 'efectivo',
+        descripcion: `Pago maquila - Servicio #${servicioId}`
+      }]);
+  }
+
+  return { data, error: handleRLSError(error) };
+};
+
+// =====================================================
 // FUNCIONES PARA MOVIMIENTOS DE CAJA
 // =====================================================
 
