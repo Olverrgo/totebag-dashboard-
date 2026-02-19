@@ -1498,7 +1498,26 @@ const ProductosView = ({ isAdmin }) => {
 
       if (error) {
         console.error('Error al crear categoría:', error);
-        setMensaje({ tipo: 'error', texto: 'Error al crear categoría: ' + (error.message || JSON.stringify(error)) });
+        const msg = error.message || '';
+        if (error.code === '23505' || msg.includes('duplicate') || msg.includes('already exists') || msg.includes('unique')) {
+          // La categoría ya existe - intentar cargarla
+          const { data: existentes } = await getCategorias();
+          if (existentes) {
+            setCategorias(existentes);
+            const existente = existentes.find(c => c.slug === slug || c.nombre === nuevaCategoria.nombre);
+            if (existente) {
+              setNuevaCategoria({ nombre: '', icono: '📦' });
+              setMostrarAgregarCategoria(false);
+              cambiarCategoria(existente);
+              setMensaje({ tipo: 'exito', texto: 'Categoría "' + existente.nombre + '" ya existía, seleccionada.' });
+              setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+              return;
+            }
+          }
+          setMensaje({ tipo: 'error', texto: 'Ya existe una categoría con ese nombre.' });
+        } else {
+          setMensaje({ tipo: 'error', texto: 'Error al crear categoría: ' + (msg || JSON.stringify(error)) });
+        }
         return;
       }
 
