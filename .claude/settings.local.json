@@ -25,7 +25,9 @@
       "Bash(git push:*)",
       "Bash(git remote set-head:*)",
       "mcp__ide__getDiagnostics",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(curl:*)",
+      "Bash(npx vite build)"
     ]
   }
 }

@@ -24,4 +24,24 @@
   button {
     min-height: 44px;
   }
+
+  /* Tablas scrolleables */
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Celdas de tabla más compactas */
+  th, td {
+    padding: 6px 4px !important;
+    white-space: nowrap;
+  }
+}
+
+@media only screen and (max-width: 480px) {
+  th, td {
+    font-size: 11px !important;
+    padding: 4px 3px !important;
+  }
 }
