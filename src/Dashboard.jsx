@@ -1492,7 +1492,8 @@ const ProductosView = ({ isAdmin }) => {
         nombre: nuevaCategoria.nombre,
         slug,
         icono: nuevaCategoria.icono,
-        orden: categorias.length + 1
+        orden: categorias.length + 1,
+        activo: true
       });
       console.log('Resultado createCategoria:', { data, error });
 
