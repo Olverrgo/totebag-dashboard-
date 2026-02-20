@@ -62,7 +62,10 @@ import {
   createServicioMaquila,
   updateServicioMaquila,
   deleteServicioMaquila,
-  registrarPagoServicio
+  registrarPagoServicio,
+  getResurtidos,
+  createResurtido,
+  deleteResurtido
 } from './supabaseClient';
 
 // ==================== DATOS ====================
@@ -863,15 +866,17 @@ const DashboardView = ({ productosActualizados }) => {
     if (fechaInicio) filtrosVentas.fechaInicio = fechaInicio;
     if (fechaFin) filtrosVentas.fechaFin = fechaFin;
 
-    const [ventasRes, cajaRes, serviciosRes] = await Promise.all([
+    const [ventasRes, cajaRes, serviciosRes, productosRes] = await Promise.all([
       getVentas(filtrosVentas),
       getBalanceCaja(fechaInicio, fechaFin),
-      getServiciosMaquila()
+      getServiciosMaquila(),
+      getProductos()
     ]);
 
     const ventasData = ventasRes.data || [];
     const cajaData = cajaRes.data || { totalIngresos: 0, totalEgresos: 0, balance: 0 };
     const serviciosData = serviciosRes.data || [];
+    const productosData = productosRes.data || [];
 
     // Calcular utilidad bruta de ventas (ventas - costos de producto)
     let ingresoVentas = 0;
@@ -899,6 +904,37 @@ const DashboardView = ({ productosActualizados }) => {
       porCobrarMaquila += Math.max(0, (parseFloat(s.total) || 0) - (parseFloat(s.monto_pagado) || 0));
     });
 
+    // Calcular valor del inventario (taller + consignación)
+    let valorTaller = 0;
+    let valorConsignacion = 0;
+    let pzasTaller = 0;
+    let pzasConsignacion = 0;
+
+    productosData.forEach(prod => {
+      if (prod.tiene_variantes) {
+        const variantesActivas = (prod.variantes || []).filter(v => v.activo !== false);
+        variantesActivas.forEach(v => {
+          const costo = parseFloat(v.costo_unitario) || 0;
+          const stock = v.stock || 0;
+          const consig = v.stock_consignacion || 0;
+          valorTaller += stock * costo;
+          valorConsignacion += consig * costo;
+          pzasTaller += stock;
+          pzasConsignacion += consig;
+        });
+      } else {
+        const costo = parseFloat(prod.costo_total_1_tinta) || 0;
+        const stock = prod.stock || 0;
+        const consig = prod.stock_consignacion || 0;
+        valorTaller += stock * costo;
+        valorConsignacion += consig * costo;
+        pzasTaller += stock;
+        pzasConsignacion += consig;
+      }
+    });
+
+    const valorInventarioTotal = valorTaller + valorConsignacion;
+
     // Utilidad neta = utilidad bruta - egresos de caja
     const utilidadNeta = utilidadBruta - cajaData.totalEgresos;
 
@@ -914,7 +950,12 @@ const DashboardView = ({ productosActualizados }) => {
       ventasCobradas,
       ventasPendientes,
       porCobrarMaquila,
-      numVentas: ventasData.length
+      numVentas: ventasData.length,
+      valorTaller,
+      valorConsignacion,
+      valorInventarioTotal,
+      pzasTaller,
+      pzasConsignacion
     });
   };
 
@@ -1033,6 +1074,43 @@ const DashboardView = ({ productosActualizados }) => {
                 <div style={{ fontSize: '18px', fontWeight: '600', color: posEcon.balanceCaja >= 0 ? colors.sidebarBg : colors.terracotta }}>
                   {formatearMonedaDash(posEcon.balanceCaja)}
                 </div>
+              </div>
+            </div>
+
+            {/* Fila de Capital: Inventario + Por cobrar = Capital total */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginTop: '16px' }}>
+              <div style={{ background: colors.cotton, borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
+                <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Inventario en taller</div>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: colors.sidebarBg }}>{formatearMonedaDash(posEcon.valorTaller)}</div>
+                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>{posEcon.pzasTaller} piezas</div>
+              </div>
+
+              <div style={{ background: colors.cotton, borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
+                <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Inventario en consignación</div>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: colors.terracotta }}>{formatearMonedaDash(posEcon.valorConsignacion)}</div>
+                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>{posEcon.pzasConsignacion} piezas</div>
+              </div>
+
+              <div style={{ background: colors.cotton, borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
+                <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Total por cobrar</div>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: (posEcon.ventasPendientes + posEcon.porCobrarMaquila) > 0 ? colors.terracotta : colors.olive }}>
+                  {formatearMonedaDash(posEcon.ventasPendientes + posEcon.porCobrarMaquila)}
+                </div>
+                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Ventas + Maquila</div>
+              </div>
+
+              <div style={{
+                background: 'rgba(0,95,132,0.06)',
+                borderRadius: '12px',
+                padding: '20px',
+                textAlign: 'center',
+                border: `2px solid ${colors.sidebarBg}`
+              }}>
+                <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Capital total</div>
+                <div style={{ fontSize: '28px', fontWeight: '700', color: colors.sidebarBg }}>
+                  {formatearMonedaDash(posEcon.valorInventarioTotal + posEcon.ventasPendientes + posEcon.porCobrarMaquila + posEcon.balanceCaja)}
+                </div>
+                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Inventario + Por cobrar + Caja</div>
               </div>
             </div>
           </>
@@ -1372,6 +1450,18 @@ const ProductosView = ({ isAdmin }) => {
     costo_confeccion: 0,
     costo_empaque: 0
   });
+
+  // Estado para resurtidos
+  const [mostrarResurtir, setMostrarResurtir] = useState(null); // producto seleccionado para resurtir
+  const [historialResurtidos, setHistorialResurtidos] = useState([]);
+  const [formResurtido, setFormResurtido] = useState({
+    cantidad: 0,
+    costoUnitario: 0,
+    clienteId: null,
+    precioVenta: 0,
+    notas: ''
+  });
+  const [guardandoResurtido, setGuardandoResurtido] = useState(false);
 
   // Cargar datos de Supabase al montar
   useEffect(() => {
@@ -2243,6 +2333,27 @@ const ProductosView = ({ isAdmin }) => {
           setProductosGuardados(productosGuardados.map(p => p.id === productoEditandoId ? data : p));
         } else {
           setProductosGuardados([data, ...productosGuardados]);
+
+          // Registrar primer resurtido automático para categorías de compra/reventa
+          if (!esCategoriaLegacy() && camposCategoria.length === 0) {
+            const cantidadAdquirida = parseInt(formProducto.cantidadAdquirida) || 0;
+            const costoUnitario = parseFloat(formProducto.costoUnitario) || 0;
+            if (cantidadAdquirida > 0) {
+              const clienteNombre = formProducto.clienteId
+                ? clientes.find(c => String(c.id) === String(formProducto.clienteId))?.nombre || ''
+                : '';
+              await createResurtido({
+                producto_id: data.id,
+                cantidad: cantidadAdquirida,
+                costo_unitario: costoUnitario,
+                cliente_id: formProducto.clienteId ? parseInt(formProducto.clienteId) : null,
+                cliente_nombre: clienteNombre,
+                precio_venta: parseFloat(formProducto.precioVenta) || 0,
+                fecha: new Date().toISOString().split('T')[0],
+                notas: 'Compra inicial'
+              });
+            }
+          }
         }
 
         // Limpiar formulario después de 2 segundos
@@ -2257,6 +2368,105 @@ const ProductosView = ({ isAdmin }) => {
       setMensaje({ tipo: 'error', texto: 'Error inesperado: ' + err.message });
     } finally {
       setGuardando(false);
+    }
+  };
+
+  // Abrir modal de resurtido
+  const abrirResurtir = async (producto) => {
+    setMostrarResurtir(producto);
+    // Pre-cargar últimos datos del producto
+    setFormResurtido({
+      cantidad: 0,
+      costoUnitario: parseFloat(producto.campos_dinamicos?.costo_unitario) || 0,
+      clienteId: producto.campos_dinamicos?.cliente_id || null,
+      precioVenta: parseFloat(producto.precio_venta) || 0,
+      notas: ''
+    });
+    // Cargar historial
+    const { data } = await getResurtidos(producto.id);
+    setHistorialResurtidos(data || []);
+  };
+
+  // Ejecutar resurtido
+  const resurtirProducto = async () => {
+    if (!mostrarResurtir) return;
+    const cantidad = parseInt(formResurtido.cantidad) || 0;
+    if (cantidad <= 0) {
+      setMensaje({ tipo: 'error', texto: 'La cantidad debe ser mayor a 0' });
+      return;
+    }
+
+    setGuardandoResurtido(true);
+    try {
+      const costoUnitario = parseFloat(formResurtido.costoUnitario) || 0;
+      const precioVenta = parseFloat(formResurtido.precioVenta) || 0;
+      const clienteNombre = formResurtido.clienteId
+        ? clientes.find(c => String(c.id) === String(formResurtido.clienteId))?.nombre || ''
+        : '';
+
+      // 1. Crear registro en tabla resurtidos
+      const { error: errResurtido } = await createResurtido({
+        producto_id: mostrarResurtir.id,
+        cantidad,
+        costo_unitario: costoUnitario,
+        cliente_id: formResurtido.clienteId ? parseInt(formResurtido.clienteId) : null,
+        cliente_nombre: clienteNombre,
+        precio_venta: precioVenta,
+        fecha: new Date().toISOString().split('T')[0],
+        notas: formResurtido.notas || null
+      });
+
+      if (errResurtido) {
+        setMensaje({ tipo: 'error', texto: 'Error al registrar resurtido: ' + errResurtido.message });
+        return;
+      }
+
+      // 2. Sumar cantidad al stock actual del producto
+      const stockActual = mostrarResurtir.stock || 0;
+      const nuevoStock = stockActual + cantidad;
+
+      // 3. Actualizar producto: stock, costo unitario, precio venta
+      const camposDinamicosActuales = mostrarResurtir.campos_dinamicos || {};
+      const { error: errUpdate } = await updateProducto(mostrarResurtir.id, {
+        stock: nuevoStock,
+        campos_dinamicos: {
+          ...camposDinamicosActuales,
+          costo_unitario: costoUnitario,
+          cliente_id: formResurtido.clienteId ? parseInt(formResurtido.clienteId) : camposDinamicosActuales.cliente_id
+        },
+        precio_venta: precioVenta,
+        costo_total_1_tinta: costoUnitario,
+        costo_total_2_tintas: costoUnitario,
+        costo_total_3_tintas: costoUnitario,
+        costo_total_4_tintas: costoUnitario
+      });
+
+      if (errUpdate) {
+        setMensaje({ tipo: 'error', texto: 'Error al actualizar producto: ' + errUpdate.message });
+        return;
+      }
+
+      // 4. Refrescar lista de productos
+      const { data: productosActualizados } = await getProductos(categoriaActiva?.id);
+      if (productosActualizados) {
+        setProductosGuardados(productosActualizados);
+      }
+
+      // 5. Refrescar historial
+      const { data: nuevoHistorial } = await getResurtidos(mostrarResurtir.id);
+      setHistorialResurtidos(nuevoHistorial || []);
+
+      setMensaje({ tipo: 'exito', texto: `Resurtido registrado: +${cantidad} unidades` });
+      setFormResurtido({ cantidad: 0, costoUnitario: costoUnitario, clienteId: formResurtido.clienteId, precioVenta, notas: '' });
+
+      // Actualizar referencia del producto en mostrarResurtir
+      const prodActualizado = productosActualizados?.find(p => p.id === mostrarResurtir.id);
+      if (prodActualizado) setMostrarResurtir(prodActualizado);
+
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: 'Error inesperado: ' + err.message });
+    } finally {
+      setGuardandoResurtido(false);
     }
   };
 
@@ -3055,13 +3265,15 @@ const ProductosView = ({ isAdmin }) => {
                     disabled={!isAdmin} style={{ ...inputStyle, textAlign: 'left' }} placeholder="Ej: De la Rosa" />
                 </div>
 
-                {/* Cantidad adquirida */}
+                {/* Cantidad adquirida (solo al crear, al editar se usa Resurtir) */}
+                {!productoEditandoId && (
                 <div>
                   <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>CANTIDAD ADQUIRIDA</div>
                   <input type="number" min="0" step="1" value={formProducto.cantidadAdquirida}
                     onChange={(e) => setFormProducto({ ...formProducto, cantidadAdquirida: parseInt(e.target.value) || 0 })}
                     disabled={!isAdmin} style={inputStyle} placeholder="0" />
                 </div>
+                )}
 
                 {/* Costo unitario */}
                 <div>
@@ -3967,6 +4179,26 @@ const ProductosView = ({ isAdmin }) => {
                         {prod.costo_total_4_tintas > 0 && <span>4 tintas: ${prod.costo_total_4_tintas?.toFixed(2)}</span>}
                       </div>
                       <div style={{ display: 'flex', gap: '8px' }}>
+                        {/* Botón Resurtir (solo para compra/reventa: tiene costo_unitario en campos_dinamicos) */}
+                        {prod.campos_dinamicos?.costo_unitario !== undefined && isAdmin && (
+                          <button
+                            onClick={() => abrirResurtir(prod)}
+                            onMouseEnter={() => setHoverEditar({ ...hoverEditar, [`res-${prod.id}`]: true })}
+                            onMouseLeave={() => setHoverEditar({ ...hoverEditar, [`res-${prod.id}`]: false })}
+                            style={{
+                              padding: '8px 14px',
+                              background: hoverEditar[`res-${prod.id}`] ? '#43a047' : '#388e3c',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '13px',
+                              fontWeight: '500',
+                              transition: 'all 0.3s ease'
+                            }}>
+                            Resurtir
+                          </button>
+                        )}
                         {/* Botón Variantes */}
                         <button
                           onClick={() => abrirVariantes(prod)}
@@ -4035,6 +4267,198 @@ const ProductosView = ({ isAdmin }) => {
               <p style={{ color: colors.camel, fontSize: '14px' }}>Haz clic en "+ Agregar" para crear tu primer producto</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Modal de Resurtir */}
+      {mostrarResurtir && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center',
+          justifyContent: 'center', zIndex: 1000
+        }}>
+          <div style={{
+            background: colors.cotton, borderRadius: '12px', padding: isMobile ? '16px' : '25px',
+            maxWidth: '700px', width: '95%', maxHeight: '90vh', overflowY: 'auto'
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div>
+                <h3 style={{ margin: 0, color: colors.espresso }}>Resurtir: {mostrarResurtir.linea_nombre}</h3>
+                <p style={{ margin: '4px 0 0', fontSize: '13px', color: colors.camel }}>
+                  Stock actual: {mostrarResurtir.stock || 0} unidades
+                </p>
+              </div>
+              <button onClick={() => { setMostrarResurtir(null); setHistorialResurtidos([]); }}
+                style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: colors.camel }}>
+                x
+              </button>
+            </div>
+
+            {/* Formulario de resurtido */}
+            <div style={{ background: colors.sidebarBg, borderRadius: '8px', padding: '20px', color: colors.sidebarText, marginBottom: '20px' }}>
+              <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '15px', letterSpacing: '1px' }}>
+                NUEVO RESURTIDO
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '15px' }}>
+                {/* Cantidad */}
+                <div>
+                  <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '6px' }}>CANTIDAD</div>
+                  <input type="number" min="1" step="1" value={formResurtido.cantidad || ''}
+                    onChange={(e) => setFormResurtido({ ...formResurtido, cantidad: parseInt(e.target.value) || 0 })}
+                    style={{ width: '100%', padding: '10px', fontSize: '15px', fontWeight: '600', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', color: colors.sidebarText, textAlign: 'center' }}
+                    placeholder="0" />
+                </div>
+                {/* Costo unitario */}
+                <div>
+                  <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '6px' }}>COSTO UNITARIO</div>
+                  <input type="number" min="0" step="0.01" value={formResurtido.costoUnitario || ''}
+                    onChange={(e) => setFormResurtido({ ...formResurtido, costoUnitario: parseFloat(e.target.value) || 0 })}
+                    style={{ width: '100%', padding: '10px', fontSize: '15px', fontWeight: '600', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', color: colors.sidebarText, textAlign: 'center' }}
+                    placeholder="0.00" />
+                </div>
+                {/* Total inversión (calculado) */}
+                <div>
+                  <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '6px' }}>TOTAL INVERSION</div>
+                  <div style={{ width: '100%', padding: '10px', fontSize: '15px', fontWeight: '600', border: '2px solid rgba(255,255,255,0.15)', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', color: colors.sidebarText, textAlign: 'center' }}>
+                    ${((parseFloat(formResurtido.cantidad) || 0) * (parseFloat(formResurtido.costoUnitario) || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+                {/* Precio de venta */}
+                <div>
+                  <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '6px' }}>PRECIO DE VENTA</div>
+                  <input type="number" min="0" step="0.01" value={formResurtido.precioVenta || ''}
+                    onChange={(e) => setFormResurtido({ ...formResurtido, precioVenta: parseFloat(e.target.value) || 0 })}
+                    style={{ width: '100%', padding: '10px', fontSize: '15px', fontWeight: '600', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', color: colors.sidebarText, textAlign: 'center' }}
+                    placeholder="0.00" />
+                </div>
+                {/* Cliente/Proveedor */}
+                <div>
+                  <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '6px' }}>PROVEEDOR</div>
+                  <select value={formResurtido.clienteId || ''}
+                    onChange={(e) => setFormResurtido({ ...formResurtido, clienteId: e.target.value || null })}
+                    style={{ width: '100%', padding: '10px', fontSize: '14px', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', color: colors.sidebarText, cursor: 'pointer', appearance: 'auto' }}>
+                    <option value="">Sin asignar</option>
+                    {clientes.filter(c => c.activo !== false).map(c => (
+                      <option key={c.id} value={c.id}>{c.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                {/* Notas */}
+                <div>
+                  <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '6px' }}>NOTAS</div>
+                  <input type="text" value={formResurtido.notas}
+                    onChange={(e) => setFormResurtido({ ...formResurtido, notas: e.target.value })}
+                    style={{ width: '100%', padding: '10px', fontSize: '14px', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', color: colors.sidebarText, textAlign: 'left' }}
+                    placeholder="Ej: Resurtido mensual" />
+                </div>
+              </div>
+              <button onClick={resurtirProducto} disabled={guardandoResurtido || (parseInt(formResurtido.cantidad) || 0) <= 0}
+                style={{
+                  width: '100%', padding: '12px', background: (parseInt(formResurtido.cantidad) || 0) > 0 ? '#388e3c' : 'rgba(255,255,255,0.2)',
+                  color: 'white', border: 'none', borderRadius: '6px', fontSize: '15px', fontWeight: '600', cursor: (parseInt(formResurtido.cantidad) || 0) > 0 ? 'pointer' : 'not-allowed',
+                  transition: 'all 0.3s ease'
+                }}>
+                {guardandoResurtido ? 'Registrando...' : `Registrar Resurtido (+${parseInt(formResurtido.cantidad) || 0} unidades)`}
+              </button>
+            </div>
+
+            {/* Historial de resurtidos */}
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: '600', color: colors.espresso, marginBottom: '12px' }}>
+                Historial de Resurtidos ({historialResurtidos.length})
+              </div>
+              {historialResurtidos.length > 0 ? (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                    <thead>
+                      <tr style={{ background: colors.cream, textAlign: 'left' }}>
+                        <th style={{ padding: '10px 8px', color: colors.espresso, fontWeight: '600', borderBottom: `2px solid ${colors.sand}` }}>Fecha</th>
+                        <th style={{ padding: '10px 8px', color: colors.espresso, fontWeight: '600', borderBottom: `2px solid ${colors.sand}`, textAlign: 'center' }}>Cant.</th>
+                        <th style={{ padding: '10px 8px', color: colors.espresso, fontWeight: '600', borderBottom: `2px solid ${colors.sand}`, textAlign: 'right' }}>Costo Unit.</th>
+                        <th style={{ padding: '10px 8px', color: colors.espresso, fontWeight: '600', borderBottom: `2px solid ${colors.sand}`, textAlign: 'right' }}>Total</th>
+                        <th style={{ padding: '10px 8px', color: colors.espresso, fontWeight: '600', borderBottom: `2px solid ${colors.sand}`, textAlign: 'right' }}>P. Venta</th>
+                        <th style={{ padding: '10px 8px', color: colors.espresso, fontWeight: '600', borderBottom: `2px solid ${colors.sand}` }}>Proveedor</th>
+                        <th style={{ padding: '10px 8px', color: colors.espresso, fontWeight: '600', borderBottom: `2px solid ${colors.sand}` }}>Notas</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historialResurtidos.map((r, idx) => {
+                        const costoAnterior = idx < historialResurtidos.length - 1 ? historialResurtidos[idx + 1].costo_unitario : null;
+                        const cambio = costoAnterior !== null ? parseFloat(r.costo_unitario) - parseFloat(costoAnterior) : null;
+                        return (
+                          <tr key={r.id} style={{ borderBottom: `1px solid ${colors.sand}` }}>
+                            <td style={{ padding: '10px 8px', color: colors.espresso }}>
+                              {new Date(r.fecha + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </td>
+                            <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: '600', color: colors.olive }}>
+                              +{r.cantidad}
+                            </td>
+                            <td style={{ padding: '10px 8px', textAlign: 'right', color: colors.espresso }}>
+                              ${parseFloat(r.costo_unitario).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                              {cambio !== null && cambio !== 0 && (
+                                <span style={{ marginLeft: '4px', fontSize: '11px', color: cambio > 0 ? '#e53935' : '#43a047' }}>
+                                  {cambio > 0 ? '+' : ''}{cambio.toFixed(2)}
+                                </span>
+                              )}
+                            </td>
+                            <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: '600', color: colors.sidebarBg }}>
+                              ${parseFloat(r.costo_total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td style={{ padding: '10px 8px', textAlign: 'right', color: colors.espresso }}>
+                              ${parseFloat(r.precio_venta || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td style={{ padding: '10px 8px', color: colors.camel, fontSize: '12px' }}>
+                              {r.cliente?.nombre || r.cliente_nombre || '-'}
+                            </td>
+                            <td style={{ padding: '10px 8px', color: colors.camel, fontSize: '12px', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {r.notas || '-'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {/* Resumen del historial */}
+                  <div style={{ display: 'flex', gap: '15px', marginTop: '12px', padding: '12px', background: colors.cream, borderRadius: '6px' }}>
+                    <div style={{ flex: 1, textAlign: 'center' }}>
+                      <div style={{ fontSize: '11px', color: colors.camel }}>Total Comprado</div>
+                      <div style={{ fontSize: '18px', fontWeight: '700', color: colors.espresso }}>
+                        {historialResurtidos.reduce((s, r) => s + r.cantidad, 0)} pzas
+                      </div>
+                    </div>
+                    <div style={{ flex: 1, textAlign: 'center' }}>
+                      <div style={{ fontSize: '11px', color: colors.camel }}>Total Invertido</div>
+                      <div style={{ fontSize: '18px', fontWeight: '700', color: colors.sidebarBg }}>
+                        ${historialResurtidos.reduce((s, r) => s + parseFloat(r.costo_total), 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                    <div style={{ flex: 1, textAlign: 'center' }}>
+                      <div style={{ fontSize: '11px', color: colors.camel }}>Costo Prom.</div>
+                      <div style={{ fontSize: '18px', fontWeight: '700', color: colors.espresso }}>
+                        ${(historialResurtidos.reduce((s, r) => s + parseFloat(r.costo_total), 0) / Math.max(historialResurtidos.reduce((s, r) => s + r.cantidad, 0), 1)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '20px', color: colors.camel, fontSize: '14px' }}>
+                  Sin historial de resurtidos
+                </div>
+              )}
+            </div>
+
+            {/* Mensaje */}
+            {mensaje.texto && (
+              <div style={{
+                marginTop: '15px', padding: '10px', borderRadius: '6px', textAlign: 'center', fontSize: '13px',
+                background: mensaje.tipo === 'exito' ? 'rgba(76,175,80,0.15)' : 'rgba(244,67,54,0.15)',
+                color: mensaje.tipo === 'exito' ? '#388e3c' : '#c62828'
+              }}>
+                {mensaje.texto}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -6731,6 +7155,25 @@ const VentasView = ({ isAdmin }) => {
           cargarDatos();
           return;
         }
+
+        // Reducir stock_consignacion al pagar consignaciones
+        if (venta.tipo_venta === 'consignacion' && venta.precio_unitario > 0) {
+          const piezasPagadas = Math.round(montoAplicar / venta.precio_unitario);
+          if (piezasPagadas > 0) {
+            const producto = productos.find(p => p.id === venta.producto_id);
+            if (producto && venta.variante_id) {
+              const variante = (producto.variantes || []).find(v => v.id === venta.variante_id);
+              if (variante) {
+                const nuevaConsig = Math.max(0, (variante.stock_consignacion || 0) - piezasPagadas);
+                await updateStockVariante(variante.id, variante.stock || 0, nuevaConsig);
+              }
+            } else if (producto && !venta.variante_id) {
+              const nuevaConsig = Math.max(0, (producto.stock_consignacion || 0) - piezasPagadas);
+              await updateProducto(producto.id, { stock_consignacion: nuevaConsig });
+            }
+          }
+        }
+
         montoRestante -= montoAplicar;
       }
 
