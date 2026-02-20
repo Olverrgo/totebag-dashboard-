@@ -2178,4 +2178,54 @@ export const getBalanceCaja = async (fechaInicio = null, fechaFin = null) => {
   return { data: resumen, error: null };
 };
 
+// =====================================================
+// FUNCIONES PARA RESURTIDOS (Historial de compras)
+// =====================================================
+
+// Obtener resurtidos de un producto
+export const getResurtidos = async (productoId) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  let query = supabase
+    .from('resurtidos')
+    .select(`
+      *,
+      cliente:clientes(id, nombre)
+    `)
+    .eq('activo', true)
+    .order('fecha', { ascending: false });
+
+  if (productoId) {
+    query = query.eq('producto_id', productoId);
+  }
+
+  const { data, error } = await query;
+  return { data, error: handleRLSError(error) };
+};
+
+// Crear resurtido
+export const createResurtido = async (resurtido) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('resurtidos')
+    .insert([resurtido])
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+// Eliminar resurtido (hard delete)
+export const deleteResurtido = async (id) => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+
+  const { error } = await supabase
+    .from('resurtidos')
+    .delete()
+    .eq('id', id);
+
+  return { error: handleRLSError(error) };
+};
+
 export default supabase;

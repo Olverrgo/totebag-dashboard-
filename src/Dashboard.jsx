@@ -5129,6 +5129,7 @@ const StocksView = ({ isAdmin }) => {
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
   const [hoverGuardar, setHoverGuardar] = useState({});
+  const [imagenPopup, setImagenPopup] = useState(null);
 
   // Cargar productos al montar
   useEffect(() => {
