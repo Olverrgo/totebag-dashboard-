@@ -1334,6 +1334,9 @@ const ProductosView = ({ isAdmin }) => {
   const [nuevaCategoria, setNuevaCategoria] = useState({ nombre: '', icono: '📦' });
   const [hoverCategorias, setHoverCategorias] = useState({});
 
+  // Estado para clientes (usado en formulario de compra/reventa)
+  const [clientes, setClientes] = useState([]);
+
   // Estados para variantes de producto
   const [productoVariantes, setProductoVariantes] = useState(null); // Producto seleccionado para ver variantes
   const [variantes, setVariantes] = useState([]);
@@ -1421,6 +1424,12 @@ const ProductosView = ({ isAdmin }) => {
       const { data: productosData } = await getProductos();
       if (productosData) {
         setProductosGuardados(productosData);
+      }
+
+      // Cargar clientes (para formulario de compra/reventa)
+      const { data: clientesData } = await getClientes();
+      if (clientesData) {
+        setClientes(clientesData);
       }
     };
 
@@ -1939,9 +1948,10 @@ const ProductosView = ({ isAdmin }) => {
     serigrafia4: 0,
     empaque: 0,
     tipoEntrega: 'envio', // 'envio' o 'recolecta'
-    costoCompra: 0,
-    costoEnvio: 0,
-    costoExtra: 0,
+    skuProducto: '',
+    cantidadAdquirida: 0,
+    costoUnitario: 0,
+    clienteId: null,
     envio: 0,
     minPiezasEnvio: 20,
     precioVenta: 0 // Precio de venta sugerido
@@ -2025,9 +2035,10 @@ const ProductosView = ({ isAdmin }) => {
         envio: formProducto.envio || 0,
         minPiezasEnvio: formProducto.minPiezasEnvio || 20,
         precioVenta: parseFloat(productoExistente.precio_venta) || 0,
-        costoCompra: parseFloat(productoExistente.campos_dinamicos?.costo_compra) || 0,
-        costoEnvio: parseFloat(productoExistente.campos_dinamicos?.costo_envio) || 0,
-        costoExtra: parseFloat(productoExistente.campos_dinamicos?.costo_extra) || 0
+        skuProducto: productoExistente.campos_dinamicos?.sku || '',
+        cantidadAdquirida: productoExistente.campos_dinamicos?.cantidad_adquirida || 0,
+        costoUnitario: parseFloat(productoExistente.campos_dinamicos?.costo_unitario) || 0,
+        clienteId: productoExistente.campos_dinamicos?.cliente_id || null
       });
     } else {
       // Nuevo producto - valores por defecto
@@ -2046,9 +2057,10 @@ const ProductosView = ({ isAdmin }) => {
         serigrafia4: 0,
         empaque: 0,
         tipoEntrega: 'envio',
-        costoCompra: 0,
-        costoEnvio: 0,
-        costoExtra: 0,
+        skuProducto: '',
+        cantidadAdquirida: 0,
+        costoUnitario: 0,
+        clienteId: null,
         envio: formProducto.envio || 0,
         minPiezasEnvio: formProducto.minPiezasEnvio || 20,
         precioVenta: 0
@@ -2110,9 +2122,10 @@ const ProductosView = ({ isAdmin }) => {
       serigrafia4: parseFloat(producto.serigrafia_4_tintas) || 0,
       empaque: parseFloat(producto.empaque) || 0,
       tipoEntrega: producto.tipo_entrega || 'envio',
-      costoCompra: parseFloat(producto.campos_dinamicos?.costo_compra) || 0,
-      costoEnvio: parseFloat(producto.campos_dinamicos?.costo_envio) || 0,
-      costoExtra: parseFloat(producto.campos_dinamicos?.costo_extra) || 0,
+      skuProducto: producto.campos_dinamicos?.sku || '',
+      cantidadAdquirida: producto.campos_dinamicos?.cantidad_adquirida || 0,
+      costoUnitario: parseFloat(producto.campos_dinamicos?.costo_unitario) || 0,
+      clienteId: producto.campos_dinamicos?.cliente_id || null,
       envio: formProducto.envio || 0,
       minPiezasEnvio: formProducto.minPiezasEnvio || 20,
       precioVenta: parseFloat(producto.precio_venta) || 0
@@ -2177,23 +2190,27 @@ const ProductosView = ({ isAdmin }) => {
         });
       } else {
         // Para categorías de compra/reventa (sin campos dinámicos configurados)
-        const costoCompra = parseFloat(formProducto.costoCompra) || 0;
-        const costoEnvio = parseFloat(formProducto.costoEnvio) || 0;
-        const costoExtra = parseFloat(formProducto.costoExtra) || 0;
-        const costoTotal = costoCompra + costoEnvio + costoExtra;
+        const costoUnitario = parseFloat(formProducto.costoUnitario) || 0;
+        const cantidadAdquirida = parseInt(formProducto.cantidadAdquirida) || 0;
 
         productoData.campos_dinamicos = {
           ...productoData.campos_dinamicos,
-          costo_compra: costoCompra,
-          costo_envio: costoEnvio,
-          costo_extra: costoExtra
+          sku: formProducto.skuProducto || '',
+          cantidad_adquirida: cantidadAdquirida,
+          costo_unitario: costoUnitario,
+          cliente_id: formProducto.clienteId || null
         };
 
+        // Stock inicial = cantidad adquirida (solo para productos nuevos)
+        if (!productoEditandoId) {
+          productoData.stock = cantidadAdquirida;
+        }
+
         Object.assign(productoData, {
-          costo_total_1_tinta: costoTotal,
-          costo_total_2_tintas: costoTotal,
-          costo_total_3_tintas: costoTotal,
-          costo_total_4_tintas: costoTotal
+          costo_total_1_tinta: costoUnitario,
+          costo_total_2_tintas: costoUnitario,
+          costo_total_3_tintas: costoUnitario,
+          costo_total_4_tintas: costoUnitario
         });
       }
 
@@ -2983,13 +3000,15 @@ const ProductosView = ({ isAdmin }) => {
 
           {/* Formulario de costos para categorías de compra/reventa (sin campos dinámicos) */}
           {!esCategoriaLegacy() && camposCategoria.length === 0 && (() => {
-            const costoCompra = parseFloat(formProducto.costoCompra) || 0;
-            const costoEnvio = parseFloat(formProducto.costoEnvio) || 0;
-            const costoExtra = parseFloat(formProducto.costoExtra) || 0;
-            const costoTotal = costoCompra + costoEnvio + costoExtra;
+            const costoUnitario = parseFloat(formProducto.costoUnitario) || 0;
+            const cantidadAdquirida = parseInt(formProducto.cantidadAdquirida) || 0;
+            const totalInversion = costoUnitario * cantidadAdquirida;
             const precioVenta = parseFloat(formProducto.precioVenta) || 0;
-            const utilidad = precioVenta - costoTotal;
+            const utilidad = precioVenta - costoUnitario;
             const margen = precioVenta > 0 ? ((utilidad / precioVenta) * 100) : 0;
+            const stockActual = productoEditandoId
+              ? (productosGuardados.find(p => p.id === productoEditandoId)?.stock || 0)
+              : null;
             const inputStyle = {
               width: '100%',
               padding: '10px',
@@ -3001,87 +3020,113 @@ const ProductosView = ({ isAdmin }) => {
               color: colors.sidebarText,
               textAlign: 'center'
             };
+            const selectStyle = {
+              ...inputStyle,
+              textAlign: 'left',
+              cursor: 'pointer',
+              appearance: 'auto'
+            };
             return (
             <div style={{ background: colors.sidebarBg, borderRadius: '8px', padding: '25px', color: colors.sidebarText }}>
               <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '20px', letterSpacing: '1px' }}>
-                COSTOS DE ADQUISICIÓN
+                DATOS DE ADQUISICIÓN
               </div>
 
-              {/* Inputs de costos */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '15px', marginBottom: '20px' }}>
+              {/* Grid de inputs */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
+                {/* SKU */}
                 <div>
-                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>COSTO COMPRA</div>
-                  <input type="number" min="0" step="0.01" value={formProducto.costoCompra}
-                    onChange={(e) => setFormProducto({ ...formProducto, costoCompra: parseFloat(e.target.value) || 0 })}
-                    disabled={!isAdmin} style={inputStyle} placeholder="0.00" />
+                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>SKU</div>
+                  <input type="text" value={formProducto.skuProducto}
+                    onChange={(e) => setFormProducto({ ...formProducto, skuProducto: e.target.value })}
+                    disabled={!isAdmin} style={{ ...inputStyle, textAlign: 'left' }} placeholder="Ej: DG-001" />
                 </div>
-                <div>
-                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>ENVÍO / FLETE</div>
-                  <input type="number" min="0" step="0.01" value={formProducto.costoEnvio}
-                    onChange={(e) => setFormProducto({ ...formProducto, costoEnvio: parseFloat(e.target.value) || 0 })}
-                    disabled={!isAdmin} style={inputStyle} placeholder="0.00" />
-                </div>
-                <div>
-                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>OTROS COSTOS</div>
-                  <input type="number" min="0" step="0.01" value={formProducto.costoExtra}
-                    onChange={(e) => setFormProducto({ ...formProducto, costoExtra: parseFloat(e.target.value) || 0 })}
-                    disabled={!isAdmin} style={inputStyle} placeholder="0.00" />
-                </div>
-              </div>
 
-              {/* Resumen de costos */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '10px', marginBottom: '20px' }}>
-                {[
-                  { label: 'COMPRA', valor: costoCompra },
-                  { label: 'ENVÍO', valor: costoEnvio },
-                  { label: 'OTROS', valor: costoExtra }
-                ].map((item) => (
-                  <div key={item.label} style={{ background: 'rgba(255,255,255,0.08)', padding: '10px', borderRadius: '6px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', opacity: 0.7, marginBottom: '4px' }}>{item.label}</div>
-                    <div style={{ fontSize: '15px', fontWeight: '600' }}>${item.valor.toFixed(2)}</div>
+                {/* Cantidad adquirida */}
+                <div>
+                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>CANTIDAD ADQUIRIDA</div>
+                  <input type="number" min="0" step="1" value={formProducto.cantidadAdquirida}
+                    onChange={(e) => setFormProducto({ ...formProducto, cantidadAdquirida: parseInt(e.target.value) || 0 })}
+                    disabled={!isAdmin} style={inputStyle} placeholder="0" />
+                </div>
+
+                {/* Costo unitario */}
+                <div>
+                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>COSTO POR UNIDAD</div>
+                  <input type="number" min="0" step="0.01" value={formProducto.costoUnitario}
+                    onChange={(e) => setFormProducto({ ...formProducto, costoUnitario: parseFloat(e.target.value) || 0 })}
+                    disabled={!isAdmin} style={inputStyle} placeholder="0.00" />
+                </div>
+
+                {/* Total inversión (calculado) */}
+                <div>
+                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>TOTAL INVERSIÓN</div>
+                  <div style={{ ...inputStyle, background: 'rgba(255,255,255,0.05)', border: '2px solid rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    ${totalInversion.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                   </div>
-                ))}
-                <div style={{ background: 'rgba(255,255,255,0.15)', padding: '10px', borderRadius: '6px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '11px', opacity: 0.9, marginBottom: '4px' }}>COSTO TOTAL</div>
-                  <div style={{ fontSize: '18px', fontWeight: '700' }}>${costoTotal.toFixed(2)}</div>
+                </div>
+
+                {/* Precio de venta */}
+                <div>
+                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>PRECIO DE VENTA</div>
+                  <input type="number" min="0" step="0.01" value={formProducto.precioVenta}
+                    onChange={(e) => setFormProducto({ ...formProducto, precioVenta: parseFloat(e.target.value) || 0 })}
+                    disabled={!isAdmin} style={inputStyle} placeholder="0.00" />
+                </div>
+
+                {/* Cliente */}
+                <div>
+                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>CLIENTE / PROVEEDOR</div>
+                  <select value={formProducto.clienteId || ''}
+                    onChange={(e) => setFormProducto({ ...formProducto, clienteId: e.target.value || null })}
+                    disabled={!isAdmin} style={selectStyle}>
+                    <option value="">Sin asignar</option>
+                    {clientes.filter(c => c.activo !== false).map(c => (
+                      <option key={c.id} value={c.id}>{c.nombre}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              {/* Precio de venta */}
-              <div style={{ borderTop: '1px solid rgba(255,255,255,0.15)', paddingTop: '20px', marginBottom: '15px' }}>
-                <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>PRECIO DE VENTA</div>
-                <input type="number" min="0" step="0.01" value={formProducto.precioVenta}
-                  onChange={(e) => setFormProducto({ ...formProducto, precioVenta: parseFloat(e.target.value) || 0 })}
-                  disabled={!isAdmin}
-                  style={{ ...inputStyle, fontSize: '20px', padding: '12px' }}
-                  placeholder="0.00" />
-              </div>
+              {/* Resumen visual */}
+              <div style={{ display: 'grid', gridTemplateColumns: productoEditandoId ? '1fr 1fr 1fr' : '1fr 1fr', gap: '10px' }}>
+                {/* Utilidad por pieza */}
+                <div style={{
+                  background: utilidad >= 0 ? 'rgba(76,175,80,0.2)' : 'rgba(244,67,54,0.2)',
+                  padding: '12px', borderRadius: '6px', textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '4px' }}>UTILIDAD / PIEZA</div>
+                  <div style={{ fontSize: '20px', fontWeight: '700', color: utilidad >= 0 ? '#81c784' : '#e57373' }}>
+                    ${utilidad.toFixed(2)}
+                  </div>
+                </div>
 
-              {/* Indicadores de margen */}
-              {precioVenta > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                {/* Margen */}
+                <div style={{
+                  background: margen >= 20 ? 'rgba(76,175,80,0.2)' : margen >= 0 ? 'rgba(255,193,7,0.2)' : 'rgba(244,67,54,0.2)',
+                  padding: '12px', borderRadius: '6px', textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '4px' }}>MARGEN</div>
+                  <div style={{ fontSize: '20px', fontWeight: '700',
+                    color: margen >= 20 ? '#81c784' : margen >= 0 ? '#ffd54f' : '#e57373'
+                  }}>
+                    {margen.toFixed(1)}%
+                  </div>
+                </div>
+
+                {/* Stock restante (solo al editar) */}
+                {productoEditandoId && (
                   <div style={{
-                    background: utilidad >= 0 ? 'rgba(76,175,80,0.2)' : 'rgba(244,67,54,0.2)',
+                    background: 'rgba(33,150,243,0.2)',
                     padding: '12px', borderRadius: '6px', textAlign: 'center'
                   }}>
-                    <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '4px' }}>UTILIDAD / PIEZA</div>
-                    <div style={{ fontSize: '20px', fontWeight: '700', color: utilidad >= 0 ? '#81c784' : '#e57373' }}>
-                      ${utilidad.toFixed(2)}
+                    <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '4px' }}>STOCK RESTANTE</div>
+                    <div style={{ fontSize: '20px', fontWeight: '700', color: '#64b5f6' }}>
+                      {stockActual}
                     </div>
                   </div>
-                  <div style={{
-                    background: margen >= 20 ? 'rgba(76,175,80,0.2)' : margen >= 0 ? 'rgba(255,193,7,0.2)' : 'rgba(244,67,54,0.2)',
-                    padding: '12px', borderRadius: '6px', textAlign: 'center'
-                  }}>
-                    <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '4px' }}>MARGEN</div>
-                    <div style={{ fontSize: '20px', fontWeight: '700',
-                      color: margen >= 20 ? '#81c784' : margen >= 0 ? '#ffd54f' : '#e57373'
-                    }}>
-                      {margen.toFixed(1)}%
-                    </div>
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
             );
           })()}
