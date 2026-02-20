@@ -827,6 +827,8 @@ const DashboardView = ({ productosActualizados }) => {
   // Estado para posición económica real
   const [posEcon, setPosEcon] = useState(null);
   const [periodoEcon, setPeriodoEcon] = useState('mes');
+  const [popupInventario, setPopupInventario] = useState(null); // 'taller' | 'consignacion' | null
+  const [productosInventario, setProductosInventario] = useState([]);
 
   const formatearMonedaDash = (monto) => {
     return '$' + (parseFloat(monto) || 0).toLocaleString('es-MX', {
@@ -877,6 +879,7 @@ const DashboardView = ({ productosActualizados }) => {
     const cajaData = cajaRes.data || { totalIngresos: 0, totalEgresos: 0, balance: 0 };
     const serviciosData = serviciosRes.data || [];
     const productosData = productosRes.data || [];
+    setProductosInventario(productosData);
 
     // Calcular utilidad bruta de ventas (ventas - costos de producto)
     let ingresoVentas = 0;
@@ -963,8 +966,167 @@ const DashboardView = ({ productosActualizados }) => {
     cargarPosicionEconomica();
   }, [periodoEcon]);
 
+  // Generar desglose de inventario para popup
+  const desgloseInventario = () => {
+    const esTaller = popupInventario === 'taller';
+    const estructura = {};
+    let totalPzas = 0;
+    let totalValor = 0;
+
+    productosInventario.forEach(prod => {
+      const catNombre = prod.categoria?.nombre || 'Sin Categoría';
+      if (!estructura[catNombre]) {
+        estructura[catNombre] = { productos: [], totalPzas: 0, totalValor: 0 };
+      }
+
+      const productoInfo = {
+        nombre: prod.linea_nombre,
+        variantes: [],
+        totalPzas: 0,
+        totalValor: 0
+      };
+
+      if (prod.tiene_variantes) {
+        const variantesActivas = (prod.variantes || []).filter(v => v.activo !== false);
+        variantesActivas.forEach(v => {
+          const pzas = esTaller ? (v.stock || 0) : (v.stock_consignacion || 0);
+          const costo = parseFloat(v.costo_unitario) || 0;
+          if (pzas > 0) {
+            const nombreVar = [v.material, v.color, v.talla].filter(Boolean).join(' / ') || 'Sin especificar';
+            productoInfo.variantes.push({ nombre: nombreVar, pzas, valor: pzas * costo, imagen: v.imagen_url });
+            productoInfo.totalPzas += pzas;
+            productoInfo.totalValor += pzas * costo;
+          }
+        });
+      } else {
+        const pzas = esTaller ? (prod.stock || 0) : (prod.stock_consignacion || 0);
+        const costo = parseFloat(prod.costo_total_1_tinta) || 0;
+        if (pzas > 0) {
+          productoInfo.totalPzas = pzas;
+          productoInfo.totalValor = pzas * costo;
+        }
+      }
+
+      if (productoInfo.totalPzas > 0) {
+        estructura[catNombre].productos.push(productoInfo);
+        estructura[catNombre].totalPzas += productoInfo.totalPzas;
+        estructura[catNombre].totalValor += productoInfo.totalValor;
+        totalPzas += productoInfo.totalPzas;
+        totalValor += productoInfo.totalValor;
+      }
+    });
+
+    return { estructura, totalPzas, totalValor };
+  };
+
   return (
     <div>
+      {/* Popup desglose de inventario */}
+      {popupInventario && (() => {
+        const { estructura, totalPzas, totalValor } = desgloseInventario();
+        const esTaller = popupInventario === 'taller';
+        const titulo = esTaller ? 'Inventario en Taller' : 'Inventario en Consignación';
+        const colorPrincipal = esTaller ? colors.sidebarBg : colors.terracotta;
+
+        return (
+          <div
+            onClick={() => setPopupInventario(null)}
+            style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', zIndex: 2000, padding: '20px', boxSizing: 'border-box'
+            }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: colors.cotton, borderRadius: '16px', padding: '24px',
+                maxWidth: '600px', width: '100%', maxHeight: '80vh',
+                display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+              }}
+            >
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexShrink: 0 }}>
+                <div>
+                  <h3 style={{ margin: 0, color: colors.espresso, fontSize: '20px' }}>{titulo}</h3>
+                  <div style={{ fontSize: '13px', color: colors.camel, marginTop: '4px' }}>
+                    {totalPzas} piezas — {formatearMonedaDash(totalValor)}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setPopupInventario(null)}
+                  style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: colors.camel, padding: '4px', lineHeight: 1 }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Contenido scrollable */}
+              <div style={{ overflowY: 'auto', flex: 1 }}>
+                {Object.keys(estructura).length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '30px', color: colors.camel }}>Sin inventario</div>
+                ) : (
+                  Object.entries(estructura).map(([catNombre, catData]) => (
+                    <div key={catNombre} style={{ marginBottom: '16px' }}>
+                      {/* Categoría header */}
+                      <div style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        padding: '8px 12px', background: colorPrincipal, borderRadius: '8px', marginBottom: '8px'
+                      }}>
+                        <span style={{ color: 'white', fontWeight: '600', fontSize: '14px' }}>{catNombre}</span>
+                        <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '13px' }}>
+                          {catData.totalPzas} pzas — {formatearMonedaDash(catData.totalValor)}
+                        </span>
+                      </div>
+
+                      {/* Productos */}
+                      {catData.productos.map((prod, idx) => (
+                        <div key={idx} style={{ marginBottom: '8px', marginLeft: '8px' }}>
+                          <div style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            padding: '6px 10px', background: colors.linen, borderRadius: '6px'
+                          }}>
+                            <span style={{ fontWeight: '600', fontSize: '13px', color: colors.espresso }}>{prod.nombre}</span>
+                            <span style={{ fontSize: '13px', color: colorPrincipal, fontWeight: '600' }}>
+                              {prod.totalPzas} pzas — {formatearMonedaDash(prod.totalValor)}
+                            </span>
+                          </div>
+
+                          {/* Variantes */}
+                          {prod.variantes.length > 0 && (
+                            <div style={{ marginLeft: '12px', marginTop: '4px' }}>
+                              {prod.variantes.map((v, vIdx) => (
+                                <div key={vIdx} style={{
+                                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                  padding: '4px 10px', borderBottom: `1px solid ${colors.sand}`, fontSize: '12px'
+                                }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    {v.imagen && (
+                                      <img src={v.imagen} alt="" style={{ width: '24px', height: '24px', borderRadius: '4px', objectFit: 'cover' }} />
+                                    )}
+                                    <span style={{ color: colors.espresso }}>{v.nombre}</span>
+                                  </div>
+                                  <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                                    <span style={{ color: colors.camel }}>{v.pzas} pzas</span>
+                                    <span style={{ color: colorPrincipal, fontWeight: '600', minWidth: '80px', textAlign: 'right' }}>
+                                      {formatearMonedaDash(v.valor)}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* POSICIÓN ECONÓMICA */}
       <div style={{ marginBottom: '30px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
@@ -1079,13 +1241,23 @@ const DashboardView = ({ productosActualizados }) => {
 
             {/* Fila de Capital: Inventario + Por cobrar = Capital total */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginTop: '16px' }}>
-              <div style={{ background: colors.cotton, borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
+              <div
+                onClick={() => setPopupInventario('taller')}
+                style={{ background: colors.cotton, borderRadius: '12px', padding: '20px', textAlign: 'center', cursor: 'pointer', transition: 'transform 0.15s', border: `1px solid ${colors.sand}` }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.03)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
                 <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Inventario en taller</div>
                 <div style={{ fontSize: '24px', fontWeight: '700', color: colors.sidebarBg }}>{formatearMonedaDash(posEcon.valorTaller)}</div>
                 <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>{posEcon.pzasTaller} piezas</div>
               </div>
 
-              <div style={{ background: colors.cotton, borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
+              <div
+                onClick={() => setPopupInventario('consignacion')}
+                style={{ background: colors.cotton, borderRadius: '12px', padding: '20px', textAlign: 'center', cursor: 'pointer', transition: 'transform 0.15s', border: `1px solid ${colors.sand}` }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.03)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
                 <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Inventario en consignación</div>
                 <div style={{ fontSize: '24px', fontWeight: '700', color: colors.terracotta }}>{formatearMonedaDash(posEcon.valorConsignacion)}</div>
                 <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>{posEcon.pzasConsignacion} piezas</div>
