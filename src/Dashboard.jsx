@@ -1949,6 +1949,7 @@ const ProductosView = ({ isAdmin }) => {
     empaque: 0,
     tipoEntrega: 'envio', // 'envio' o 'recolecta'
     skuProducto: '',
+    marcaProducto: '',
     cantidadAdquirida: 0,
     costoUnitario: 0,
     clienteId: null,
@@ -2036,6 +2037,7 @@ const ProductosView = ({ isAdmin }) => {
         minPiezasEnvio: formProducto.minPiezasEnvio || 20,
         precioVenta: parseFloat(productoExistente.precio_venta) || 0,
         skuProducto: productoExistente.campos_dinamicos?.sku || '',
+        marcaProducto: productoExistente.campos_dinamicos?.marca || '',
         cantidadAdquirida: productoExistente.campos_dinamicos?.cantidad_adquirida || 0,
         costoUnitario: parseFloat(productoExistente.campos_dinamicos?.costo_unitario) || 0,
         clienteId: productoExistente.campos_dinamicos?.cliente_id || null
@@ -2058,6 +2060,7 @@ const ProductosView = ({ isAdmin }) => {
         empaque: 0,
         tipoEntrega: 'envio',
         skuProducto: '',
+        marcaProducto: '',
         cantidadAdquirida: 0,
         costoUnitario: 0,
         clienteId: null,
@@ -2123,6 +2126,7 @@ const ProductosView = ({ isAdmin }) => {
       empaque: parseFloat(producto.empaque) || 0,
       tipoEntrega: producto.tipo_entrega || 'envio',
       skuProducto: producto.campos_dinamicos?.sku || '',
+      marcaProducto: producto.campos_dinamicos?.marca || '',
       cantidadAdquirida: producto.campos_dinamicos?.cantidad_adquirida || 0,
       costoUnitario: parseFloat(producto.campos_dinamicos?.costo_unitario) || 0,
       clienteId: producto.campos_dinamicos?.cliente_id || null,
@@ -2196,6 +2200,7 @@ const ProductosView = ({ isAdmin }) => {
         productoData.campos_dinamicos = {
           ...productoData.campos_dinamicos,
           sku: formProducto.skuProducto || '',
+          marca: formProducto.marcaProducto || '',
           cantidad_adquirida: cantidadAdquirida,
           costo_unitario: costoUnitario,
           cliente_id: formProducto.clienteId || null
@@ -3040,6 +3045,14 @@ const ProductosView = ({ isAdmin }) => {
                   <input type="text" value={formProducto.skuProducto}
                     onChange={(e) => setFormProducto({ ...formProducto, skuProducto: e.target.value })}
                     disabled={!isAdmin} style={{ ...inputStyle, textAlign: 'left' }} placeholder="Ej: DG-001" />
+                </div>
+
+                {/* Marca */}
+                <div>
+                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>MARCA</div>
+                  <input type="text" value={formProducto.marcaProducto}
+                    onChange={(e) => setFormProducto({ ...formProducto, marcaProducto: e.target.value })}
+                    disabled={!isAdmin} style={{ ...inputStyle, textAlign: 'left' }} placeholder="Ej: De la Rosa" />
                 </div>
 
                 {/* Cantidad adquirida */}
