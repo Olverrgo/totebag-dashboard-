@@ -1939,6 +1939,9 @@ const ProductosView = ({ isAdmin }) => {
     serigrafia4: 0,
     empaque: 0,
     tipoEntrega: 'envio', // 'envio' o 'recolecta'
+    costoCompra: 0,
+    costoEnvio: 0,
+    costoExtra: 0,
     envio: 0,
     minPiezasEnvio: 20,
     precioVenta: 0 // Precio de venta sugerido
@@ -2021,7 +2024,10 @@ const ProductosView = ({ isAdmin }) => {
         tipoEntrega: productoExistente.tipo_entrega || 'envio',
         envio: formProducto.envio || 0,
         minPiezasEnvio: formProducto.minPiezasEnvio || 20,
-        precioVenta: parseFloat(productoExistente.precio_venta) || 0
+        precioVenta: parseFloat(productoExistente.precio_venta) || 0,
+        costoCompra: parseFloat(productoExistente.campos_dinamicos?.costo_compra) || 0,
+        costoEnvio: parseFloat(productoExistente.campos_dinamicos?.costo_envio) || 0,
+        costoExtra: parseFloat(productoExistente.campos_dinamicos?.costo_extra) || 0
       });
     } else {
       // Nuevo producto - valores por defecto
@@ -2040,6 +2046,9 @@ const ProductosView = ({ isAdmin }) => {
         serigrafia4: 0,
         empaque: 0,
         tipoEntrega: 'envio',
+        costoCompra: 0,
+        costoEnvio: 0,
+        costoExtra: 0,
         envio: formProducto.envio || 0,
         minPiezasEnvio: formProducto.minPiezasEnvio || 20,
         precioVenta: 0
@@ -2101,8 +2110,12 @@ const ProductosView = ({ isAdmin }) => {
       serigrafia4: parseFloat(producto.serigrafia_4_tintas) || 0,
       empaque: parseFloat(producto.empaque) || 0,
       tipoEntrega: producto.tipo_entrega || 'envio',
+      costoCompra: parseFloat(producto.campos_dinamicos?.costo_compra) || 0,
+      costoEnvio: parseFloat(producto.campos_dinamicos?.costo_envio) || 0,
+      costoExtra: parseFloat(producto.campos_dinamicos?.costo_extra) || 0,
       envio: formProducto.envio || 0,
-      minPiezasEnvio: formProducto.minPiezasEnvio || 20
+      minPiezasEnvio: formProducto.minPiezasEnvio || 20,
+      precioVenta: parseFloat(producto.precio_venta) || 0
     });
   };
 
@@ -2149,12 +2162,32 @@ const ProductosView = ({ isAdmin }) => {
           costo_total_3_tintas: parseFloat(costosCalculados.total3Tintas),
           costo_total_4_tintas: parseFloat(costosCalculados.total4Tintas)
         });
-      } else {
-        // Para categorías nuevas (Ropa de Cama, etc.), calcular costos desde campos dinámicos
+      } else if (camposCategoria.length > 0) {
+        // Para categorías con campos dinámicos (Ropa de Cama, etc.)
         const costoMaterial = parseFloat(camposDinamicos.costo_material) || 0;
         const costoConfeccion = parseFloat(camposDinamicos.costo_confeccion) || 0;
         const costoEmpaque = parseFloat(camposDinamicos.costo_empaque) || 0;
         const costoTotal = costoMaterial + costoConfeccion + costoEmpaque;
+
+        Object.assign(productoData, {
+          costo_total_1_tinta: costoTotal,
+          costo_total_2_tintas: costoTotal,
+          costo_total_3_tintas: costoTotal,
+          costo_total_4_tintas: costoTotal
+        });
+      } else {
+        // Para categorías de compra/reventa (sin campos dinámicos configurados)
+        const costoCompra = parseFloat(formProducto.costoCompra) || 0;
+        const costoEnvio = parseFloat(formProducto.costoEnvio) || 0;
+        const costoExtra = parseFloat(formProducto.costoExtra) || 0;
+        const costoTotal = costoCompra + costoEnvio + costoExtra;
+
+        productoData.campos_dinamicos = {
+          ...productoData.campos_dinamicos,
+          costo_compra: costoCompra,
+          costo_envio: costoEnvio,
+          costo_extra: costoExtra
+        };
 
         Object.assign(productoData, {
           costo_total_1_tinta: costoTotal,
@@ -2948,42 +2981,110 @@ const ProductosView = ({ isAdmin }) => {
             </>
           )}
 
-          {/* Formulario básico para categorías nuevas sin campos dinámicos */}
-          {!esCategoriaLegacy() && camposCategoria.length === 0 && (
+          {/* Formulario de costos para categorías de compra/reventa (sin campos dinámicos) */}
+          {!esCategoriaLegacy() && camposCategoria.length === 0 && (() => {
+            const costoCompra = parseFloat(formProducto.costoCompra) || 0;
+            const costoEnvio = parseFloat(formProducto.costoEnvio) || 0;
+            const costoExtra = parseFloat(formProducto.costoExtra) || 0;
+            const costoTotal = costoCompra + costoEnvio + costoExtra;
+            const precioVenta = parseFloat(formProducto.precioVenta) || 0;
+            const utilidad = precioVenta - costoTotal;
+            const margen = precioVenta > 0 ? ((utilidad / precioVenta) * 100) : 0;
+            const inputStyle = {
+              width: '100%',
+              padding: '10px',
+              fontSize: '15px',
+              fontWeight: '600',
+              border: '2px solid rgba(255,255,255,0.3)',
+              borderRadius: '6px',
+              background: 'rgba(255,255,255,0.1)',
+              color: colors.sidebarText,
+              textAlign: 'center'
+            };
+            return (
             <div style={{ background: colors.sidebarBg, borderRadius: '8px', padding: '25px', color: colors.sidebarText }}>
               <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '20px', letterSpacing: '1px' }}>
-                PRECIO DE VENTA
+                COSTOS DE ADQUISICIÓN
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
-                <div style={{ flex: 1, minWidth: '150px' }}>
-                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>PRECIO DE VENTA</div>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formProducto.precioVenta}
-                    onChange={(e) => setFormProducto({ ...formProducto, precioVenta: parseFloat(e.target.value) || 0 })}
-                    disabled={!isAdmin}
-                    style={{
-                      width: '100%',
-                      padding: '12px',
-                      fontSize: '18px',
-                      fontWeight: '600',
-                      border: '2px solid rgba(255,255,255,0.3)',
-                      borderRadius: '6px',
-                      background: 'rgba(255,255,255,0.1)',
-                      color: colors.sidebarText,
-                      textAlign: 'center'
-                    }}
-                    placeholder="0.00"
-                  />
+
+              {/* Inputs de costos */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '15px', marginBottom: '20px' }}>
+                <div>
+                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>COSTO COMPRA</div>
+                  <input type="number" min="0" step="0.01" value={formProducto.costoCompra}
+                    onChange={(e) => setFormProducto({ ...formProducto, costoCompra: parseFloat(e.target.value) || 0 })}
+                    disabled={!isAdmin} style={inputStyle} placeholder="0.00" />
+                </div>
+                <div>
+                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>ENVÍO / FLETE</div>
+                  <input type="number" min="0" step="0.01" value={formProducto.costoEnvio}
+                    onChange={(e) => setFormProducto({ ...formProducto, costoEnvio: parseFloat(e.target.value) || 0 })}
+                    disabled={!isAdmin} style={inputStyle} placeholder="0.00" />
+                </div>
+                <div>
+                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>OTROS COSTOS</div>
+                  <input type="number" min="0" step="0.01" value={formProducto.costoExtra}
+                    onChange={(e) => setFormProducto({ ...formProducto, costoExtra: parseFloat(e.target.value) || 0 })}
+                    disabled={!isAdmin} style={inputStyle} placeholder="0.00" />
                 </div>
               </div>
-              <div style={{ fontSize: '12px', opacity: 0.7, marginTop: '12px' }}>
-                Puedes agregar campos personalizados desde la configuración de categoría.
+
+              {/* Resumen de costos */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '10px', marginBottom: '20px' }}>
+                {[
+                  { label: 'COMPRA', valor: costoCompra },
+                  { label: 'ENVÍO', valor: costoEnvio },
+                  { label: 'OTROS', valor: costoExtra }
+                ].map((item) => (
+                  <div key={item.label} style={{ background: 'rgba(255,255,255,0.08)', padding: '10px', borderRadius: '6px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', opacity: 0.7, marginBottom: '4px' }}>{item.label}</div>
+                    <div style={{ fontSize: '15px', fontWeight: '600' }}>${item.valor.toFixed(2)}</div>
+                  </div>
+                ))}
+                <div style={{ background: 'rgba(255,255,255,0.15)', padding: '10px', borderRadius: '6px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '11px', opacity: 0.9, marginBottom: '4px' }}>COSTO TOTAL</div>
+                  <div style={{ fontSize: '18px', fontWeight: '700' }}>${costoTotal.toFixed(2)}</div>
+                </div>
               </div>
+
+              {/* Precio de venta */}
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.15)', paddingTop: '20px', marginBottom: '15px' }}>
+                <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>PRECIO DE VENTA</div>
+                <input type="number" min="0" step="0.01" value={formProducto.precioVenta}
+                  onChange={(e) => setFormProducto({ ...formProducto, precioVenta: parseFloat(e.target.value) || 0 })}
+                  disabled={!isAdmin}
+                  style={{ ...inputStyle, fontSize: '20px', padding: '12px' }}
+                  placeholder="0.00" />
+              </div>
+
+              {/* Indicadores de margen */}
+              {precioVenta > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div style={{
+                    background: utilidad >= 0 ? 'rgba(76,175,80,0.2)' : 'rgba(244,67,54,0.2)',
+                    padding: '12px', borderRadius: '6px', textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '4px' }}>UTILIDAD / PIEZA</div>
+                    <div style={{ fontSize: '20px', fontWeight: '700', color: utilidad >= 0 ? '#81c784' : '#e57373' }}>
+                      ${utilidad.toFixed(2)}
+                    </div>
+                  </div>
+                  <div style={{
+                    background: margen >= 20 ? 'rgba(76,175,80,0.2)' : margen >= 0 ? 'rgba(255,193,7,0.2)' : 'rgba(244,67,54,0.2)',
+                    padding: '12px', borderRadius: '6px', textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '4px' }}>MARGEN</div>
+                    <div style={{ fontSize: '20px', fontWeight: '700',
+                      color: margen >= 20 ? '#81c784' : margen >= 0 ? '#ffd54f' : '#e57373'
+                    }}>
+                      {margen.toFixed(1)}%
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+            );
+          })()}
 
           {/* Formulario legacy para Totebags */}
           {esCategoriaLegacy() && (
