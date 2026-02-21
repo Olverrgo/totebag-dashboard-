@@ -7329,20 +7329,33 @@ const VentasView = ({ isAdmin }) => {
           return;
         }
 
-        // Reducir stock_consignacion al pagar consignaciones
+        // Reducir stock_consignacion y registrar movimiento al pagar consignaciones
         if (venta.tipo_venta === 'consignacion' && venta.precio_unitario > 0) {
           const piezasPagadas = Math.round(montoAplicar / venta.precio_unitario);
           if (piezasPagadas > 0) {
             const producto = productos.find(p => p.id === venta.producto_id);
-            if (producto && venta.variante_id) {
-              const variante = (producto.variantes || []).find(v => v.id === venta.variante_id);
-              if (variante) {
-                const nuevaConsig = Math.max(0, (variante.stock_consignacion || 0) - piezasPagadas);
-                await updateStockVariante(variante.id, variante.stock || 0, nuevaConsig);
+            if (producto) {
+              // Crear movimiento de stock tipo venta_consignacion para historial
+              await createMovimientoStock({
+                producto_id: venta.producto_id,
+                cliente_id: venta.cliente_id,
+                tipo_movimiento: 'venta_consignacion',
+                cantidad: piezasPagadas,
+                notas: `Cobro desde Ventas - ${piezasPagadas} pzas pagadas`,
+                ...(venta.variante_id ? { variante_id: venta.variante_id } : {})
+              });
+
+              // Reducir stock_consignacion
+              if (venta.variante_id) {
+                const variante = (producto.variantes || []).find(v => v.id === venta.variante_id);
+                if (variante) {
+                  const nuevaConsig = Math.max(0, (variante.stock_consignacion || 0) - piezasPagadas);
+                  await updateStockVariante(variante.id, variante.stock || 0, nuevaConsig);
+                }
+              } else {
+                const nuevaConsig = Math.max(0, (producto.stock_consignacion || 0) - piezasPagadas);
+                await updateProducto(producto.id, { stock_consignacion: nuevaConsig });
               }
-            } else if (producto && !venta.variante_id) {
-              const nuevaConsig = Math.max(0, (producto.stock_consignacion || 0) - piezasPagadas);
-              await updateProducto(producto.id, { stock_consignacion: nuevaConsig });
             }
           }
         }
