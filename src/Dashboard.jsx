@@ -869,33 +869,33 @@ const DashboardView = ({ productosActualizados }) => {
     if (fechaInicio) filtrosVentas.fechaInicio = fechaInicio;
     if (fechaFin) filtrosVentas.fechaFin = fechaFin;
 
-    const [ventasRes, cajaRes, serviciosRes, productosRes, ventasConsigRes] = await Promise.all([
+    const [ventasRes, cajaRes, serviciosRes, productosRes, todasVentasRes] = await Promise.all([
       getVentas(filtrosVentas),
       getBalanceCaja(fechaInicio, fechaFin),
       getServiciosMaquila(),
       getProductos(),
-      getVentas({ tipoVenta: 'consignacion' })
+      getVentas({}) // TODAS las ventas sin filtro para calcular capital real
     ]);
 
     const ventasData = ventasRes.data || [];
+    const todasVentas = todasVentasRes.data || [];
     const cajaData = cajaRes.data || { totalIngresos: 0, totalEgresos: 0, balance: 0 };
     const serviciosData = serviciosRes.data || [];
     const productosData = productosRes.data || [];
     setProductosInventario(productosData);
 
     // Guardar ventas de consignación pendientes/parciales para el popup
-    const ventasConsig = (ventasConsigRes.data || []).filter(v =>
-      v.estado_pago !== 'pagado' && v.estado_pago !== 'cancelado'
+    const ventasConsig = todasVentas.filter(v =>
+      v.tipo_venta === 'consignacion' && v.estado_pago !== 'pagado' && v.estado_pago !== 'cancelado'
     );
     setVentasConsignacion(ventasConsig);
 
-    // Calcular utilidad bruta de ventas (ventas - costos de producto)
+    // Métricas del período seleccionado (ventas, utilidad, etc.)
     let ingresoVentas = 0;
     let costoVentas = 0;
     let utilidadBruta = 0;
     let piezasVendidas = 0;
     let ventasCobradas = 0;
-    let ventasPendientes = 0;
 
     ventasData.forEach(v => {
       const total = parseFloat(v.total) || 0;
@@ -906,18 +906,24 @@ const DashboardView = ({ productosActualizados }) => {
       utilidadBruta += total - costo;
       piezasVendidas += v.cantidad || 0;
       ventasCobradas += pagado;
+    });
+
+    // Por cobrar GLOBAL (todas las ventas, sin filtro de período)
+    let ventasPendientes = 0;
+    todasVentas.forEach(v => {
+      const total = parseFloat(v.total) || 0;
+      const pagado = parseFloat(v.monto_pagado) || 0;
       ventasPendientes += Math.max(0, total - pagado);
     });
 
-    // Servicios de maquila por cobrar a clientes
+    // Servicios de maquila por cobrar (todos, sin filtro de período)
     let porCobrarMaquila = 0;
     serviciosData.forEach(s => {
       porCobrarMaquila += Math.max(0, (parseFloat(s.total) || 0) - (parseFloat(s.monto_pagado) || 0));
     });
 
-    // Calcular valor del inventario (taller + consignación)
+    // Calcular valor del inventario en taller (a costo)
     let valorTaller = 0;
-    let valorConsignacion = 0;
     let pzasTaller = 0;
     let pzasConsignacion = 0;
 
@@ -926,22 +932,22 @@ const DashboardView = ({ productosActualizados }) => {
         const variantesActivas = (prod.variantes || []).filter(v => v.activo !== false);
         variantesActivas.forEach(v => {
           const costo = parseFloat(v.costo_unitario) || 0;
-          const stock = v.stock || 0;
-          const consig = v.stock_consignacion || 0;
-          valorTaller += stock * costo;
-          valorConsignacion += consig * costo;
-          pzasTaller += stock;
-          pzasConsignacion += consig;
+          valorTaller += (v.stock || 0) * costo;
+          pzasTaller += v.stock || 0;
+          pzasConsignacion += v.stock_consignacion || 0;
         });
       } else {
         const costo = parseFloat(prod.costo_total_1_tinta) || 0;
-        const stock = prod.stock || 0;
-        const consig = prod.stock_consignacion || 0;
-        valorTaller += stock * costo;
-        valorConsignacion += consig * costo;
-        pzasTaller += stock;
-        pzasConsignacion += consig;
+        valorTaller += (prod.stock || 0) * costo;
+        pzasTaller += prod.stock || 0;
+        pzasConsignacion += prod.stock_consignacion || 0;
       }
+    });
+
+    // Valor de consignación a precio de venta REAL (desde ventas pendientes)
+    let valorConsignacion = 0;
+    ventasConsig.forEach(vc => {
+      valorConsignacion += Math.max(0, (parseFloat(vc.total) || 0) - (parseFloat(vc.monto_pagado) || 0));
     });
 
     const valorInventarioTotal = valorTaller + valorConsignacion;
@@ -1344,7 +1350,7 @@ const DashboardView = ({ productosActualizados }) => {
               >
                 <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Inventario en consignación</div>
                 <div style={{ fontSize: '24px', fontWeight: '700', color: colors.terracotta }}>{formatearMonedaDash(posEcon.valorConsignacion)}</div>
-                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>{posEcon.pzasConsignacion} piezas</div>
+                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>{posEcon.pzasConsignacion} piezas • precio de venta</div>
               </div>
 
               <div style={{ background: colors.cotton, borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
