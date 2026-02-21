@@ -829,6 +829,7 @@ const DashboardView = ({ productosActualizados }) => {
   const [periodoEcon, setPeriodoEcon] = useState('mes');
   const [popupInventario, setPopupInventario] = useState(null); // 'taller' | 'consignacion' | null
   const [productosInventario, setProductosInventario] = useState([]);
+  const [ventasConsignacion, setVentasConsignacion] = useState([]);
 
   const formatearMonedaDash = (monto) => {
     return '$' + (parseFloat(monto) || 0).toLocaleString('es-MX', {
@@ -868,11 +869,12 @@ const DashboardView = ({ productosActualizados }) => {
     if (fechaInicio) filtrosVentas.fechaInicio = fechaInicio;
     if (fechaFin) filtrosVentas.fechaFin = fechaFin;
 
-    const [ventasRes, cajaRes, serviciosRes, productosRes] = await Promise.all([
+    const [ventasRes, cajaRes, serviciosRes, productosRes, ventasConsigRes] = await Promise.all([
       getVentas(filtrosVentas),
       getBalanceCaja(fechaInicio, fechaFin),
       getServiciosMaquila(),
-      getProductos()
+      getProductos(),
+      getVentas({ tipoVenta: 'consignacion' })
     ]);
 
     const ventasData = ventasRes.data || [];
@@ -880,6 +882,12 @@ const DashboardView = ({ productosActualizados }) => {
     const serviciosData = serviciosRes.data || [];
     const productosData = productosRes.data || [];
     setProductosInventario(productosData);
+
+    // Guardar ventas de consignación pendientes/parciales para el popup
+    const ventasConsig = (ventasConsigRes.data || []).filter(v =>
+      v.estado_pago !== 'pagado' && v.estado_pago !== 'cancelado'
+    );
+    setVentasConsignacion(ventasConsig);
 
     // Calcular utilidad bruta de ventas (ventas - costos de producto)
     let ingresoVentas = 0;
@@ -993,7 +1001,26 @@ const DashboardView = ({ productosActualizados }) => {
           const costo = parseFloat(v.costo_unitario) || 0;
           if (pzas > 0) {
             const nombreVar = [v.material, v.color, v.talla].filter(Boolean).join(' / ') || 'Sin especificar';
-            productoInfo.variantes.push({ nombre: nombreVar, pzas, valor: pzas * costo, imagen: v.imagen_url });
+
+            // Para consignación: buscar info de clientes y estado de pago
+            let clientesInfo = [];
+            if (!esTaller) {
+              const ventasVariante = ventasConsignacion.filter(vc =>
+                vc.producto_id === prod.id && vc.variante_id === v.id
+              );
+              ventasVariante.forEach(vc => {
+                const pzasPendientes = vc.cantidad - Math.floor((vc.monto_pagado || 0) / (vc.precio_unitario || 1));
+                if (pzasPendientes > 0) {
+                  clientesInfo.push({
+                    cliente: vc.cliente_nombre || 'Sin cliente',
+                    pzas: pzasPendientes,
+                    estado: vc.estado_pago
+                  });
+                }
+              });
+            }
+
+            productoInfo.variantes.push({ nombre: nombreVar, pzas, valor: pzas * costo, imagen: v.imagen_url, clientesInfo });
             productoInfo.totalPzas += pzas;
             productoInfo.totalValor += pzas * costo;
           }
@@ -1002,8 +1029,27 @@ const DashboardView = ({ productosActualizados }) => {
         const pzas = esTaller ? (prod.stock || 0) : (prod.stock_consignacion || 0);
         const costo = parseFloat(prod.costo_total_1_tinta) || 0;
         if (pzas > 0) {
+          // Para consignación sin variantes: buscar info de clientes
+          let clientesInfo = [];
+          if (!esTaller) {
+            const ventasProd = ventasConsignacion.filter(vc =>
+              vc.producto_id === prod.id && !vc.variante_id
+            );
+            ventasProd.forEach(vc => {
+              const pzasPendientes = vc.cantidad - Math.floor((vc.monto_pagado || 0) / (vc.precio_unitario || 1));
+              if (pzasPendientes > 0) {
+                clientesInfo.push({
+                  cliente: vc.cliente_nombre || 'Sin cliente',
+                  pzas: pzasPendientes,
+                  estado: vc.estado_pago
+                });
+              }
+            });
+          }
+
           productoInfo.totalPzas = pzas;
           productoInfo.totalValor = pzas * costo;
+          productoInfo.clientesInfo = clientesInfo;
         }
       }
 
@@ -1096,22 +1142,60 @@ const DashboardView = ({ productosActualizados }) => {
                           {prod.variantes.length > 0 && (
                             <div style={{ marginLeft: '12px', marginTop: '4px' }}>
                               {prod.variantes.map((v, vIdx) => (
-                                <div key={vIdx} style={{
-                                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                  padding: '4px 10px', borderBottom: `1px solid ${colors.sand}`, fontSize: '12px'
-                                }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    {v.imagen && (
-                                      <img src={v.imagen} alt="" style={{ width: '24px', height: '24px', borderRadius: '4px', objectFit: 'cover' }} />
-                                    )}
-                                    <span style={{ color: colors.espresso }}>{v.nombre}</span>
+                                <div key={vIdx} style={{ borderBottom: `1px solid ${colors.sand}` }}>
+                                  <div style={{
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    padding: '4px 10px', fontSize: '12px'
+                                  }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      {v.imagen && (
+                                        <img src={v.imagen} alt="" style={{ width: '24px', height: '24px', borderRadius: '4px', objectFit: 'cover' }} />
+                                      )}
+                                      <span style={{ color: colors.espresso }}>{v.nombre}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                                      <span style={{ color: colors.camel }}>{v.pzas} pzas</span>
+                                      <span style={{ color: colorPrincipal, fontWeight: '600', minWidth: '80px', textAlign: 'right' }}>
+                                        {formatearMonedaDash(v.valor)}
+                                      </span>
+                                    </div>
                                   </div>
-                                  <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                                    <span style={{ color: colors.camel }}>{v.pzas} pzas</span>
-                                    <span style={{ color: colorPrincipal, fontWeight: '600', minWidth: '80px', textAlign: 'right' }}>
-                                      {formatearMonedaDash(v.valor)}
-                                    </span>
-                                  </div>
+                                  {/* Detalle de clientes en consignación */}
+                                  {!esTaller && v.clientesInfo && v.clientesInfo.length > 0 && (
+                                    <div style={{ marginLeft: '36px', paddingBottom: '4px' }}>
+                                      {v.clientesInfo.map((ci, ciIdx) => (
+                                        <div key={ciIdx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', padding: '1px 0' }}>
+                                          <span style={{ color: colors.camel }}>{ci.cliente}</span>
+                                          <span style={{ color: colors.espresso, fontWeight: '600' }}>{ci.pzas} pzas</span>
+                                          <span style={{
+                                            padding: '1px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: '600',
+                                            background: ci.estado === 'parcial' ? 'rgba(247,183,49,0.2)' : 'rgba(196,120,74,0.2)',
+                                            color: ci.estado === 'parcial' ? '#F7B731' : colors.terracotta
+                                          }}>
+                                            {ci.estado === 'parcial' ? 'Parcial' : 'Pendiente'}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {/* Detalle de clientes para productos sin variantes */}
+                          {!esTaller && prod.variantes.length === 0 && prod.clientesInfo && prod.clientesInfo.length > 0 && (
+                            <div style={{ marginLeft: '20px', marginTop: '4px' }}>
+                              {prod.clientesInfo.map((ci, ciIdx) => (
+                                <div key={ciIdx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', padding: '2px 0' }}>
+                                  <span style={{ color: colors.camel }}>{ci.cliente}</span>
+                                  <span style={{ color: colors.espresso, fontWeight: '600' }}>{ci.pzas} pzas</span>
+                                  <span style={{
+                                    padding: '1px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: '600',
+                                    background: ci.estado === 'parcial' ? 'rgba(247,183,49,0.2)' : 'rgba(196,120,74,0.2)',
+                                    color: ci.estado === 'parcial' ? '#F7B731' : colors.terracotta
+                                  }}>
+                                    {ci.estado === 'parcial' ? 'Parcial' : 'Pendiente'}
+                                  </span>
                                 </div>
                               ))}
                             </div>
@@ -7331,7 +7415,7 @@ const VentasView = ({ isAdmin }) => {
 
         // Reducir stock_consignacion y registrar movimiento al pagar consignaciones
         if (venta.tipo_venta === 'consignacion' && venta.precio_unitario > 0) {
-          const piezasPagadas = Math.round(montoAplicar / venta.precio_unitario);
+          const piezasPagadas = Math.floor(montoAplicar / venta.precio_unitario);
           if (piezasPagadas > 0) {
             const producto = productos.find(p => p.id === venta.producto_id);
             if (producto) {
