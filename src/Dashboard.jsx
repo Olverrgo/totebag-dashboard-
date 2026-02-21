@@ -1364,9 +1364,9 @@ const DashboardView = ({ productosActualizados }) => {
               }}>
                 <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Capital total</div>
                 <div style={{ fontSize: '28px', fontWeight: '700', color: colors.sidebarBg }}>
-                  {formatearMonedaDash(posEcon.valorInventarioTotal + posEcon.ventasPendientes + posEcon.porCobrarMaquila + posEcon.balanceCaja)}
+                  {formatearMonedaDash(posEcon.valorTaller + posEcon.ventasPendientes + posEcon.porCobrarMaquila + posEcon.balanceCaja)}
                 </div>
-                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Inventario + Por cobrar + Caja</div>
+                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Taller + Por cobrar + Caja</div>
               </div>
             </div>
           </>
