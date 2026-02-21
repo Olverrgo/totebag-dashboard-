@@ -1004,57 +1004,68 @@ const DashboardView = ({ productosActualizados }) => {
         const variantesActivas = (prod.variantes || []).filter(v => v.activo !== false);
         variantesActivas.forEach(v => {
           const pzas = esTaller ? (v.stock || 0) : (v.stock_consignacion || 0);
-          const costo = parseFloat(v.costo_unitario) || 0;
+          const costoUnitario = parseFloat(v.costo_unitario) || 0;
           if (pzas > 0) {
             const nombreVar = [v.material, v.color, v.talla].filter(Boolean).join(' / ') || 'Sin especificar';
 
-            // Para consignación: buscar info de clientes y estado de pago
             let clientesInfo = [];
+            let valorReal = 0;
+
             if (!esTaller) {
+              // Consignación: calcular valor a precio de venta REAL desde ventas
               const ventasVariante = ventasConsignacion.filter(vc =>
                 vc.producto_id === prod.id && vc.variante_id === v.id
               );
               ventasVariante.forEach(vc => {
+                const pendiente = Math.max(0, (parseFloat(vc.total) || 0) - (parseFloat(vc.monto_pagado) || 0));
                 const pzasPendientes = vc.cantidad - Math.floor((vc.monto_pagado || 0) / (vc.precio_unitario || 1));
+                valorReal += pendiente;
                 if (pzasPendientes > 0) {
                   clientesInfo.push({
                     cliente: vc.cliente_nombre || 'Sin cliente',
                     pzas: pzasPendientes,
-                    estado: vc.estado_pago
+                    estado: vc.estado_pago,
+                    valor: pendiente
                   });
                 }
               });
             }
 
-            productoInfo.variantes.push({ nombre: nombreVar, pzas, valor: pzas * costo, imagen: v.imagen_url, clientesInfo });
+            const valor = esTaller ? (pzas * costoUnitario) : valorReal;
+            productoInfo.variantes.push({ nombre: nombreVar, pzas, valor, imagen: v.imagen_url, clientesInfo });
             productoInfo.totalPzas += pzas;
-            productoInfo.totalValor += pzas * costo;
+            productoInfo.totalValor += valor;
           }
         });
       } else {
         const pzas = esTaller ? (prod.stock || 0) : (prod.stock_consignacion || 0);
-        const costo = parseFloat(prod.costo_total_1_tinta) || 0;
+        const costoUnitario = parseFloat(prod.costo_total_1_tinta) || 0;
         if (pzas > 0) {
-          // Para consignación sin variantes: buscar info de clientes
           let clientesInfo = [];
+          let valorReal = 0;
+
           if (!esTaller) {
             const ventasProd = ventasConsignacion.filter(vc =>
               vc.producto_id === prod.id && !vc.variante_id
             );
             ventasProd.forEach(vc => {
+              const pendiente = Math.max(0, (parseFloat(vc.total) || 0) - (parseFloat(vc.monto_pagado) || 0));
               const pzasPendientes = vc.cantidad - Math.floor((vc.monto_pagado || 0) / (vc.precio_unitario || 1));
+              valorReal += pendiente;
               if (pzasPendientes > 0) {
                 clientesInfo.push({
                   cliente: vc.cliente_nombre || 'Sin cliente',
                   pzas: pzasPendientes,
-                  estado: vc.estado_pago
+                  estado: vc.estado_pago,
+                  valor: pendiente
                 });
               }
             });
           }
 
+          const valor = esTaller ? (pzas * costoUnitario) : valorReal;
           productoInfo.totalPzas = pzas;
-          productoInfo.totalValor = pzas * costo;
+          productoInfo.totalValor = valor;
           productoInfo.clientesInfo = clientesInfo;
         }
       }
@@ -1173,6 +1184,7 @@ const DashboardView = ({ productosActualizados }) => {
                                         <div key={ciIdx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', padding: '1px 0' }}>
                                           <span style={{ color: colors.camel }}>{ci.cliente}</span>
                                           <span style={{ color: colors.espresso, fontWeight: '600' }}>{ci.pzas} pzas</span>
+                                          <span style={{ color: colorPrincipal, fontWeight: '600' }}>{formatearMonedaDash(ci.valor)}</span>
                                           <span style={{
                                             padding: '1px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: '600',
                                             background: ci.estado === 'parcial' ? 'rgba(247,183,49,0.2)' : 'rgba(196,120,74,0.2)',
@@ -1195,6 +1207,7 @@ const DashboardView = ({ productosActualizados }) => {
                                 <div key={ciIdx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', padding: '2px 0' }}>
                                   <span style={{ color: colors.camel }}>{ci.cliente}</span>
                                   <span style={{ color: colors.espresso, fontWeight: '600' }}>{ci.pzas} pzas</span>
+                                  <span style={{ color: colorPrincipal, fontWeight: '600' }}>{formatearMonedaDash(ci.valor)}</span>
                                   <span style={{
                                     padding: '1px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: '600',
                                     background: ci.estado === 'parcial' ? 'rgba(247,183,49,0.2)' : 'rgba(196,120,74,0.2)',
