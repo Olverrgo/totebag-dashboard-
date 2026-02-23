@@ -7425,6 +7425,19 @@ const VentasView = ({ isAdmin }) => {
         const pendiente = (venta.total || 0) - (venta.monto_pagado || 0);
         if (pendiente <= 0) continue;
         const montoAplicar = Math.min(montoRestante, pendiente);
+
+        // Servicios de maquila se pagan con registrarPagoServicio (tabla servicios_maquila)
+        if (venta._es_servicio) {
+          const { error } = await registrarPagoServicio(venta.id, montoAplicar);
+          if (error) {
+            setMensaje({ tipo: 'error', texto: 'Error en pago servicio: ' + error.message });
+            cargarDatos();
+            return;
+          }
+          montoRestante -= montoAplicar;
+          continue;
+        }
+
         const { error } = await registrarPagoVenta(venta.id, montoAplicar);
         if (error) {
           setMensaje({ tipo: 'error', texto: 'Error en pago: ' + error.message });
