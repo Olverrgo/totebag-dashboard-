@@ -1374,8 +1374,18 @@ export const registrarPagoVenta = async (ventaId, montoPago) => {
 
   if (errorGet) return { data: null, error: handleRLSError(errorGet) };
 
-  const nuevoMontoPagado = (parseFloat(venta.monto_pagado) || 0) + montoPago;
   const total = parseFloat(venta.total) || 0;
+  const pagadoActual = parseFloat(venta.monto_pagado) || 0;
+  const pendiente = total - pagadoActual;
+
+  // Si ya está completamente pagada, no permitir más pagos
+  if (pendiente <= 0) {
+    return { data: null, error: { message: 'Esta venta ya está completamente pagada' } };
+  }
+
+  // Limitar el pago al monto pendiente
+  const montoReal = Math.min(montoPago, pendiente);
+  const nuevoMontoPagado = pagadoActual + montoReal;
 
   let nuevoEstado = 'parcial';
   if (nuevoMontoPagado >= total) {
@@ -1396,12 +1406,12 @@ export const registrarPagoVenta = async (ventaId, montoPago) => {
     .single();
 
   // Registrar ingreso automático en caja
-  if (!error && montoPago > 0) {
+  if (!error && montoReal > 0) {
     await supabase
       .from('movimientos_caja')
       .insert([{
         tipo: 'ingreso',
-        monto: montoPago,
+        monto: montoReal,
         venta_id: ventaId,
         categoria: 'pago_consignacion',
         metodo_pago: 'efectivo',
@@ -2046,8 +2056,18 @@ export const registrarPagoServicio = async (servicioId, montoPago) => {
 
   if (errorGet) return { data: null, error: handleRLSError(errorGet) };
 
-  const nuevoMontoPagado = (parseFloat(servicio.monto_pagado) || 0) + montoPago;
   const total = parseFloat(servicio.total) || 0;
+  const pagadoActual = parseFloat(servicio.monto_pagado) || 0;
+  const pendiente = total - pagadoActual;
+
+  // Si ya está completamente pagado, no permitir más pagos
+  if (pendiente <= 0) {
+    return { data: null, error: { message: 'Este servicio ya está completamente pagado' } };
+  }
+
+  // Limitar el pago al monto pendiente
+  const montoReal = Math.min(montoPago, pendiente);
+  const nuevoMontoPagado = pagadoActual + montoReal;
 
   let nuevoEstado = 'parcial';
   if (nuevoMontoPagado >= total) {
@@ -2067,12 +2087,12 @@ export const registrarPagoServicio = async (servicioId, montoPago) => {
     .single();
 
   // Registrar ingreso en caja (el cliente nos paga por el servicio)
-  if (!error && montoPago > 0) {
+  if (!error && montoReal > 0) {
     await supabase
       .from('movimientos_caja')
       .insert([{
         tipo: 'ingreso',
-        monto: montoPago,
+        monto: montoReal,
         categoria: 'venta',
         metodo_pago: 'efectivo',
         descripcion: `Cobro servicio maquila - Servicio #${servicioId}`,
