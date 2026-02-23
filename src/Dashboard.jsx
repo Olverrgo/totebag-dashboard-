@@ -63,6 +63,10 @@ import {
   updateServicioMaquila,
   deleteServicioMaquila,
   registrarPagoServicio,
+  revertirPago,
+  updateMovimientoCaja,
+  ajustarPagoVenta,
+  ajustarPagoServicio,
   getResurtidos,
   createResurtido,
   deleteResurtido
@@ -7152,6 +7156,8 @@ const VentasView = ({ isAdmin }) => {
   const [ventaEditando, setVentaEditando] = useState(null);
   const [mostrarPago, setMostrarPago] = useState(null); // ID de venta para registrar pago
   const [clienteDesglose, setClienteDesglose] = useState(null); // ID cliente para ver desglose de deuda
+  const [editandoPago, setEditandoPago] = useState(null); // ID de venta/servicio para editar pago
+  const [montoEditPago, setMontoEditPago] = useState('');
 
   // Formulario de nueva venta
   const [formVenta, setFormVenta] = useState({
@@ -7504,6 +7510,32 @@ const VentasView = ({ isAdmin }) => {
     }
   };
 
+  const handleAjustarPago = async (venta) => {
+    const nuevoMonto = parseFloat(montoEditPago);
+    if (isNaN(nuevoMonto) || nuevoMonto < 0) {
+      setMensaje({ tipo: 'error', texto: 'Ingresa un monto válido (0 o mayor)' });
+      return;
+    }
+    setGuardando(true);
+    try {
+      const fn = venta._es_servicio ? ajustarPagoServicio : ajustarPagoVenta;
+      const { error } = await fn(venta.id, nuevoMonto);
+      if (error) {
+        setMensaje({ tipo: 'error', texto: 'Error: ' + (error.message || error) });
+      } else {
+        setMensaje({ tipo: 'exito', texto: 'Pago ajustado correctamente' });
+        setEditandoPago(null);
+        setMontoEditPago('');
+        cargarDatos();
+        setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+      }
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: 'Error: ' + err.message });
+    } finally {
+      setGuardando(false);
+    }
+  };
+
   const formatearFecha = (fecha) => {
     if (!fecha) return '-';
     return new Date(fecha).toLocaleDateString('es-MX', {
@@ -7731,17 +7763,85 @@ const VentasView = ({ isAdmin }) => {
                             <div style={{ background: '#FFF8F0', padding: '12px 15px' }}>
                               {cliente.ventas.map(v => (
                                 <div key={v.id} style={{
-                                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                   padding: '8px 10px', borderBottom: `1px solid ${colors.sand}`,
                                   fontSize: '12px'
                                 }}>
-                                  <div>
-                                    <span style={{ fontWeight: '500', color: colors.espresso }}>{v.producto_nombre}</span>
-                                    <span style={{ color: colors.camel }}> • {v.cantidad} pzas • {formatearFecha(v.created_at)}</span>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                      <span style={{ fontWeight: '500', color: colors.espresso }}>{v.producto_nombre}</span>
+                                      <span style={{ color: colors.camel }}> • {v.cantidad} pzas • {formatearFecha(v.created_at)}</span>
+                                      <span style={{ color: colors.camel }}> • Pagado: {formatearMoneda(v.monto_pagado || 0)} / {formatearMoneda(v.total || 0)}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      <span style={{ fontWeight: '600', color: colors.terracotta }}>
+                                        {formatearMoneda((v.total || 0) - (v.monto_pagado || 0))}
+                                      </span>
+                                      {isAdmin && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (editandoPago === v.id) {
+                                              setEditandoPago(null);
+                                              setMontoEditPago('');
+                                            } else {
+                                              setEditandoPago(v.id);
+                                              setMontoEditPago(String(v.monto_pagado || 0));
+                                            }
+                                          }}
+                                          style={{
+                                            padding: '2px 8px',
+                                            background: 'rgba(0,95,132,0.1)',
+                                            color: colors.sidebarBg,
+                                            border: `1px solid ${colors.sidebarBg}`,
+                                            borderRadius: '4px',
+                                            cursor: 'pointer',
+                                            fontSize: '11px'
+                                          }}
+                                        >
+                                          {editandoPago === v.id ? 'Cancelar' : 'Editar pago'}
+                                        </button>
+                                      )}
+                                    </div>
                                   </div>
-                                  <div style={{ fontWeight: '600', color: colors.terracotta }}>
-                                    {formatearMoneda((v.total || 0) - (v.monto_pagado || 0))}
-                                  </div>
+                                  {editandoPago === v.id && (
+                                    <div style={{
+                                      marginTop: '8px',
+                                      display: 'flex',
+                                      gap: '8px',
+                                      alignItems: 'center',
+                                      background: colors.cream,
+                                      padding: '8px',
+                                      borderRadius: '6px'
+                                    }}>
+                                      <span style={{ fontSize: '12px', color: colors.espresso }}>Monto pagado:</span>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={montoEditPago}
+                                        onChange={e => setMontoEditPago(e.target.value)}
+                                        style={{ ...inputStyle, width: '120px', fontSize: '12px', padding: '6px 8px' }}
+                                        onClick={e => e.stopPropagation()}
+                                      />
+                                      <span style={{ fontSize: '11px', color: colors.camel }}>/ {formatearMoneda(v.total || 0)}</span>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); handleAjustarPago(v); }}
+                                        disabled={guardando}
+                                        style={{
+                                          padding: '5px 12px',
+                                          background: colors.sidebarBg,
+                                          color: 'white',
+                                          border: 'none',
+                                          borderRadius: '4px',
+                                          cursor: guardando ? 'not-allowed' : 'pointer',
+                                          fontSize: '11px',
+                                          fontWeight: '600'
+                                        }}
+                                      >
+                                        {guardando ? '...' : 'Guardar'}
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                               {mostrarPago === cId && (
@@ -8181,11 +8281,15 @@ const CajaView = ({ isAdmin }) => {
   const [cargando, setCargando] = useState(true);
   const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
   const [guardando, setGuardando] = useState(false);
-  const [mostrarFormEgreso, setMostrarFormEgreso] = useState(false);
+  const [mostrarFormMovimiento, setMostrarFormMovimiento] = useState(false);
+  const [editandoMovimiento, setEditandoMovimiento] = useState(null);
+  const [editandoPagoCaja, setEditandoPagoCaja] = useState(null);
+  const [montoEditPagoCaja, setMontoEditPagoCaja] = useState('');
   const [filtroPeriodo, setFiltroPeriodo] = useState('mes');
   const [filtroTipo, setFiltroTipo] = useState('todos');
 
-  const [formEgreso, setFormEgreso] = useState({
+  const [formMovimiento, setFormMovimiento] = useState({
+    tipo: 'egreso',
     monto: '',
     categoria: 'gasto_operativo',
     metodoPago: 'efectivo',
@@ -8199,6 +8303,12 @@ const CajaView = ({ isAdmin }) => {
     { value: 'gasto_envio', label: 'Gasto de envío' },
     { value: 'gasto_produccion', label: 'Gasto de producción' },
     { value: 'retiro', label: 'Retiro' },
+    { value: 'ajuste', label: 'Ajuste de caja' },
+    { value: 'otro', label: 'Otro' }
+  ];
+
+  const categoriasIngreso = [
+    { value: 'ajuste', label: 'Ajuste de caja' },
     { value: 'otro', label: 'Otro' }
   ];
 
@@ -8211,6 +8321,7 @@ const CajaView = ({ isAdmin }) => {
     gasto_envio: 'Gasto envío',
     gasto_produccion: 'Gasto producción',
     retiro: 'Retiro',
+    ajuste: 'Ajuste',
     otro: 'Otro'
   };
 
@@ -8291,35 +8402,57 @@ const CajaView = ({ isAdmin }) => {
     });
   };
 
-  const handleRegistrarEgreso = async () => {
-    if (!formEgreso.monto || parseFloat(formEgreso.monto) <= 0) {
+  const resetForm = () => {
+    setFormMovimiento({ tipo: 'egreso', monto: '', categoria: 'gasto_operativo', metodoPago: 'efectivo', descripcion: '', referencia: '' });
+    setEditandoMovimiento(null);
+    setMostrarFormMovimiento(false);
+  };
+
+  const handleGuardarMovimiento = async () => {
+    if (!formMovimiento.monto || parseFloat(formMovimiento.monto) <= 0) {
       setMensaje({ tipo: 'error', texto: 'Ingresa un monto válido' });
       return;
     }
-    if (!formEgreso.descripcion.trim()) {
+    if (!formMovimiento.descripcion.trim()) {
       setMensaje({ tipo: 'error', texto: 'Ingresa una descripción' });
       return;
     }
 
     setGuardando(true);
     try {
-      const { error } = await createMovimientoCaja({
-        tipo: 'egreso',
-        monto: parseFloat(formEgreso.monto),
-        categoria: formEgreso.categoria,
-        metodo_pago: formEgreso.metodoPago,
-        descripcion: formEgreso.descripcion.trim(),
-        referencia: formEgreso.referencia.trim() || null
-      });
-
-      if (error) {
-        setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
+      if (editandoMovimiento) {
+        const { error } = await updateMovimientoCaja(editandoMovimiento, {
+          monto: parseFloat(formMovimiento.monto),
+          categoria: formMovimiento.categoria,
+          metodo_pago: formMovimiento.metodoPago,
+          descripcion: formMovimiento.descripcion.trim(),
+          referencia: formMovimiento.referencia.trim() || null
+        });
+        if (error) {
+          setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
+        } else {
+          setMensaje({ tipo: 'exito', texto: 'Movimiento actualizado' });
+          resetForm();
+          cargarDatos();
+          setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+        }
       } else {
-        setMensaje({ tipo: 'exito', texto: 'Egreso registrado' });
-        setMostrarFormEgreso(false);
-        setFormEgreso({ monto: '', categoria: 'gasto_operativo', metodoPago: 'efectivo', descripcion: '', referencia: '' });
-        cargarDatos();
-        setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+        const { error } = await createMovimientoCaja({
+          tipo: formMovimiento.tipo,
+          monto: parseFloat(formMovimiento.monto),
+          categoria: formMovimiento.categoria,
+          metodo_pago: formMovimiento.metodoPago,
+          descripcion: formMovimiento.descripcion.trim(),
+          referencia: formMovimiento.referencia.trim() || null
+        });
+        if (error) {
+          setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
+        } else {
+          setMensaje({ tipo: 'exito', texto: `${formMovimiento.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'} registrado` });
+          resetForm();
+          cargarDatos();
+          setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+        }
       }
     } catch (err) {
       setMensaje({ tipo: 'error', texto: 'Error: ' + err.message });
@@ -8338,6 +8471,67 @@ const CajaView = ({ isAdmin }) => {
       setMensaje({ tipo: 'exito', texto: 'Movimiento eliminado' });
       cargarDatos();
       setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+    }
+  };
+
+  const handleRevertir = async (mov) => {
+    const tipoLink = mov.venta_id ? 'venta' : mov.servicio_id ? 'servicio maquila' : '';
+    if (!window.confirm(`¿Revertir pago de $${parseFloat(mov.monto).toFixed(2)} vinculado a ${tipoLink}?\nEsto restará el monto del pago registrado en la ${tipoLink}.`)) return;
+
+    setGuardando(true);
+    const { error } = await revertirPago(mov.id);
+    if (error) {
+      setMensaje({ tipo: 'error', texto: 'Error: ' + (error.message || error) });
+    } else {
+      setMensaje({ tipo: 'exito', texto: 'Pago revertido exitosamente' });
+      cargarDatos();
+      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+    }
+    setGuardando(false);
+  };
+
+  const handleEditar = (mov) => {
+    setFormMovimiento({
+      tipo: mov.tipo,
+      monto: mov.monto,
+      categoria: mov.categoria,
+      metodoPago: mov.metodo_pago,
+      descripcion: mov.descripcion || '',
+      referencia: mov.referencia || ''
+    });
+    setEditandoMovimiento(mov.id);
+    setMostrarFormMovimiento(true);
+  };
+
+  const handleEditarPagoCaja = async (mov) => {
+    const nuevoMonto = parseFloat(montoEditPagoCaja);
+    if (isNaN(nuevoMonto) || nuevoMonto < 0) {
+      setMensaje({ tipo: 'error', texto: 'Ingresa un monto válido (0 o mayor)' });
+      return;
+    }
+    setGuardando(true);
+    try {
+      let error = null;
+      if (mov.venta_id) {
+        const res = await ajustarPagoVenta(mov.venta_id, nuevoMonto);
+        error = res.error;
+      } else if (mov.servicio_id) {
+        const res = await ajustarPagoServicio(mov.servicio_id, nuevoMonto);
+        error = res.error;
+      }
+      if (error) {
+        setMensaje({ tipo: 'error', texto: 'Error: ' + (error.message || error) });
+      } else {
+        setMensaje({ tipo: 'exito', texto: 'Pago ajustado correctamente' });
+        setEditandoPagoCaja(null);
+        setMontoEditPagoCaja('');
+        cargarDatos();
+        setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+      }
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: 'Error: ' + err.message });
+    } finally {
+      setGuardando(false);
     }
   };
 
@@ -8417,7 +8611,7 @@ const CajaView = ({ isAdmin }) => {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '20px', alignItems: 'center' }}>
         {isAdmin && (
           <button
-            onClick={() => setMostrarFormEgreso(!mostrarFormEgreso)}
+            onClick={() => { if (mostrarFormMovimiento) { resetForm(); } else { setMostrarFormMovimiento(true); } }}
             style={{
               padding: '10px 20px',
               background: colors.terracotta,
@@ -8429,7 +8623,7 @@ const CajaView = ({ isAdmin }) => {
               fontSize: '14px'
             }}
           >
-            {mostrarFormEgreso ? 'Cancelar' : '+ Registrar Egreso'}
+            {mostrarFormMovimiento ? 'Cancelar' : '+ Nuevo movimiento'}
           </button>
         )}
 
@@ -8485,8 +8679,8 @@ const CajaView = ({ isAdmin }) => {
         </div>
       </div>
 
-      {/* Formulario de Egreso */}
-      {mostrarFormEgreso && isAdmin && (
+      {/* Formulario de Movimiento (Ingreso/Egreso) */}
+      {mostrarFormMovimiento && isAdmin && (
         <div style={{
           background: colors.cotton,
           borderRadius: '12px',
@@ -8494,16 +8688,35 @@ const CajaView = ({ isAdmin }) => {
           marginBottom: '20px',
           border: `1px solid ${colors.sand}`
         }}>
-          <h3 style={{ color: colors.espresso, marginTop: 0, marginBottom: '16px' }}>Registrar Egreso</h3>
+          <h3 style={{ color: colors.espresso, marginTop: 0, marginBottom: '16px' }}>
+            {editandoMovimiento ? 'Editar movimiento' : 'Nuevo movimiento'}
+          </h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+            {!editandoMovimiento && (
+              <div>
+                <label style={{ fontSize: '13px', color: colors.camel, display: 'block', marginBottom: '4px' }}>Tipo</label>
+                <select
+                  value={formMovimiento.tipo}
+                  onChange={e => {
+                    const nuevoTipo = e.target.value;
+                    const cats = nuevoTipo === 'ingreso' ? categoriasIngreso : categoriasEgreso;
+                    setFormMovimiento({ ...formMovimiento, tipo: nuevoTipo, categoria: cats[0].value });
+                  }}
+                  style={inputStyle}
+                >
+                  <option value="egreso">Egreso</option>
+                  <option value="ingreso">Ingreso</option>
+                </select>
+              </div>
+            )}
             <div>
               <label style={{ fontSize: '13px', color: colors.camel, display: 'block', marginBottom: '4px' }}>Monto *</label>
               <input
                 type="number"
                 step="0.01"
                 min="0.01"
-                value={formEgreso.monto}
-                onChange={e => setFormEgreso({ ...formEgreso, monto: e.target.value })}
+                value={formMovimiento.monto}
+                onChange={e => setFormMovimiento({ ...formMovimiento, monto: e.target.value })}
                 placeholder="0.00"
                 style={inputStyle}
               />
@@ -8511,11 +8724,11 @@ const CajaView = ({ isAdmin }) => {
             <div>
               <label style={{ fontSize: '13px', color: colors.camel, display: 'block', marginBottom: '4px' }}>Categoría</label>
               <select
-                value={formEgreso.categoria}
-                onChange={e => setFormEgreso({ ...formEgreso, categoria: e.target.value })}
+                value={formMovimiento.categoria}
+                onChange={e => setFormMovimiento({ ...formMovimiento, categoria: e.target.value })}
                 style={inputStyle}
               >
-                {categoriasEgreso.map(c => (
+                {(formMovimiento.tipo === 'ingreso' ? categoriasIngreso : categoriasEgreso).map(c => (
                   <option key={c.value} value={c.value}>{c.label}</option>
                 ))}
               </select>
@@ -8523,8 +8736,8 @@ const CajaView = ({ isAdmin }) => {
             <div>
               <label style={{ fontSize: '13px', color: colors.camel, display: 'block', marginBottom: '4px' }}>Método de pago</label>
               <select
-                value={formEgreso.metodoPago}
-                onChange={e => setFormEgreso({ ...formEgreso, metodoPago: e.target.value })}
+                value={formMovimiento.metodoPago}
+                onChange={e => setFormMovimiento({ ...formMovimiento, metodoPago: e.target.value })}
                 style={inputStyle}
               >
                 <option value="efectivo">Efectivo</option>
@@ -8537,8 +8750,8 @@ const CajaView = ({ isAdmin }) => {
               <label style={{ fontSize: '13px', color: colors.camel, display: 'block', marginBottom: '4px' }}>Referencia</label>
               <input
                 type="text"
-                value={formEgreso.referencia}
-                onChange={e => setFormEgreso({ ...formEgreso, referencia: e.target.value })}
+                value={formMovimiento.referencia}
+                onChange={e => setFormMovimiento({ ...formMovimiento, referencia: e.target.value })}
                 placeholder="Nº factura, recibo, etc."
                 style={inputStyle}
               />
@@ -8547,20 +8760,20 @@ const CajaView = ({ isAdmin }) => {
           <div style={{ marginTop: '12px' }}>
             <label style={{ fontSize: '13px', color: colors.camel, display: 'block', marginBottom: '4px' }}>Descripción *</label>
             <textarea
-              value={formEgreso.descripcion}
-              onChange={e => setFormEgreso({ ...formEgreso, descripcion: e.target.value })}
-              placeholder="Descripción del gasto..."
+              value={formMovimiento.descripcion}
+              onChange={e => setFormMovimiento({ ...formMovimiento, descripcion: e.target.value })}
+              placeholder={formMovimiento.tipo === 'ingreso' ? 'Descripción del ingreso...' : 'Descripción del gasto...'}
               rows={2}
               style={{ ...inputStyle, resize: 'vertical' }}
             />
           </div>
           <div style={{ marginTop: '16px', display: 'flex', gap: '12px' }}>
             <button
-              onClick={handleRegistrarEgreso}
+              onClick={handleGuardarMovimiento}
               disabled={guardando}
               style={{
                 padding: '10px 24px',
-                background: colors.terracotta,
+                background: formMovimiento.tipo === 'ingreso' ? colors.olive : colors.terracotta,
                 color: 'white',
                 border: 'none',
                 borderRadius: '8px',
@@ -8569,10 +8782,10 @@ const CajaView = ({ isAdmin }) => {
                 opacity: guardando ? 0.6 : 1
               }}
             >
-              {guardando ? 'Guardando...' : 'Registrar Egreso'}
+              {guardando ? 'Guardando...' : editandoMovimiento ? 'Guardar cambios' : `Registrar ${formMovimiento.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'}`}
             </button>
             <button
-              onClick={() => setMostrarFormEgreso(false)}
+              onClick={resetForm}
               style={{
                 padding: '10px 24px',
                 background: colors.sand,
@@ -8655,7 +8868,7 @@ const CajaView = ({ isAdmin }) => {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <div style={{
                   fontSize: '20px',
                   fontWeight: '700',
@@ -8663,23 +8876,142 @@ const CajaView = ({ isAdmin }) => {
                 }}>
                   {mov.tipo === 'ingreso' ? '+' : '-'}{formatearMoneda(mov.monto)}
                 </div>
-                {isAdmin && mov.tipo === 'egreso' && !mov.venta_id && (
+                {isAdmin && (mov.venta_id || mov.servicio_id) && (
+                  <>
+                    <button
+                      onClick={() => {
+                        if (editandoPagoCaja === mov.id) {
+                          setEditandoPagoCaja(null);
+                          setMontoEditPagoCaja('');
+                        } else {
+                          setEditandoPagoCaja(mov.id);
+                          setMontoEditPagoCaja('');
+                        }
+                      }}
+                      style={{
+                        padding: '6px 12px',
+                        background: 'rgba(0,95,132,0.1)',
+                        color: colors.sidebarBg,
+                        border: `1px solid ${colors.sidebarBg}`,
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '12px'
+                      }}
+                    >
+                      Editar pago
+                    </button>
+                    <button
+                      onClick={() => handleRevertir(mov)}
+                      disabled={guardando}
+                      style={{
+                        padding: '6px 12px',
+                        background: 'rgba(196,120,74,0.1)',
+                        color: colors.terracotta,
+                        border: `1px solid ${colors.terracotta}`,
+                        borderRadius: '6px',
+                        cursor: guardando ? 'not-allowed' : 'pointer',
+                        fontSize: '12px'
+                      }}
+                    >
+                      Revertir
+                    </button>
+                  </>
+                )}
+                {isAdmin && !mov.venta_id && !mov.servicio_id && (
+                  <>
+                    <button
+                      onClick={() => handleEditar(mov)}
+                      style={{
+                        padding: '6px 12px',
+                        background: 'rgba(0,95,132,0.1)',
+                        color: colors.sidebarBg,
+                        border: `1px solid ${colors.sidebarBg}`,
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '12px'
+                      }}
+                    >
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => handleEliminar(mov.id)}
+                      style={{
+                        padding: '6px 12px',
+                        background: 'rgba(196,120,74,0.1)',
+                        color: colors.terracotta,
+                        border: `1px solid ${colors.terracotta}`,
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '12px'
+                      }}
+                    >
+                      Eliminar
+                    </button>
+                  </>
+                )}
+              </div>
+              {editandoPagoCaja === mov.id && (
+                <div style={{
+                  marginTop: '10px',
+                  display: 'flex',
+                  gap: '8px',
+                  alignItems: 'center',
+                  background: colors.cream,
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  flexWrap: 'wrap'
+                }}>
+                  <span style={{ fontSize: '12px', color: colors.espresso, fontWeight: '500' }}>
+                    Nuevo monto pagado en {mov.venta_id ? 'venta' : 'servicio'}:
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={montoEditPagoCaja}
+                    onChange={e => setMontoEditPagoCaja(e.target.value)}
+                    placeholder="0.00"
+                    style={{
+                      padding: '6px 10px',
+                      border: `1px solid ${colors.sand}`,
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      width: '130px',
+                      background: 'white'
+                    }}
+                  />
                   <button
-                    onClick={() => handleEliminar(mov.id)}
+                    onClick={() => handleEditarPagoCaja(mov)}
+                    disabled={guardando}
+                    style={{
+                      padding: '6px 14px',
+                      background: colors.sidebarBg,
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: guardando ? 'not-allowed' : 'pointer',
+                      fontSize: '12px',
+                      fontWeight: '600'
+                    }}
+                  >
+                    {guardando ? '...' : 'Guardar'}
+                  </button>
+                  <button
+                    onClick={() => { setEditandoPagoCaja(null); setMontoEditPagoCaja(''); }}
                     style={{
                       padding: '6px 12px',
-                      background: 'rgba(196,120,74,0.1)',
-                      color: colors.terracotta,
-                      border: `1px solid ${colors.terracotta}`,
+                      background: colors.sand,
+                      color: colors.espresso,
+                      border: 'none',
                       borderRadius: '6px',
                       cursor: 'pointer',
                       fontSize: '12px'
                     }}
                   >
-                    Eliminar
+                    Cancelar
                   </button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           ))}
         </div>

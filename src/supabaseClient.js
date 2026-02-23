@@ -2075,7 +2075,8 @@ export const registrarPagoServicio = async (servicioId, montoPago) => {
         monto: montoPago,
         categoria: 'venta',
         metodo_pago: 'efectivo',
-        descripcion: `Cobro servicio maquila - Servicio #${servicioId}`
+        descripcion: `Cobro servicio maquila - Servicio #${servicioId}`,
+        servicio_id: servicioId
       }]);
   }
 
@@ -2139,6 +2140,151 @@ export const deleteMovimientoCaja = async (id) => {
     .eq('id', id);
 
   return { error: handleRLSError(error) };
+};
+
+// Actualizar movimiento de caja (solo movimientos manuales)
+export const updateMovimientoCaja = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('movimientos_caja')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+// Revertir un pago vinculado a venta o servicio
+export const revertirPago = async (movimientoId) => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+
+  // 1. Obtener el movimiento
+  const { data: mov, error: errorGet } = await supabase
+    .from('movimientos_caja')
+    .select('*')
+    .eq('id', movimientoId)
+    .single();
+
+  if (errorGet) return { error: handleRLSError(errorGet) };
+  if (!mov) return { error: 'Movimiento no encontrado' };
+
+  const monto = parseFloat(mov.monto) || 0;
+
+  // 2. Si tiene venta_id, restar monto de ventas.monto_pagado
+  if (mov.venta_id) {
+    const { data: venta, error: errorVenta } = await supabase
+      .from('ventas')
+      .select('total, monto_pagado')
+      .eq('id', mov.venta_id)
+      .single();
+
+    if (errorVenta) return { error: handleRLSError(errorVenta) };
+
+    const nuevoMontoPagado = Math.max(0, (parseFloat(venta.monto_pagado) || 0) - monto);
+    const total = parseFloat(venta.total) || 0;
+    let nuevoEstado = 'parcial';
+    if (nuevoMontoPagado >= total) nuevoEstado = 'pagado';
+    else if (nuevoMontoPagado <= 0) nuevoEstado = 'pendiente';
+
+    const { error: errorUpdate } = await supabase
+      .from('ventas')
+      .update({ monto_pagado: nuevoMontoPagado, estado_pago: nuevoEstado })
+      .eq('id', mov.venta_id);
+
+    if (errorUpdate) return { error: handleRLSError(errorUpdate) };
+  }
+
+  // 3. Si tiene servicio_id, restar monto de servicios_maquila.monto_pagado
+  if (mov.servicio_id) {
+    const { data: servicio, error: errorServicio } = await supabase
+      .from('servicios_maquila')
+      .select('total, monto_pagado')
+      .eq('id', mov.servicio_id)
+      .single();
+
+    if (errorServicio) return { error: handleRLSError(errorServicio) };
+
+    const nuevoMontoPagado = Math.max(0, (parseFloat(servicio.monto_pagado) || 0) - monto);
+    const total = parseFloat(servicio.total) || 0;
+    let nuevoEstado = 'parcial';
+    if (nuevoMontoPagado >= total) nuevoEstado = 'pagado';
+    else if (nuevoMontoPagado <= 0) nuevoEstado = 'pendiente';
+
+    const { error: errorUpdate } = await supabase
+      .from('servicios_maquila')
+      .update({ monto_pagado: nuevoMontoPagado, estado_pago: nuevoEstado })
+      .eq('id', mov.servicio_id);
+
+    if (errorUpdate) return { error: handleRLSError(errorUpdate) };
+  }
+
+  // 4. Soft-delete del movimiento
+  const { error: errorDelete } = await supabase
+    .from('movimientos_caja')
+    .update({ activo: false })
+    .eq('id', movimientoId);
+
+  return { error: handleRLSError(errorDelete) };
+};
+
+// Ajustar monto_pagado de una venta manualmente (admin)
+export const ajustarPagoVenta = async (ventaId, nuevoMontoPagado) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data: venta, error: errorGet } = await supabase
+    .from('ventas')
+    .select('total')
+    .eq('id', ventaId)
+    .single();
+
+  if (errorGet) return { data: null, error: handleRLSError(errorGet) };
+
+  const total = parseFloat(venta.total) || 0;
+  const montoPagado = Math.max(0, parseFloat(nuevoMontoPagado) || 0);
+
+  let nuevoEstado = 'parcial';
+  if (montoPagado >= total) nuevoEstado = 'pagado';
+  else if (montoPagado <= 0) nuevoEstado = 'pendiente';
+
+  const { data, error } = await supabase
+    .from('ventas')
+    .update({ monto_pagado: montoPagado, estado_pago: nuevoEstado })
+    .eq('id', ventaId)
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+// Ajustar monto_pagado de un servicio maquila manualmente (admin)
+export const ajustarPagoServicio = async (servicioId, nuevoMontoPagado) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data: servicio, error: errorGet } = await supabase
+    .from('servicios_maquila')
+    .select('total')
+    .eq('id', servicioId)
+    .single();
+
+  if (errorGet) return { data: null, error: handleRLSError(errorGet) };
+
+  const total = parseFloat(servicio.total) || 0;
+  const montoPagado = Math.max(0, parseFloat(nuevoMontoPagado) || 0);
+
+  let nuevoEstado = 'parcial';
+  if (montoPagado >= total) nuevoEstado = 'pagado';
+  else if (montoPagado <= 0) nuevoEstado = 'pendiente';
+
+  const { data, error } = await supabase
+    .from('servicios_maquila')
+    .update({ monto_pagado: montoPagado, estado_pago: nuevoEstado })
+    .eq('id', servicioId)
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
 };
 
 // Obtener balance de caja (ingresos - egresos)
