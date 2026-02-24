@@ -894,7 +894,7 @@ const DashboardView = ({ productosActualizados }) => {
     );
     setVentasConsignacion(ventasConsig);
 
-    // Métricas del período seleccionado (ventas, utilidad, etc.)
+    // Métricas del período seleccionado (ventas + servicios maquila)
     let ingresoVentas = 0;
     let costoVentas = 0;
     let utilidadBruta = 0;
@@ -911,6 +911,24 @@ const DashboardView = ({ productosActualizados }) => {
       piezasVendidas += v.cantidad || 0;
       ventasCobradas += pagado;
     });
+
+    // Sumar servicios de maquila del período
+    let ingresoServicios = 0;
+    let cobradoServicios = 0;
+    serviciosData.forEach(s => {
+      const fechaServicio = s.fecha ? s.fecha.split('T')[0] : null;
+      const enPeriodo = (!fechaInicio || fechaServicio >= fechaInicio) && (!fechaFin || fechaServicio <= fechaFin);
+      if (enPeriodo) {
+        const total = parseFloat(s.total) || 0;
+        const pagado = parseFloat(s.monto_pagado) || 0;
+        ingresoServicios += total;
+        cobradoServicios += pagado;
+      }
+    });
+
+    ingresoVentas += ingresoServicios;
+    utilidadBruta += ingresoServicios; // Servicios son pura utilidad (sin costo de material)
+    ventasCobradas += cobradoServicios;
 
     // Por cobrar GLOBAL (todas las ventas, sin filtro de período)
     let ventasPendientes = 0;
@@ -959,8 +977,17 @@ const DashboardView = ({ productosActualizados }) => {
     // Utilidad neta = utilidad bruta - egresos de caja
     const utilidadNeta = utilidadBruta - cajaData.totalEgresos;
 
+    // Contar servicios del período
+    let numServiciosPeriodo = 0;
+    serviciosData.forEach(s => {
+      const fechaServicio = s.fecha ? s.fecha.split('T')[0] : null;
+      const enPeriodo = (!fechaInicio || fechaServicio >= fechaInicio) && (!fechaFin || fechaServicio <= fechaFin);
+      if (enPeriodo) numServiciosPeriodo++;
+    });
+
     setPosEcon({
       ingresoVentas,
+      ingresoServicios,
       costoVentas,
       utilidadBruta,
       egresos: cajaData.totalEgresos,
@@ -972,6 +999,7 @@ const DashboardView = ({ productosActualizados }) => {
       ventasPendientes,
       porCobrarMaquila,
       numVentas: ventasData.length,
+      numServicios: numServiciosPeriodo,
       valorTaller,
       valorConsignacion,
       valorInventarioTotal,
@@ -1277,9 +1305,9 @@ const DashboardView = ({ productosActualizados }) => {
                 padding: '20px',
                 textAlign: 'center'
               }}>
-                <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Ventas totales</div>
+                <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Ingresos totales</div>
                 <div style={{ fontSize: '26px', fontWeight: '700', color: colors.sidebarBg }}>{formatearMonedaDash(posEcon.ingresoVentas)}</div>
-                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>{posEcon.numVentas} ventas • {posEcon.piezasVendidas} pzas</div>
+                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>{posEcon.numVentas} ventas • {posEcon.piezasVendidas} pzas{posEcon.numServicios > 0 ? ` • ${posEcon.numServicios} servicios` : ''}</div>
               </div>
 
               <div style={{
@@ -1291,7 +1319,7 @@ const DashboardView = ({ productosActualizados }) => {
               }}>
                 <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Utilidad bruta</div>
                 <div style={{ fontSize: '26px', fontWeight: '700', color: colors.olive }}>{formatearMonedaDash(posEcon.utilidadBruta)}</div>
-                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Ventas - Costo de producto</div>
+                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Ventas + Servicios - Costos</div>
               </div>
 
               <div style={{
