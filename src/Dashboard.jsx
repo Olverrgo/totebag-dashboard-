@@ -7287,8 +7287,34 @@ const VentasView = ({ isAdmin }) => {
         // 4. Actualizar stock del producto
         const productoId = parseInt(formVenta.productoId);
         if (producto?.tiene_variantes) {
-          // Producto con variantes: descontar del stock general (sin variante específica seleccionada)
-          // No podemos actualizar variante específica porque VentasView no tiene selector de variante
+          // Producto con variantes: distribuir proporcionalmente entre variantes con stock
+          const variantesConStock = (producto.variantes || []).filter(v => v.activo !== false && (v.stock || 0) > 0);
+          const stockTotal = variantesConStock.reduce((sum, v) => sum + (v.stock || 0), 0);
+
+          if (stockTotal > 0 && variantesConStock.length > 0) {
+            // Calcular descuento por variante (proporcional, con residuo en la última)
+            let porDescontar = cantidad;
+            for (let i = 0; i < variantesConStock.length; i++) {
+              if (porDescontar <= 0) break;
+              const v = variantesConStock[i];
+              const stockVar = v.stock || 0;
+              const consigVar = v.stock_consignacion || 0;
+              const esUltima = (i === variantesConStock.length - 1);
+              const descuento = esUltima
+                ? Math.min(stockVar, porDescontar)
+                : Math.min(stockVar, Math.floor(cantidad * stockVar / stockTotal));
+              const desc = Math.min(descuento, porDescontar);
+
+              if (desc > 0) {
+                if (esConsignacion) {
+                  await updateStockVariante(v.id, stockVar - desc, consigVar + desc);
+                } else {
+                  await updateStockVariante(v.id, stockVar - desc, consigVar);
+                }
+                porDescontar -= desc;
+              }
+            }
+          }
         } else {
           const stockActual = producto?.stock || 0;
           const consigActual = producto?.stock_consignacion || 0;
