@@ -40,272 +40,6 @@ const handleRLSError = (error) => {
 };
 
 // =====================================================
-// FUNCIONES PARA LÍNEAS DE PRODUCTO
-// =====================================================
-
-// Obtener todas las líneas de producto
-export const getLineasProducto = async () => {
-  if (!supabase) return { data: null, error: 'Supabase no configurado' };
-
-  const { data, error } = await supabase
-    .from('lineas_producto')
-    .select('*')
-    .eq('activo', true)
-    .order('orden', { ascending: true });
-
-  return { data, error: handleRLSError(error) };
-};
-
-// Actualizar una línea de producto
-export const updateLineaProducto = async (id, updates) => {
-  if (!supabase) return { data: null, error: 'Supabase no configurado' };
-
-  const { data, error } = await supabase
-    .from('lineas_producto')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
-
-  return { data, error: handleRLSError(error) };
-};
-
-// =====================================================
-// FUNCIONES PARA PROYECCIONES
-// =====================================================
-
-// Obtener todas las proyecciones
-export const getProyecciones = async () => {
-  if (!supabase) return { data: null, error: 'Supabase no configurado' };
-
-  const { data, error } = await supabase
-    .from('proyecciones')
-    .select('*')
-    .order('mes_numero', { ascending: true });
-
-  return { data, error: handleRLSError(error) };
-};
-
-// Actualizar una proyección
-export const updateProyeccion = async (id, updates) => {
-  if (!supabase) return { data: null, error: 'Supabase no configurado' };
-
-  const { data, error } = await supabase
-    .from('proyecciones')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
-
-  return { data, error: handleRLSError(error) };
-};
-
-// =====================================================
-// FUNCIONES PARA CANALES E-COMMERCE
-// =====================================================
-
-// Obtener todos los canales e-commerce
-export const getCanalesEcommerce = async () => {
-  if (!supabase) return { data: null, error: 'Supabase no configurado' };
-
-  const { data, error } = await supabase
-    .from('canales_ecommerce')
-    .select('*')
-    .eq('activo', true)
-    .order('orden', { ascending: true });
-
-  return { data, error: handleRLSError(error) };
-};
-
-// Actualizar un canal e-commerce
-export const updateCanalEcommerce = async (id, updates) => {
-  if (!supabase) return { data: null, error: 'Supabase no configurado' };
-
-  const { data, error } = await supabase
-    .from('canales_ecommerce')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
-
-  return { data, error: handleRLSError(error) };
-};
-
-// Crear un nuevo canal e-commerce
-export const createCanalEcommerce = async (canal) => {
-  if (!supabase) return { data: null, error: 'Supabase no configurado' };
-
-  const { data, error } = await supabase
-    .from('canales_ecommerce')
-    .insert([canal])
-    .select()
-    .single();
-
-  return { data, error: handleRLSError(error) };
-};
-
-// Eliminar un canal e-commerce
-export const deleteCanalEcommerce = async (id) => {
-  if (!supabase) return { error: 'Supabase no configurado' };
-
-  const { error } = await supabase
-    .from('canales_ecommerce')
-    .delete()
-    .eq('id', id);
-
-  return { error };
-};
-
-// =====================================================
-// FUNCIONES PARA COSTOS DE ENVÍO
-// =====================================================
-
-// Obtener todos los costos de envío
-export const getCostosEnvio = async () => {
-  if (!supabase) return { data: null, error: 'Supabase no configurado' };
-
-  const { data, error } = await supabase
-    .from('costos_envio')
-    .select('*')
-    .eq('activo', true)
-    .order('orden', { ascending: true });
-
-  return { data, error: handleRLSError(error) };
-};
-
-// Actualizar un costo de envío
-export const updateCostoEnvio = async (id, updates) => {
-  if (!supabase) return { data: null, error: 'Supabase no configurado' };
-
-  const { data, error } = await supabase
-    .from('costos_envio')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
-
-  return { data, error: handleRLSError(error) };
-};
-
-// Crear un nuevo costo de envío
-export const createCostoEnvio = async (costo) => {
-  if (!supabase) return { data: null, error: 'Supabase no configurado' };
-
-  const { data, error } = await supabase
-    .from('costos_envio')
-    .insert([costo])
-    .select()
-    .single();
-
-  return { data, error: handleRLSError(error) };
-};
-
-// Eliminar un costo de envío
-export const deleteCostoEnvio = async (id) => {
-  if (!supabase) return { error: 'Supabase no configurado' };
-
-  const { error } = await supabase
-    .from('costos_envio')
-    .delete()
-    .eq('id', id);
-
-  return { error };
-};
-
-// =====================================================
-// FUNCIONES PARA PERSONALIZACIÓN
-// =====================================================
-
-// Obtener todas las opciones de personalización
-export const getPersonalizacion = async () => {
-  if (!supabase) return { data: null, error: 'Supabase no configurado' };
-
-  const { data, error } = await supabase
-    .from('personalizacion')
-    .select('*')
-    .eq('activo', true)
-    .order('orden', { ascending: true });
-
-  return { data, error: handleRLSError(error) };
-};
-
-// Actualizar una opción de personalización
-export const updatePersonalizacion = async (id, updates) => {
-  if (!supabase) return { data: null, error: 'Supabase no configurado' };
-
-  const { data, error } = await supabase
-    .from('personalizacion')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
-
-  return { data, error: handleRLSError(error) };
-};
-
-// =====================================================
-// FUNCIONES PARA TIPOS DE DISEÑO
-// =====================================================
-
-// Obtener todos los tipos de diseño
-export const getTiposDiseno = async () => {
-  if (!supabase) return { data: null, error: 'Supabase no configurado' };
-
-  const { data, error } = await supabase
-    .from('tipos_diseno')
-    .select('*')
-    .eq('activo', true)
-    .order('orden', { ascending: true });
-
-  return { data, error: handleRLSError(error) };
-};
-
-// Actualizar un tipo de diseño
-export const updateTipoDiseno = async (id, updates) => {
-  if (!supabase) return { data: null, error: 'Supabase no configurado' };
-
-  const { data, error } = await supabase
-    .from('tipos_diseno')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
-
-  return { data, error: handleRLSError(error) };
-};
-
-// =====================================================
-// FUNCIONES PARA COLECCIONES
-// =====================================================
-
-// Obtener todas las colecciones
-export const getColecciones = async () => {
-  if (!supabase) return { data: null, error: 'Supabase no configurado' };
-
-  const { data, error } = await supabase
-    .from('colecciones')
-    .select('*')
-    .eq('activo', true)
-    .order('orden', { ascending: true });
-
-  return { data, error: handleRLSError(error) };
-};
-
-// Actualizar una colección
-export const updateColeccion = async (id, updates) => {
-  if (!supabase) return { data: null, error: 'Supabase no configurado' };
-
-  const { data, error } = await supabase
-    .from('colecciones')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
-
-  return { data, error: handleRLSError(error) };
-};
-
-// =====================================================
 // FUNCIONES PARA CONFIGURACIÓN
 // =====================================================
 
@@ -970,35 +704,6 @@ export const deleteImagenVariante = async (varianteId, imagenUrl) => {
 };
 
 // Obtener resumen de variantes por producto
-export const getResumenVariantes = async (productoId) => {
-  if (!supabase) return { data: null, error: 'Supabase no configurado' };
-
-  const { data, error } = await supabase
-    .from('variantes_producto')
-    .select('stock, stock_consignacion, material, color, talla')
-    .eq('producto_id', productoId)
-    .eq('activo', true);
-
-  if (error) return { data: null, error: handleRLSError(error) };
-
-  // Calcular resumen
-  const resumen = {
-    stockTotal: 0,
-    consignacionTotal: 0,
-    numVariantes: data?.length || 0,
-    materiales: [...new Set(data?.map(v => v.material).filter(Boolean))],
-    colores: [...new Set(data?.map(v => v.color).filter(Boolean))],
-    tallas: [...new Set(data?.map(v => v.talla).filter(Boolean))]
-  };
-
-  data?.forEach(v => {
-    resumen.stockTotal += v.stock || 0;
-    resumen.consignacionTotal += v.stock_consignacion || 0;
-  });
-
-  return { data: resumen, error: null };
-};
-
 // =====================================================
 // FUNCIONES PARA CONFIGURACIONES DE CORTE
 // =====================================================
@@ -1361,14 +1066,15 @@ export const getResumenVentas = async (fechaInicio = null, fechaFin = null) => {
   return { data: resumen, error: null };
 };
 
-// Registrar pago de venta
-export const registrarPagoVenta = async (ventaId, montoPago) => {
+// Registrar pago de venta (centralizado: maneja stock_consignacion y movimientos para consignaciones)
+// options.skipMovimientoStock: true para evitar duplicar movimiento cuando ya fue creado externamente
+export const registrarPagoVenta = async (ventaId, montoPago, options = {}) => {
   if (!supabase) return { data: null, error: 'Supabase no configurado' };
 
-  // Obtener venta actual
+  // Obtener venta actual con campos necesarios para consignaciones
   const { data: venta, error: errorGet } = await supabase
     .from('ventas')
-    .select('total, monto_pagado')
+    .select('total, monto_pagado, tipo_venta, precio_unitario, producto_id, cliente_id, variante_id')
     .eq('id', ventaId)
     .single();
 
@@ -1405,21 +1111,80 @@ export const registrarPagoVenta = async (ventaId, montoPago) => {
     .select()
     .single();
 
+  if (error) return { data: null, error: handleRLSError(error) };
+
+  // Para consignaciones: reducir stock_consignacion y crear movimiento_stock
+  const esConsignacion = venta.tipo_venta === 'consignacion';
+  const precioUnitario = parseFloat(venta.precio_unitario) || 0;
+
+  if (esConsignacion && precioUnitario > 0 && montoReal > 0) {
+    const piezasPagadas = Math.floor(montoReal / precioUnitario);
+
+    if (piezasPagadas > 0) {
+      // Crear movimiento de stock tipo venta_consignacion (skip si ya fue creado externamente)
+      if (!options.skipMovimientoStock) {
+        await supabase
+          .from('movimientos_stock')
+          .insert([{
+            producto_id: venta.producto_id,
+            cliente_id: venta.cliente_id,
+            tipo_movimiento: 'venta_consignacion',
+            cantidad: piezasPagadas,
+            notas: `Cobro consignación - ${piezasPagadas} pzas pagadas`,
+            ...(venta.variante_id ? { variante_id: venta.variante_id } : {})
+          }]);
+      }
+
+      // Reducir stock_consignacion
+      if (venta.variante_id) {
+        const { data: varData } = await supabase
+          .from('variantes_producto')
+          .select('stock, stock_consignacion')
+          .eq('id', venta.variante_id)
+          .single();
+        if (varData) {
+          const nuevaConsig = Math.max(0, (varData.stock_consignacion || 0) - piezasPagadas);
+          await supabase
+            .from('variantes_producto')
+            .update({ stock_consignacion: nuevaConsig })
+            .eq('id', venta.variante_id);
+        }
+      } else if (venta.producto_id) {
+        const { data: prodData } = await supabase
+          .from('productos')
+          .select('stock_consignacion')
+          .eq('id', venta.producto_id)
+          .single();
+        if (prodData) {
+          const nuevaConsig = Math.max(0, (prodData.stock_consignacion || 0) - piezasPagadas);
+          await supabase
+            .from('productos')
+            .update({ stock_consignacion: nuevaConsig })
+            .eq('id', venta.producto_id);
+        }
+      }
+    }
+  }
+
   // Registrar ingreso automático en caja
-  if (!error && montoReal > 0) {
+  if (montoReal > 0) {
+    const categoriaCaja = esConsignacion ? 'cobro_consignacion' : 'venta';
+    const descripcionCaja = esConsignacion
+      ? `Cobro consignación - Venta #${ventaId}`
+      : `Pago venta - Venta #${ventaId}`;
     await supabase
       .from('movimientos_caja')
       .insert([{
         tipo: 'ingreso',
         monto: montoReal,
         venta_id: ventaId,
-        categoria: 'pago_consignacion',
+        categoria: categoriaCaja,
         metodo_pago: 'efectivo',
-        descripcion: `Pago de consignación - Venta #${ventaId}`
+        descripcion: descripcionCaja
       }]);
   }
 
-  return { data, error: handleRLSError(error) };
+  return { data, error: null };
 };
 
 // =====================================================
@@ -1537,7 +1302,7 @@ export const createConsignacionConVenta = async (movimiento, datosVenta) => {
 export const registrarVentaConsignacion = async (movimiento, datosVenta) => {
   if (!supabase) return { data: null, error: 'Supabase no configurado' };
 
-  // 1. Crear el movimiento de stock
+  // 1. Crear el movimiento de stock (registro en SalidasView)
   const { data: movData, error: movError } = await supabase
     .from('movimientos_stock')
     .insert([movimiento])
@@ -1562,46 +1327,23 @@ export const registrarVentaConsignacion = async (movimiento, datosVenta) => {
     return { data: { movimiento: movData }, error: null, warning: 'Movimiento creado pero no se encontraron ventas pendientes' };
   }
 
-  // 3. Registrar pago en las ventas pendientes (FIFO - primero las más antiguas)
+  // 3. Registrar pago en las ventas pendientes (FIFO) usando registrarPagoVenta centralizado
   let cantidadPorPagar = datosVenta.cantidad;
   const ventasActualizadas = [];
 
   for (const venta of (ventasPendientes || [])) {
     if (cantidadPorPagar <= 0) break;
 
-    const cantidadPendienteVenta = venta.cantidad - (venta.monto_pagado / venta.precio_unitario);
+    const cantidadPendienteVenta = venta.cantidad - ((parseFloat(venta.monto_pagado) || 0) / (parseFloat(venta.precio_unitario) || 1));
     const cantidadAPagar = Math.min(cantidadPorPagar, cantidadPendienteVenta);
-    const montoAPagar = cantidadAPagar * venta.precio_unitario;
+    const montoAPagar = cantidadAPagar * (parseFloat(venta.precio_unitario) || 0);
 
-    const nuevoMontoPagado = (parseFloat(venta.monto_pagado) || 0) + montoAPagar;
-    const nuevoEstado = nuevoMontoPagado >= parseFloat(venta.total) ? 'pagado' : 'parcial';
-
-    const { data: ventaActualizada, error: updateError } = await supabase
-      .from('ventas')
-      .update({
-        monto_pagado: nuevoMontoPagado,
-        estado_pago: nuevoEstado,
-        fecha_pago: nuevoEstado === 'pagado' ? new Date().toISOString() : null
-      })
-      .eq('id', venta.id)
-      .select()
-      .single();
-
-    if (!updateError) {
-      ventasActualizadas.push(ventaActualizada);
-
-      // Registrar ingreso automático en caja
-      if (montoAPagar > 0) {
-        await supabase
-          .from('movimientos_caja')
-          .insert([{
-            tipo: 'ingreso',
-            monto: montoAPagar,
-            venta_id: venta.id,
-            categoria: 'venta',
-            metodo_pago: 'efectivo',
-            descripcion: `Venta consignación - ${cantidadAPagar} pzas - Venta #${venta.id}`
-          }]);
+    if (montoAPagar > 0) {
+      // registrarPagoVenta maneja: monto_pagado, estado_pago, stock_consignacion y movimiento_caja
+      // skipMovimientoStock porque ya creamos el movimiento arriba
+      const { data: ventaActualizada, error: pagoError } = await registrarPagoVenta(venta.id, montoAPagar, { skipMovimientoStock: true });
+      if (!pagoError && ventaActualizada) {
+        ventasActualizadas.push(ventaActualizada);
       }
     }
 
@@ -1699,47 +1441,6 @@ export const registrarDevolucionConsignacion = async (movimiento, datosDevolucio
 };
 
 // Obtener resumen de stock por producto
-export const getResumenStock = async (productoId) => {
-  if (!supabase) return { data: null, error: 'Supabase no configurado' };
-
-  const { data, error } = await supabase
-    .from('movimientos_stock')
-    .select('tipo_movimiento, cantidad')
-    .eq('producto_id', productoId);
-
-  if (data) {
-    const resumen = {
-      enConsignacion: 0,
-      vendidoDirecto: 0,
-      vendidoConsignacion: 0,
-      devuelto: 0
-    };
-
-    data.forEach(mov => {
-      switch (mov.tipo_movimiento) {
-        case 'consignacion':
-          resumen.enConsignacion += mov.cantidad;
-          break;
-        case 'venta_directa':
-          resumen.vendidoDirecto += mov.cantidad;
-          break;
-        case 'venta_consignacion':
-          resumen.vendidoConsignacion += mov.cantidad;
-          resumen.enConsignacion -= mov.cantidad;
-          break;
-        case 'devolucion':
-          resumen.devuelto += mov.cantidad;
-          resumen.enConsignacion -= mov.cantidad;
-          break;
-      }
-    });
-
-    return { data: resumen, error: null };
-  }
-
-  return { data: null, error };
-};
-
 // =====================================================
 // FUNCIONES DE AUTENTICACIÓN
 // =====================================================
@@ -1770,27 +1471,6 @@ export const getSession = async () => {
 
   const { data, error } = await supabase.auth.getSession();
   return { data: data?.session, error };
-};
-
-// Obtener usuario actual
-export const getCurrentUser = async () => {
-  if (!supabase) return { data: null, error: 'Supabase no configurado' };
-
-  const { data: { user }, error } = await supabase.auth.getUser();
-  return { data: user, error };
-};
-
-// Obtener perfil del usuario (con rol)
-export const getUserProfile = async (userId) => {
-  if (!supabase) return { data: null, error: 'Supabase no configurado' };
-
-  const { data, error } = await supabase
-    .from('user_profiles')
-    .select('*')
-    .eq('id', userId)
-    .single();
-
-  return { data, error: handleRLSError(error) };
 };
 
 // Escuchar cambios de autenticación
@@ -1959,17 +1639,6 @@ export const getSignedPdfUrl = async (filePath) => {
     .createSignedUrl(filePath, 3600);
 
   return { data: data?.signedUrl, error };
-};
-
-// Eliminar archivo de storage
-export const deleteStorageFile = async (bucket, filePath) => {
-  if (!supabase) return { error: 'Supabase no configurado' };
-
-  const { error } = await supabase.storage
-    .from(bucket)
-    .remove([filePath]);
-
-  return { error };
 };
 
 // =====================================================

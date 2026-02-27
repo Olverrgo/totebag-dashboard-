@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import "./Dashboard.css";
 import { useAuth } from './AuthContext';
-import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart } from 'recharts';
 import {
   isSupabaseConfigured,
   cargarDatosDashboard,
-  updateLineaProducto,
   getTiposTela,
   updateTipoTela,
   getConfigEnvio,
@@ -45,11 +44,9 @@ import {
   updateStockVariante,
   uploadImagenVariante,
   deleteImagenVariante,
-  getConfiguracionesCorte,
   getConfiguracionActual,
   createConfiguracionCorte,
   updateConfiguracionCorte,
-  deleteConfiguracionCorte,
   duplicarConfiguracionConNuevoPrecio,
   getHistorialPrecios,
   deleteMovimientoStock,
@@ -69,7 +66,6 @@ import {
   ajustarPagoServicio,
   getResurtidos,
   createResurtido,
-  deleteResurtido
 } from './supabaseClient';
 
 // ==================== DATOS ====================
@@ -516,174 +512,6 @@ const personalizacion = [
   { tipo: 'Sublimación', costo: '+$20-25/pza', minimo: '50+', ideal: 'Full color, fotos' },
   { tipo: 'Bordado', costo: '+$25-35/pza', minimo: '50+', ideal: 'Look premium' },
   { tipo: 'Etiqueta personalizada', costo: '+$3-5/pza', minimo: '100+', ideal: 'Marca del cliente' },
-];
-
-// Tipos de diseños
-const tiposDiseno = [
-  {
-    id: 'florales',
-    nombre: 'Florales',
-    icon: '🌸',
-    descripcion: 'Patrones botánicos, flores silvestres, jardines',
-    popularidad: 95,
-    temporada: 'Primavera/Verano',
-    target: 'Mujeres 25-45 años',
-    ejemplos: ['Rosas vintage', 'Flores silvestres', 'Hojas tropicales', 'Jardín inglés'],
-    colores: ['Rosa pastel', 'Verde sage', 'Terracota', 'Crema'],
-    tendencia: 'alta'
-  },
-  {
-    id: 'geometricos',
-    nombre: 'Geométricos',
-    icon: '◆',
-    descripcion: 'Líneas, formas abstractas, patrones repetitivos',
-    popularidad: 80,
-    temporada: 'Todo el año',
-    target: 'Unisex, millennials',
-    ejemplos: ['Líneas minimalistas', 'Azteca moderno', 'Art deco', 'Bauhaus'],
-    colores: ['Negro/Blanco', 'Mostaza', 'Azul marino', 'Terracota'],
-    tendencia: 'media'
-  },
-  {
-    id: 'artisticos',
-    nombre: 'Artísticos',
-    icon: '🎨',
-    descripcion: 'Ilustraciones, arte original, pinturas',
-    popularidad: 85,
-    temporada: 'Todo el año',
-    target: 'Creativos, artistas',
-    ejemplos: ['Acuarelas', 'Ilustración botánica', 'Retratos', 'Arte abstracto'],
-    colores: ['Multicolor', 'Tonos tierra', 'Pasteles'],
-    tendencia: 'alta'
-  },
-  {
-    id: 'lettering',
-    nombre: 'Lettering/Frases',
-    icon: '✎',
-    descripcion: 'Tipografía, frases motivacionales, quotes',
-    popularidad: 75,
-    temporada: 'Todo el año',
-    target: 'Jóvenes 18-35',
-    ejemplos: ['Frases positivas', 'Nombres propios', 'Ciudades', 'Fechas especiales'],
-    colores: ['Negro sobre natural', 'Dorado', 'Rosa gold'],
-    tendencia: 'media'
-  },
-  {
-    id: 'animales',
-    nombre: 'Animales',
-    icon: '🦋',
-    descripcion: 'Fauna, mascotas, criaturas ilustradas',
-    popularidad: 70,
-    temporada: 'Todo el año',
-    target: 'Amantes de animales',
-    ejemplos: ['Gatos', 'Perros', 'Mariposas', 'Aves', 'Animales mexicanos'],
-    colores: ['Natural', 'Colores vivos', 'Tonos tierra'],
-    tendencia: 'media'
-  },
-  {
-    id: 'mexicano',
-    nombre: 'Mexicano/Artesanal',
-    icon: '🇲🇽',
-    descripcion: 'Cultura mexicana, bordados, tradiciones',
-    popularidad: 90,
-    temporada: 'Todo el año (pico en Sept)',
-    target: 'Turistas, mexicanos orgullosos',
-    ejemplos: ['Otomí', 'Talavera', 'Día de muertos', 'Alebrije', 'Tenango'],
-    colores: ['Multicolor vibrante', 'Rojo/Verde', 'Azul talavera'],
-    tendencia: 'alta'
-  },
-  {
-    id: 'minimalista',
-    nombre: 'Minimalista',
-    icon: '○',
-    descripcion: 'Diseños simples, elegantes, menos es más',
-    popularidad: 88,
-    temporada: 'Todo el año',
-    target: 'Profesionales, estilo clean',
-    ejemplos: ['Una línea', 'Punto focal', 'Logo discreto', 'Textura sutil'],
-    colores: ['Crudo natural', 'Negro', 'Gris', 'Beige'],
-    tendencia: 'alta'
-  },
-  {
-    id: 'vintage',
-    nombre: 'Vintage/Retro',
-    icon: '📻',
-    descripcion: 'Estética nostálgica, décadas pasadas',
-    popularidad: 72,
-    temporada: 'Otoño/Invierno',
-    target: 'Hipsters, nostálgicos',
-    ejemplos: ['70s groovy', 'Art nouveau', 'Publicidad retro', 'Mapas antiguos'],
-    colores: ['Mostaza', 'Naranja quemado', 'Verde olivo', 'Marrón'],
-    tendencia: 'media'
-  }
-];
-
-// Colecciones de modelos
-const colecciones = [
-  {
-    nombre: 'Primavera Botánica',
-    temporada: 'Primavera 2024',
-    modelos: 12,
-    diseños: ['Flores silvestres', 'Hojas monstera', 'Jardín secreto', 'Rosas vintage'],
-    lineas: ['Estándar', 'Premium'],
-    estado: 'activa',
-    ventas: 145,
-    rating: 4.8
-  },
-  {
-    nombre: 'Puebla Artesanal',
-    temporada: 'Todo el año',
-    modelos: 15,
-    diseños: ['Talavera azul', 'Bordado Otomí', 'Catrina elegante', 'Tenango colorido'],
-    lineas: ['Básica', 'Estándar', 'Premium'],
-    estado: 'activa',
-    ventas: 230,
-    rating: 4.9
-  },
-  {
-    nombre: 'Minimal Chic',
-    temporada: 'Todo el año',
-    modelos: 8,
-    diseños: ['Línea continua', 'Monograma', 'Geometric black', 'Pure cotton'],
-    lineas: ['Estándar', 'Premium'],
-    estado: 'activa',
-    ventas: 180,
-    rating: 4.7
-  },
-  {
-    nombre: 'Verano Tropical',
-    temporada: 'Verano 2024',
-    modelos: 10,
-    diseños: ['Palmeras', 'Tucanes', 'Frutas tropicales', 'Atardecer playa'],
-    lineas: ['Básica', 'Estándar'],
-    estado: 'próxima',
-    ventas: 0,
-    rating: 0
-  },
-  {
-    nombre: 'Edición Corporativa',
-    temporada: 'Todo el año',
-    modelos: 5,
-    diseños: ['Logo empresa', 'Colores corporativos', 'Evento especial'],
-    lineas: ['Básica'],
-    estado: 'activa',
-    ventas: 320,
-    rating: 4.6
-  }
-];
-
-// Roadmap de modelos por mes
-const roadmapModelos = [
-  { mes: 'Mes 1', nuevos: 15, acumulado: 15, coleccion: 'Lanzamiento inicial' },
-  { mes: 'Mes 2', nuevos: 10, acumulado: 25, coleccion: 'Puebla Artesanal' },
-  { mes: 'Mes 3', nuevos: 10, acumulado: 35, coleccion: 'Primavera Botánica' },
-  { mes: 'Mes 4', nuevos: 10, acumulado: 45, coleccion: 'Minimal Chic' },
-  { mes: 'Mes 5', nuevos: 10, acumulado: 55, coleccion: 'Ampliación florales' },
-  { mes: 'Mes 6', nuevos: 10, acumulado: 65, coleccion: 'Verano Tropical' },
-  { mes: 'Mes 7', nuevos: 10, acumulado: 75, coleccion: 'Ediciones especiales' },
-  { mes: 'Mes 8', nuevos: 10, acumulado: 85, coleccion: 'Día de Muertos' },
-  { mes: 'Mes 9', nuevos: 7, acumulado: 92, coleccion: 'Navidad/Fiestas' },
-  { mes: 'Mes 10', nuevos: 8, acumulado: 100, coleccion: 'Consolidación catálogo' },
 ];
 
 // Paleta de colores fashion
@@ -6313,13 +6141,17 @@ const SalidasView = ({ isAdmin }) => {
             nuevoStock = vStockActual - cantidad;
             nuevaConsig = vConsigActual + cantidad;
           } else if (formSalida.tipoMovimiento === 'venta_consignacion') {
+            // stock_consignacion ya fue reducido por registrarPagoVenta, solo actualizar estado local
             nuevaConsig = vConsigActual - cantidad;
           } else if (formSalida.tipoMovimiento === 'devolucion') {
             nuevoStock = vStockActual + cantidad;
             nuevaConsig = vConsigActual - cantidad;
           }
 
-          await updateStockVariante(variante.id, nuevoStock, nuevaConsig);
+          // Para venta_consignacion no escribir a DB (registrarPagoVenta ya lo hizo)
+          if (formSalida.tipoMovimiento !== 'venta_consignacion') {
+            await updateStockVariante(variante.id, nuevoStock, nuevaConsig);
+          }
 
           // Actualizar estado local
           setProductos(productos.map(p => {
@@ -6358,7 +6190,7 @@ const SalidasView = ({ isAdmin }) => {
               } : p
             ));
           } else if (formSalida.tipoMovimiento === 'venta_consignacion') {
-            await updateProducto(productoId, { stock_consignacion: consignacionActual - cantidad });
+            // stock_consignacion ya fue reducido por registrarPagoVenta, solo actualizar estado local
             setProductos(productos.map(p =>
               p.id === productoId ? { ...p, stock_consignacion: consignacionActual - cantidad } : p
             ));
@@ -7477,37 +7309,6 @@ const VentasView = ({ isAdmin }) => {
           setMensaje({ tipo: 'error', texto: 'Error en pago: ' + error.message });
           cargarDatos();
           return;
-        }
-
-        // Reducir stock_consignacion y registrar movimiento al pagar consignaciones
-        if (venta.tipo_venta === 'consignacion' && venta.precio_unitario > 0) {
-          const piezasPagadas = Math.floor(montoAplicar / venta.precio_unitario);
-          if (piezasPagadas > 0) {
-            const producto = productos.find(p => p.id === venta.producto_id);
-            if (producto) {
-              // Crear movimiento de stock tipo venta_consignacion para historial
-              await createMovimientoStock({
-                producto_id: venta.producto_id,
-                cliente_id: venta.cliente_id,
-                tipo_movimiento: 'venta_consignacion',
-                cantidad: piezasPagadas,
-                notas: `Cobro desde Ventas - ${piezasPagadas} pzas pagadas`,
-                ...(venta.variante_id ? { variante_id: venta.variante_id } : {})
-              });
-
-              // Reducir stock_consignacion
-              if (venta.variante_id) {
-                const variante = (producto.variantes || []).find(v => v.id === venta.variante_id);
-                if (variante) {
-                  const nuevaConsig = Math.max(0, (variante.stock_consignacion || 0) - piezasPagadas);
-                  await updateStockVariante(variante.id, variante.stock || 0, nuevaConsig);
-                }
-              } else {
-                const nuevaConsig = Math.max(0, (producto.stock_consignacion || 0) - piezasPagadas);
-                await updateProducto(producto.id, { stock_consignacion: nuevaConsig });
-              }
-            }
-          }
         }
 
         montoRestante -= montoAplicar;
