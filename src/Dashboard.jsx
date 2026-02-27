@@ -7002,6 +7002,7 @@ const SalidasView = ({ isAdmin }) => {
 const VentasView = ({ isAdmin }) => {
   const isMobile = window.innerWidth <= 768;
   const [ventas, setVentas] = useState([]);
+  const [ventasPendientesGlobal, setVentasPendientesGlobal] = useState([]); // Para Cuentas por Cobrar (sin filtro de fecha)
   const [servicios, setServicios] = useState([]);
   const [productos, setProductos] = useState([]);
   const [clientes, setClientes] = useState([]);
@@ -7058,7 +7059,7 @@ const VentasView = ({ isAdmin }) => {
 
     const fechas = getFechasPeriodo();
 
-    const [prodRes, cliRes, ventasRes, resumenRes, serviciosRes] = await Promise.all([
+    const [prodRes, cliRes, ventasRes, resumenRes, serviciosRes, pendientesRes] = await Promise.all([
       getProductos(),
       getClientes(),
       getVentas({
@@ -7067,7 +7068,8 @@ const VentasView = ({ isAdmin }) => {
         estadoPago: filtroEstado !== 'todos' ? filtroEstado : null
       }),
       getResumenVentas(fechas.inicio, fechas.fin),
-      getServiciosMaquila()
+      getServiciosMaquila(),
+      getVentas() // Todas las ventas sin filtro para Cuentas por Cobrar
     ]);
 
     if (prodRes.data) setProductos(prodRes.data);
@@ -7075,6 +7077,7 @@ const VentasView = ({ isAdmin }) => {
     if (ventasRes.data) setVentas(ventasRes.data);
     if (resumenRes.data) setResumen(resumenRes.data);
     if (serviciosRes.data) setServicios(serviciosRes.data);
+    if (pendientesRes.data) setVentasPendientesGlobal(pendientesRes.data);
   };
 
   useEffect(() => {
@@ -7487,7 +7490,7 @@ const VentasView = ({ isAdmin }) => {
 
       {/* Cuentas por Cobrar por Cliente */}
       {(() => {
-        const ventasPendientes = ventas.filter(v => v.estado_pago === 'pendiente' || v.estado_pago === 'parcial');
+        const ventasPendientes = ventasPendientesGlobal.filter(v => v.estado_pago === 'pendiente' || v.estado_pago === 'parcial');
         const serviciosPendientes = servicios.filter(s => s.estado_pago === 'pendiente' || s.estado_pago === 'parcial');
         if (ventasPendientes.length === 0 && serviciosPendientes.length === 0) return null;
 
