@@ -8220,6 +8220,8 @@ const CajaView = ({ isAdmin }) => {
 
   const categoriasLabel = {
     venta: 'Venta',
+    cobro_venta: 'Cobro venta',
+    cobro_consignacion: 'Cobro consignación',
     pago_consignacion: 'Pago consignación',
     pago_cliente: 'Pago cliente',
     compra_material: 'Compra material',

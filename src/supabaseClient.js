@@ -1168,11 +1168,11 @@ export const registrarPagoVenta = async (ventaId, montoPago, options = {}) => {
 
   // Registrar ingreso automático en caja
   if (montoReal > 0) {
-    const categoriaCaja = esConsignacion ? 'cobro_consignacion' : 'venta';
+    const categoriaCaja = esConsignacion ? 'cobro_consignacion' : 'cobro_venta';
     const descripcionCaja = esConsignacion
       ? `Cobro consignación - Venta #${ventaId}`
-      : `Pago venta - Venta #${ventaId}`;
-    await supabase
+      : `Cobro venta - Venta #${ventaId}`;
+    const { error: cajaError } = await supabase
       .from('movimientos_caja')
       .insert([{
         tipo: 'ingreso',
@@ -1181,7 +1181,12 @@ export const registrarPagoVenta = async (ventaId, montoPago, options = {}) => {
         categoria: categoriaCaja,
         metodo_pago: 'efectivo',
         descripcion: descripcionCaja
-      }]);
+      }])
+      .select()
+      .single();
+    if (cajaError) {
+      console.error('Error creando movimiento de caja en registrarPagoVenta:', cajaError);
+    }
   }
 
   return { data, error: null };
