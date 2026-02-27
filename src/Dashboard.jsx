@@ -7216,23 +7216,53 @@ const VentasView = ({ isAdmin }) => {
     try {
       const producto = productos.find(p => p.id === parseInt(formVenta.productoId));
       const cliente = clientes.find(c => c.id === parseInt(formVenta.clienteId));
+      const cantidad = parseInt(formVenta.cantidad);
       const total = calcularTotal();
+      const esConsignacion = formVenta.tipoVenta === 'consignacion';
+      const tipoMov = esConsignacion ? 'consignacion' : 'venta_directa';
 
+      // Validar stock disponible
+      const stockDisponible = producto?.tiene_variantes
+        ? (producto.stock_variantes || 0)
+        : (producto?.stock || 0);
+      if (cantidad > stockDisponible) {
+        setMensaje({ tipo: 'error', texto: `Stock insuficiente. Disponible: ${stockDisponible}` });
+        setGuardando(false);
+        return;
+      }
+
+      // 1. Crear movimiento de stock
+      const movimiento = {
+        producto_id: parseInt(formVenta.productoId),
+        cliente_id: formVenta.clienteId ? parseInt(formVenta.clienteId) : null,
+        tipo_movimiento: tipoMov,
+        cantidad: cantidad,
+        notas: formVenta.notas || `${esConsignacion ? 'Consignación' : 'Venta directa'} desde Ventas`
+      };
+      const { data: movData, error: movError } = await createMovimientoStock(movimiento);
+      if (movError) {
+        setMensaje({ tipo: 'error', texto: 'Error creando movimiento: ' + movError.message });
+        setGuardando(false);
+        return;
+      }
+
+      // 2. Crear la venta
       const ventaData = {
         producto_id: parseInt(formVenta.productoId),
         cliente_id: formVenta.clienteId ? parseInt(formVenta.clienteId) : null,
+        movimiento_id: movData?.id || null,
         producto_nombre: producto?.linea_nombre || '',
         producto_medidas: producto?.linea_medidas || '',
         cliente_nombre: cliente?.nombre || 'Venta directa',
-        cantidad: parseInt(formVenta.cantidad),
+        cantidad: cantidad,
         precio_unitario: parseFloat(formVenta.precioUnitario),
         descuento_porcentaje: parseFloat(formVenta.descuentoPorcentaje) || 0,
         descuento_monto: (formVenta.cantidad * formVenta.precioUnitario) * (formVenta.descuentoPorcentaje / 100),
         total: total,
         costo_unitario: parseFloat(producto?.costo_total_1_tinta) || 0,
         metodo_pago: formVenta.metodoPago,
-        estado_pago: formVenta.estadoPago,
-        monto_pagado: formVenta.estadoPago === 'pagado' ? total : 0,
+        estado_pago: esConsignacion ? 'pendiente' : formVenta.estadoPago,
+        monto_pagado: esConsignacion ? 0 : (formVenta.estadoPago === 'pagado' ? total : 0),
         tipo_venta: formVenta.tipoVenta,
         notas: formVenta.notas
       };
@@ -7242,16 +7272,34 @@ const VentasView = ({ isAdmin }) => {
       if (error) {
         setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
       } else {
-        // Registrar ingreso automático en caja si la venta está pagada
-        if (formVenta.estadoPago === 'pagado' && total > 0) {
+        // 3. Registrar ingreso automático en caja si la venta está pagada
+        if (!esConsignacion && formVenta.estadoPago === 'pagado' && total > 0) {
           await createMovimientoCaja({
             tipo: 'ingreso',
             monto: total,
             venta_id: data?.id || null,
             categoria: 'venta',
             metodo_pago: formVenta.metodoPago || 'efectivo',
-            descripcion: `Venta - ${producto?.linea_nombre || 'Producto'} - ${formVenta.cantidad} pzas`
+            descripcion: `Venta - ${producto?.linea_nombre || 'Producto'} - ${cantidad} pzas`
           });
+        }
+
+        // 4. Actualizar stock del producto
+        const productoId = parseInt(formVenta.productoId);
+        if (producto?.tiene_variantes) {
+          // Producto con variantes: descontar del stock general (sin variante específica seleccionada)
+          // No podemos actualizar variante específica porque VentasView no tiene selector de variante
+        } else {
+          const stockActual = producto?.stock || 0;
+          const consigActual = producto?.stock_consignacion || 0;
+          if (esConsignacion) {
+            await updateProducto(productoId, {
+              stock: stockActual - cantidad,
+              stock_consignacion: consigActual + cantidad
+            });
+          } else {
+            await updateProducto(productoId, { stock: stockActual - cantidad });
+          }
         }
 
         setMensaje({ tipo: 'exito', texto: 'Venta registrada correctamente' });
