@@ -824,6 +824,7 @@ const DashboardView = ({ productosActualizados }) => {
       balanceCaja: cajaData.balance,
       piezasVendidas,
       ventasCobradas,
+      cobradoServicios,
       ventasPendientes,
       porCobrarMaquila,
       numVentas: ventasData.length,
@@ -1181,6 +1182,9 @@ const DashboardView = ({ productosActualizados }) => {
               <div style={{ background: colors.cotton, borderRadius: '10px', padding: '14px', textAlign: 'center' }}>
                 <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Cobrado</div>
                 <div style={{ fontSize: '18px', fontWeight: '600', color: colors.olive }}>{formatearMonedaDash(posEcon.ventasCobradas)}</div>
+                <div style={{ fontSize: '10px', color: colors.camel, marginTop: '3px' }}>
+                  Ventas: {formatearMonedaDash(posEcon.ventasCobradas - (posEcon.cobradoServicios || 0))} • Maquila: {formatearMonedaDash(posEcon.cobradoServicios || 0)}
+                </div>
               </div>
               <div style={{ background: colors.cotton, borderRadius: '10px', padding: '14px', textAlign: 'center' }}>
                 <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Por cobrar</div>
