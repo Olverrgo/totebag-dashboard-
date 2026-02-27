@@ -735,9 +735,13 @@ const DashboardView = ({ productosActualizados }) => {
       const pagado = parseFloat(v.monto_pagado) || 0;
       ingresoVentas += total;
       costoVentas += costo;
-      utilidadBruta += total - costo;
       piezasVendidas += v.cantidad || 0;
       ventasCobradas += pagado;
+      // Utilidad bruta basada en lo COBRADO: proporción de ganancia por peso cobrado
+      if (total > 0 && pagado > 0) {
+        const margen = (total - costo) / total; // margen por peso vendido
+        utilidadBruta += pagado * margen;
+      }
     });
 
     // Sumar servicios de maquila del período
@@ -755,7 +759,7 @@ const DashboardView = ({ productosActualizados }) => {
     });
 
     ingresoVentas += ingresoServicios;
-    utilidadBruta += ingresoServicios; // Servicios son pura utilidad (sin costo de material)
+    utilidadBruta += cobradoServicios; // Servicios cobrados son pura utilidad
     ventasCobradas += cobradoServicios;
 
     // Por cobrar GLOBAL (todas las ventas, sin filtro de período)
@@ -1148,7 +1152,7 @@ const DashboardView = ({ productosActualizados }) => {
               }}>
                 <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Utilidad bruta</div>
                 <div style={{ fontSize: '26px', fontWeight: '700', color: colors.olive }}>{formatearMonedaDash(posEcon.utilidadBruta)}</div>
-                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Ventas + Servicios - Costos</div>
+                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Ganancia real sobre lo cobrado</div>
               </div>
 
               <div style={{
@@ -1173,7 +1177,7 @@ const DashboardView = ({ productosActualizados }) => {
                 <div style={{ fontSize: '28px', fontWeight: '700', color: posEcon.utilidadNeta >= 0 ? colors.olive : colors.terracotta }}>
                   {formatearMonedaDash(posEcon.utilidadNeta)}
                 </div>
-                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Utilidad bruta - Egresos</div>
+                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Utilidad bruta - Egresos reales</div>
               </div>
             </div>
 
