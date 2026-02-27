@@ -701,9 +701,10 @@ const DashboardView = ({ productosActualizados }) => {
     if (fechaInicio) filtrosVentas.fechaInicio = fechaInicio;
     if (fechaFin) filtrosVentas.fechaFin = fechaFin;
 
-    const [ventasRes, cajaRes, serviciosRes, productosRes, todasVentasRes] = await Promise.all([
+    const [ventasRes, cajaRes, cajaGlobalRes, serviciosRes, productosRes, todasVentasRes] = await Promise.all([
       getVentas(filtrosVentas),
       getBalanceCaja(fechaInicio, fechaFin),
+      getBalanceCaja(), // Balance global (sin filtro de período) para materia prima total
       getServiciosMaquila(),
       getProductos(),
       getVentas({}) // TODAS las ventas sin filtro para calcular capital real
@@ -712,6 +713,7 @@ const DashboardView = ({ productosActualizados }) => {
     const ventasData = ventasRes.data || [];
     const todasVentas = todasVentasRes.data || [];
     const cajaData = cajaRes.data || { totalIngresos: 0, totalEgresos: 0, balance: 0 };
+    const cajaGlobal = cajaGlobalRes.data || { totalIngresos: 0, totalEgresos: 0, balance: 0, compraMaterial: 0 };
     const serviciosData = serviciosRes.data || [];
     const productosData = productosRes.data || [];
     setProductosInventario(productosData);
@@ -806,8 +808,12 @@ const DashboardView = ({ productosActualizados }) => {
 
     const valorInventarioTotal = valorTaller + valorConsignacion;
 
-    // Utilidad neta = utilidad bruta - egresos de caja
-    const utilidadNeta = utilidadBruta - cajaData.totalEgresos;
+    // Materia prima = total histórico de compras de material (capital invertido en insumos)
+    const materiaPrima = cajaGlobal.compraMaterial || 0;
+
+    // Utilidad neta = utilidad bruta - gastos operativos (egresos SIN compra de material)
+    const gastosOperativos = cajaData.totalEgresos - (cajaData.compraMaterial || 0);
+    const utilidadNeta = utilidadBruta - gastosOperativos;
 
     // Contar servicios del período
     let numServiciosPeriodo = 0;
@@ -823,6 +829,8 @@ const DashboardView = ({ productosActualizados }) => {
       costoVentas,
       utilidadBruta,
       egresos: cajaData.totalEgresos,
+      gastosOperativos,
+      compraMaterialPeriodo: cajaData.compraMaterial || 0,
       ingresosCaja: cajaData.totalIngresos,
       utilidadNeta,
       balanceCaja: cajaData.balance,
@@ -836,6 +844,7 @@ const DashboardView = ({ productosActualizados }) => {
       valorTaller,
       valorConsignacion,
       valorInventarioTotal,
+      materiaPrima,
       pzasTaller,
       pzasConsignacion
     });
@@ -1163,7 +1172,9 @@ const DashboardView = ({ productosActualizados }) => {
               }}>
                 <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Egresos</div>
                 <div style={{ fontSize: '26px', fontWeight: '700', color: colors.terracotta }}>{formatearMonedaDash(posEcon.egresos)}</div>
-                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Gastos operativos</div>
+                <div style={{ fontSize: '10px', color: colors.camel, marginTop: '3px' }}>
+                  Gastos: {formatearMonedaDash(posEcon.gastosOperativos || 0)} • Material: {formatearMonedaDash(posEcon.compraMaterialPeriodo || 0)}
+                </div>
               </div>
 
               <div style={{
@@ -1234,6 +1245,12 @@ const DashboardView = ({ productosActualizados }) => {
                 <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>{posEcon.pzasConsignacion} piezas • precio de venta</div>
               </div>
 
+              <div style={{ background: colors.cotton, borderRadius: '12px', padding: '20px', textAlign: 'center', border: `1px solid ${colors.sand}` }}>
+                <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Materia prima</div>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: colors.sidebarBg }}>{formatearMonedaDash(posEcon.materiaPrima || 0)}</div>
+                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Inversión en insumos</div>
+              </div>
+
               <div style={{ background: colors.cotton, borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
                 <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Total por cobrar</div>
                 <div style={{ fontSize: '24px', fontWeight: '700', color: (posEcon.ventasPendientes + posEcon.porCobrarMaquila) > 0 ? colors.terracotta : colors.olive }}>
@@ -1251,9 +1268,9 @@ const DashboardView = ({ productosActualizados }) => {
               }}>
                 <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Capital total</div>
                 <div style={{ fontSize: '28px', fontWeight: '700', color: colors.sidebarBg }}>
-                  {formatearMonedaDash(posEcon.valorTaller + posEcon.ventasPendientes + posEcon.porCobrarMaquila + posEcon.balanceCaja)}
+                  {formatearMonedaDash(posEcon.valorTaller + (posEcon.materiaPrima || 0) + posEcon.ventasPendientes + posEcon.porCobrarMaquila + posEcon.balanceCaja)}
                 </div>
-                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Taller + Por cobrar + Caja</div>
+                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Taller + Materia prima + Por cobrar + Caja</div>
               </div>
             </div>
           </>

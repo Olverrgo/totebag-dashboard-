@@ -1987,7 +1987,7 @@ export const getBalanceCaja = async (fechaInicio = null, fechaFin = null) => {
 
   let query = supabase
     .from('movimientos_caja')
-    .select('tipo, monto')
+    .select('tipo, monto, categoria')
     .eq('activo', true);
 
   if (fechaInicio) {
@@ -2002,7 +2002,7 @@ export const getBalanceCaja = async (fechaInicio = null, fechaFin = null) => {
 
   if (error) return { data: null, error: handleRLSError(error) };
 
-  const resumen = { totalIngresos: 0, totalEgresos: 0, balance: 0 };
+  const resumen = { totalIngresos: 0, totalEgresos: 0, balance: 0, compraMaterial: 0 };
 
   (data || []).forEach(mov => {
     const monto = parseFloat(mov.monto) || 0;
@@ -2010,6 +2010,9 @@ export const getBalanceCaja = async (fechaInicio = null, fechaFin = null) => {
       resumen.totalIngresos += monto;
     } else {
       resumen.totalEgresos += monto;
+      if (mov.categoria === 'compra_material') {
+        resumen.compraMaterial += monto;
+      }
     }
   });
 
