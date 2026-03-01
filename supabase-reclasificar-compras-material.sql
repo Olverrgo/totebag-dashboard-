@@ -2,17 +2,25 @@
 -- RECLASIFICAR COMPRAS DE MATERIAL COMO INVERSIÓN DE CAPITAL
 -- Ejecutar UNA SOLA VEZ en Supabase SQL Editor
 -- =====================================================
--- Los egresos de compra_material representan inversión (capital inyectado),
--- no gastos operativos. Se reclasifican para que la caja no se vea
--- artificialmente negativa. El valor de esos materiales ahora se trackea
--- en la tabla 'materiales' (inventario real).
 
--- Ver cuántos registros se van a actualizar:
-SELECT COUNT(*), SUM(monto) as total_inversion
-FROM movimientos_caja
-WHERE categoria = 'compra_material' AND activo = true;
+-- Paso 1: Eliminar constraint viejo de categoria
+ALTER TABLE movimientos_caja DROP CONSTRAINT movimientos_caja_categoria_check;
 
--- Reclasificar: egreso compra_material → ingreso inversion_capital
+-- Paso 2: Recrear constraint con 'inversion_capital' incluido
+ALTER TABLE movimientos_caja ADD CONSTRAINT movimientos_caja_categoria_check
+  CHECK ((categoria)::text = ANY (ARRAY[
+    'venta'::character varying,
+    'cobro_consignacion'::character varying,
+    'cobro_maquila'::character varying,
+    'otro_ingreso'::character varying,
+    'compra_material'::character varying,
+    'gasto_operativo'::character varying,
+    'pago_proveedor'::character varying,
+    'otro_egreso'::character varying,
+    'inversion_capital'::character varying
+  ]::text[]));
+
+-- Paso 3: Reclasificar egresos compra_material → ingresos inversion_capital
 UPDATE movimientos_caja
 SET tipo = 'ingreso',
     categoria = 'inversion_capital',
