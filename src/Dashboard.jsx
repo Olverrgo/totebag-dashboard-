@@ -1440,12 +1440,11 @@ const DashboardView = ({ productosActualizados }) => {
                 </div>
               </div>
 
-              {(posEcon.inversionCapitalTotal || 0) > 0 && (() => {
+              {posEcon.inversionTotal > 0 && (() => {
                 const capitalTotal = posEcon.valorTaller + (posEcon.materiaPrima || 0) + posEcon.ventasPendientes + posEcon.porCobrarMaquila + (posEcon.balanceCajaGlobal || 0);
-                // ROI: cuánto vale el negocio vs cuánto capital externo se inyectó
-                // Solo inversionCapital es dinero nuevo; compraMaterial/reinversion son conversiones internas (cash → inventario)
                 const capitalInvertido = posEcon.inversionCapitalTotal || 0;
-                const roiPct = capitalInvertido > 0 ? (((capitalTotal - capitalInvertido) / capitalInvertido) * 100).toFixed(1) : 0;
+                // ROI solo si hay capital externo inyectado (inversion_capital)
+                const roiPct = capitalInvertido > 0 ? (((capitalTotal - capitalInvertido) / capitalInvertido) * 100).toFixed(1) : null;
                 return (
                   <div style={{
                     background: colors.cotton,
@@ -1454,15 +1453,17 @@ const DashboardView = ({ productosActualizados }) => {
                     textAlign: 'center',
                     border: `1px solid ${colors.sand}`
                   }}>
-                    <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Capital invertido / ROI</div>
+                    <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Inversión acumulada{roiPct !== null ? ' / ROI' : ''}</div>
                     <div style={{ fontSize: '24px', fontWeight: '700', color: colors.sidebarBg }}>
-                      {formatearMonedaDash(capitalInvertido)}
+                      {formatearMonedaDash(posEcon.inversionTotal)}
                     </div>
-                    <div style={{ fontSize: '18px', fontWeight: '600', color: roiPct >= 0 ? colors.olive : colors.terracotta, marginTop: '4px' }}>
-                      ROI: {roiPct}%
-                    </div>
+                    {roiPct !== null && (
+                      <div style={{ fontSize: '18px', fontWeight: '600', color: roiPct >= 0 ? colors.olive : colors.terracotta, marginTop: '4px' }}>
+                        ROI: {roiPct}%
+                      </div>
+                    )}
                     <div style={{ fontSize: '11px', color: colors.camel, marginTop: '6px', lineHeight: '1.5' }}>
-                      Capital {formatearMonedaDash(capitalInvertido)} → Valor actual {formatearMonedaDash(capitalTotal)}
+                      Material {formatearMonedaDash(posEcon.compraMaterialTotal || 0)} + Reinversión {formatearMonedaDash(posEcon.reinversionTotal || 0)}{capitalInvertido > 0 ? ` + Inv. capital ${formatearMonedaDash(capitalInvertido)}` : ''}
                     </div>
                   </div>
                 );
