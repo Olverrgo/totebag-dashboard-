@@ -2071,4 +2071,406 @@ export const deleteResurtido = async (id) => {
   return { error: handleRLSError(error) };
 };
 
+// =====================================================
+// FUNCIONES PARA MATERIALES (Inventario de materia prima)
+// =====================================================
+
+export const getMateriales = async (categoriaFiltro) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  let query = supabase
+    .from('materiales')
+    .select('*')
+    .eq('activo', true)
+    .order('nombre');
+
+  if (categoriaFiltro && categoriaFiltro !== 'todas') {
+    query = query.eq('categoria', categoriaFiltro);
+  }
+
+  const { data, error } = await query;
+  return { data, error: handleRLSError(error) };
+};
+
+export const createMaterial = async (material) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('materiales')
+    .insert([material])
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+export const updateMaterial = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('materiales')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+export const deleteMaterial = async (id) => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+
+  const { error } = await supabase
+    .from('materiales')
+    .update({ activo: false })
+    .eq('id', id);
+
+  return { error: handleRLSError(error) };
+};
+
+// =====================================================
+// FUNCIONES PARA RECETAS (BOM por producto)
+// =====================================================
+
+export const getRecetasProducto = async (productoId) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('recetas')
+    .select(`
+      *,
+      material:materiales(id, nombre, unidad, costo_unitario, stock, categoria)
+    `)
+    .eq('producto_id', productoId)
+    .eq('activo', true)
+    .order('created_at', { ascending: true });
+
+  return { data, error: handleRLSError(error) };
+};
+
+export const upsertRecetaLinea = async (linea) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('recetas')
+    .upsert([linea], { onConflict: 'producto_id,material_id' })
+    .select(`
+      *,
+      material:materiales(id, nombre, unidad, costo_unitario, stock, categoria)
+    `)
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+export const deleteRecetaLinea = async (id) => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+
+  const { error } = await supabase
+    .from('recetas')
+    .update({ activo: false })
+    .eq('id', id);
+
+  return { error: handleRLSError(error) };
+};
+
+// =====================================================
+// FUNCIONES PARA ÓRDENES DE PRODUCCIÓN
+// =====================================================
+
+export const getOrdenesProduccion = async (filtros = {}) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  let query = supabase
+    .from('ordenes_produccion')
+    .select(`
+      *,
+      producto:productos(id, nombre, categoria_id),
+      variante:variantes_producto(id, material, color, talla, sku, stock),
+      materiales_usados(
+        id, material_id, cantidad_planeada, cantidad_real, costo_unitario, costo_total,
+        material:materiales(id, nombre, unidad)
+      )
+    `)
+    .order('created_at', { ascending: false });
+
+  if (filtros.estado) {
+    query = query.eq('estado', filtros.estado);
+  }
+
+  const { data, error } = await query;
+  return { data, error: handleRLSError(error) };
+};
+
+export const createOrdenProduccion = async (orden) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('ordenes_produccion')
+    .insert([orden])
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+export const updateOrdenProduccion = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('ordenes_produccion')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+// =====================================================
+// FUNCIONES PARA MATERIALES USADOS
+// =====================================================
+
+export const createMaterialesUsados = async (lineas) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('materiales_usados')
+    .insert(lineas)
+    .select(`
+      *,
+      material:materiales(id, nombre, unidad)
+    `);
+
+  return { data, error: handleRLSError(error) };
+};
+
+export const updateMaterialUsado = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('materiales_usados')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
+// =====================================================
+// FUNCIONES COMPUESTAS DE PRODUCCIÓN
+// =====================================================
+
+// Completar orden de producción:
+// 1. Descontar stock de materiales
+// 2. Crear movimientos_material tipo 'produccion'
+// 3. Sumar stock al producto/variante
+// 4. Crear movimiento_stock tipo 'produccion'
+// 5. Calcular costo unitario real
+export const completarOrdenProduccion = async (ordenId) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  // 1. Obtener orden con materiales usados
+  const { data: orden, error: errorOrden } = await supabase
+    .from('ordenes_produccion')
+    .select(`
+      *,
+      producto:productos(id, nombre, stock, tiene_variantes),
+      variante:variantes_producto(id, material, color, talla, sku, stock, stock_consignacion),
+      materiales_usados(
+        id, material_id, cantidad_planeada, cantidad_real, costo_unitario,
+        material:materiales(id, nombre, stock, costo_unitario)
+      )
+    `)
+    .eq('id', ordenId)
+    .single();
+
+  if (errorOrden) return { data: null, error: handleRLSError(errorOrden) };
+  if (!orden) return { data: null, error: 'Orden no encontrada' };
+  if (orden.estado === 'completada') return { data: null, error: 'La orden ya está completada' };
+  if (orden.estado === 'cancelada') return { data: null, error: 'La orden está cancelada' };
+
+  let costoTotal = 0;
+
+  // 2. Descontar stock de cada material y crear movimientos
+  for (const mu of orden.materiales_usados) {
+    const cantidadFinal = mu.cantidad_real != null ? mu.cantidad_real : mu.cantidad_planeada;
+    const costoUnit = parseFloat(mu.material.costo_unitario) || 0;
+    const costoLinea = cantidadFinal * costoUnit;
+    costoTotal += costoLinea;
+
+    // Descontar stock del material
+    const nuevoStock = Math.max(0, (parseFloat(mu.material.stock) || 0) - cantidadFinal);
+    const { error: errMat } = await supabase
+      .from('materiales')
+      .update({ stock: nuevoStock })
+      .eq('id', mu.material_id);
+    if (errMat) return { data: null, error: handleRLSError(errMat) };
+
+    // Actualizar costo en materiales_usados
+    await supabase
+      .from('materiales_usados')
+      .update({
+        cantidad_real: cantidadFinal,
+        costo_unitario: costoUnit,
+        costo_total: costoLinea
+      })
+      .eq('id', mu.id);
+
+    // Crear movimiento_material
+    await supabase
+      .from('movimientos_material')
+      .insert([{
+        material_id: mu.material_id,
+        tipo: 'produccion',
+        cantidad: -cantidadFinal,
+        referencia_id: ordenId,
+        referencia_tipo: 'orden_produccion',
+        notas: `Orden de producción: ${orden.cantidad} pzas de ${orden.producto?.nombre || ''}`
+      }]);
+  }
+
+  // 3. Sumar stock al producto o variante
+  if (orden.variante_id && orden.variante) {
+    const nuevoStock = (parseInt(orden.variante.stock) || 0) + orden.cantidad;
+    const { error: errVar } = await supabase
+      .from('variantes_producto')
+      .update({ stock: nuevoStock })
+      .eq('id', orden.variante_id);
+    if (errVar) return { data: null, error: handleRLSError(errVar) };
+  } else if (orden.producto) {
+    const nuevoStock = (parseInt(orden.producto.stock) || 0) + orden.cantidad;
+    const { error: errProd } = await supabase
+      .from('productos')
+      .update({ stock: nuevoStock })
+      .eq('id', orden.producto_id);
+    if (errProd) return { data: null, error: handleRLSError(errProd) };
+  }
+
+  // 4. Crear movimiento_stock tipo 'produccion'
+  await supabase
+    .from('movimientos_stock')
+    .insert([{
+      producto_id: orden.producto_id,
+      variante_id: orden.variante_id || null,
+      tipo: 'produccion',
+      cantidad: orden.cantidad,
+      notas: `Producción completada - Orden ${orden.id.slice(0, 8)}`
+    }]);
+
+  // 5. Calcular costo unitario y actualizar orden
+  const costoUnitarioCalc = orden.cantidad > 0 ? costoTotal / orden.cantidad : 0;
+
+  const { data: ordenActualizada, error: errFinal } = await supabase
+    .from('ordenes_produccion')
+    .update({
+      estado: 'completada',
+      costo_total: costoTotal,
+      costo_unitario_calculado: costoUnitarioCalc,
+      fecha_completada: new Date().toISOString()
+    })
+    .eq('id', ordenId)
+    .select()
+    .single();
+
+  return { data: ordenActualizada, error: handleRLSError(errFinal) };
+};
+
+// Registrar compra de material:
+// 1. Actualizar stock y costo promedio ponderado
+// 2. Crear movimiento_material tipo 'compra'
+// 3. Crear movimiento_caja egreso
+export const registrarCompraMaterial = async ({ materialId, cantidad, costoTotal, metodoPago, notas }) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  // 1. Obtener material actual
+  const { data: material, error: errGet } = await supabase
+    .from('materiales')
+    .select('*')
+    .eq('id', materialId)
+    .single();
+
+  if (errGet) return { data: null, error: handleRLSError(errGet) };
+
+  const stockActual = parseFloat(material.stock) || 0;
+  const costoActual = parseFloat(material.costo_unitario) || 0;
+  const cantidadCompra = parseFloat(cantidad);
+  const costoCompra = parseFloat(costoTotal);
+  const costoUnitarioCompra = cantidadCompra > 0 ? costoCompra / cantidadCompra : 0;
+
+  // Costo promedio ponderado
+  const nuevoStock = stockActual + cantidadCompra;
+  const nuevoCosto = nuevoStock > 0
+    ? ((stockActual * costoActual) + costoCompra) / nuevoStock
+    : costoUnitarioCompra;
+
+  // 2. Actualizar material
+  const { error: errUpdate } = await supabase
+    .from('materiales')
+    .update({
+      stock: nuevoStock,
+      costo_unitario: Math.round(nuevoCosto * 100) / 100
+    })
+    .eq('id', materialId);
+
+  if (errUpdate) return { data: null, error: handleRLSError(errUpdate) };
+
+  // 3. Crear movimiento_material
+  await supabase
+    .from('movimientos_material')
+    .insert([{
+      material_id: materialId,
+      tipo: 'compra',
+      cantidad: cantidadCompra,
+      notas: notas || `Compra: ${cantidadCompra} ${material.unidad} por $${costoCompra}`
+    }]);
+
+  // 4. Crear egreso en caja
+  const { error: errCaja } = await supabase
+    .from('movimientos_caja')
+    .insert([{
+      tipo: 'egreso',
+      categoria: 'compra_material',
+      monto: costoCompra,
+      descripcion: `Compra material: ${material.nombre} - ${cantidadCompra} ${material.unidad}`,
+      metodo_pago: metodoPago || 'efectivo',
+      activo: true
+    }]);
+
+  if (errCaja) return { data: null, error: handleRLSError(errCaja) };
+
+  return { data: { nuevoStock, nuevoCosto }, error: null };
+};
+
+// Inventario de materiales: resumen con valor total y alertas
+export const getInventarioMateriales = async () => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data: materiales, error } = await supabase
+    .from('materiales')
+    .select('*')
+    .eq('activo', true)
+    .order('nombre');
+
+  if (error) return { data: null, error: handleRLSError(error) };
+
+  let valorTotal = 0;
+  let alertas = 0;
+  (materiales || []).forEach(m => {
+    valorTotal += (parseFloat(m.stock) || 0) * (parseFloat(m.costo_unitario) || 0);
+    if (m.stock_minimo > 0 && m.stock <= m.stock_minimo) alertas++;
+  });
+
+  return {
+    data: {
+      materiales: materiales || [],
+      valorTotal,
+      alertas,
+      totalMateriales: (materiales || []).length
+    },
+    error: null
+  };
+};
+
 export default supabase;
