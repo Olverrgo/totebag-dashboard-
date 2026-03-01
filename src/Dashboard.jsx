@@ -1338,7 +1338,7 @@ const DashboardView = ({ productosActualizados }) => {
                 <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Egresos</div>
                 <div style={{ fontSize: '26px', fontWeight: '700', color: colors.terracotta }}>{formatearMonedaDash(posEcon.egresos)}</div>
                 <div style={{ fontSize: '10px', color: colors.camel, marginTop: '3px' }}>
-                  Gastos: {formatearMonedaDash(posEcon.gastosOperativos || 0)} • Material: {formatearMonedaDash(posEcon.compraMaterialPeriodo || 0)}{(posEcon.reinversionPeriodo || 0) > 0 ? ` • Reinv: ${formatearMonedaDash(posEcon.reinversionPeriodo)}` : ''}
+                  Gastos: {formatearMonedaDash(posEcon.gastosOperativos || 0)}{(posEcon.reinversionPeriodo || 0) > 0 ? ` • Reinv: ${formatearMonedaDash(posEcon.reinversionPeriodo)}` : ''}
                 </div>
               </div>
 
@@ -8412,17 +8412,17 @@ const CajaView = ({ isAdmin }) => {
   const [materialesList, setMaterialesList] = useState([]);
 
   const categoriasEgreso = [
-    { value: 'compra_material', label: 'Compra de material' },
     { value: 'gasto_operativo', label: 'Gasto operativo' },
     { value: 'gasto_envio', label: 'Gasto de envío' },
     { value: 'gasto_produccion', label: 'Gasto de producción' },
-    { value: 'reinversion', label: 'Reinversión (compra material)' },
+    { value: 'reinversion', label: 'Reinversión (compra material desde caja)' },
     { value: 'retiro', label: 'Retiro' },
     { value: 'ajuste', label: 'Ajuste de caja' },
     { value: 'otro', label: 'Otro' }
   ];
 
   const categoriasIngreso = [
+    { value: 'inversion_capital', label: 'Inyección de capital (dinero externo)' },
     { value: 'ajuste', label: 'Ajuste de caja' },
     { value: 'otro', label: 'Otro' }
   ];
