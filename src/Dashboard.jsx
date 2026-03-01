@@ -678,6 +678,8 @@ const DashboardView = ({ productosActualizados }) => {
   const [periodoEcon, setPeriodoEcon] = useState('mes');
   const [popupInventario, setPopupInventario] = useState(null); // 'taller' | 'consignacion' | null
   const [popupUtilidad, setPopupUtilidad] = useState(false);
+  const [popupEgresos, setPopupEgresos] = useState(false);
+  const [movimientosEgresos, setMovimientosEgresos] = useState([]);
   const [productosInventario, setProductosInventario] = useState([]);
   const [ventasConsignacion, setVentasConsignacion] = useState([]);
 
@@ -857,6 +859,13 @@ const DashboardView = ({ productosActualizados }) => {
       const enPeriodo = (!fechaInicio || fechaServicio >= fechaInicio) && (!fechaFin || fechaServicio <= fechaFin);
       if (enPeriodo) numServiciosPeriodo++;
     });
+
+    // Cargar movimientos de egresos del período para el popup
+    const egresosFilter = { tipo: 'egreso' };
+    if (fechaInicio) egresosFilter.fechaInicio = fechaInicio;
+    if (fechaFin) egresosFilter.fechaFin = fechaFin;
+    const egresosRes = await getMovimientosCaja(egresosFilter);
+    setMovimientosEgresos(egresosRes.data || []);
 
     setPosEcon({
       ingresoVentas,
@@ -1262,6 +1271,155 @@ const DashboardView = ({ productosActualizados }) => {
         );
       })()}
 
+      {/* Popup Desglose de Egresos */}
+      {popupEgresos && posEcon && (() => {
+        const movs = movimientosEgresos || [];
+        const totalEgresos = movs.reduce((s, m) => s + (parseFloat(m.monto) || 0), 0);
+
+        // Resumen por categoría
+        const resumenCat = {};
+        movs.forEach(m => {
+          const cat = m.categoria || 'Sin categoría';
+          if (!resumenCat[cat]) resumenCat[cat] = { count: 0, total: 0 };
+          resumenCat[cat].count += 1;
+          resumenCat[cat].total += parseFloat(m.monto) || 0;
+        });
+        const catEntries = Object.entries(resumenCat).sort((a, b) => b[1].total - a[1].total);
+
+        const categoriasReinversion = ['reinversion', 'compra_material', 'inversion_capital'];
+
+        return (
+          <div
+            onClick={() => setPopupEgresos(false)}
+            style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', zIndex: 2000, padding: '20px', boxSizing: 'border-box'
+            }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: colors.cotton, borderRadius: '16px', padding: '24px',
+                maxWidth: '750px', width: '100%', maxHeight: '80vh',
+                display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+              }}
+            >
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexShrink: 0 }}>
+                <div>
+                  <h3 style={{ margin: 0, color: colors.espresso, fontSize: '20px' }}>Desglose de Egresos</h3>
+                  <div style={{ fontSize: '13px', color: colors.camel, marginTop: '4px' }}>
+                    Total: {formatearMonedaDash(totalEgresos)} — {movs.length} movimiento{movs.length !== 1 ? 's' : ''}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setPopupEgresos(false)}
+                  style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: colors.camel, padding: '4px', lineHeight: 1 }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Contenido scrollable */}
+              <div style={{ overflowY: 'auto', flex: 1 }}>
+                {movs.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '40px 20px', color: colors.camel }}>
+                    <div style={{ fontSize: '32px', marginBottom: '12px' }}>—</div>
+                    <div style={{ fontSize: '14px' }}>Sin egresos en este período</div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Resumen por categoría */}
+                    <div style={{ marginBottom: '16px' }}>
+                      <div style={{
+                        display: 'grid', gridTemplateColumns: '2fr 1fr 1fr',
+                        padding: '8px 12px', background: colors.terracotta, borderRadius: '8px', marginBottom: '6px',
+                        fontSize: '11px', fontWeight: '600', color: 'white', textTransform: 'uppercase', letterSpacing: '0.5px'
+                      }}>
+                        <span>Categoría</span>
+                        <span style={{ textAlign: 'right' }}>Movimientos</span>
+                        <span style={{ textAlign: 'right' }}>Total</span>
+                      </div>
+                      {catEntries.map(([cat, d], idx) => (
+                        <div key={idx} style={{
+                          display: 'grid', gridTemplateColumns: '2fr 1fr 1fr',
+                          padding: '7px 12px', borderBottom: `1px solid ${colors.sand}`,
+                          fontSize: '13px', alignItems: 'center',
+                          background: categoriasReinversion.includes(cat) ? 'rgba(171,213,94,0.06)' : 'transparent'
+                        }}>
+                          <span style={{ color: colors.espresso, fontWeight: '500', textTransform: 'capitalize' }}>
+                            {cat.replace(/_/g, ' ')}
+                          </span>
+                          <span style={{ textAlign: 'right', color: colors.camel }}>{d.count}</span>
+                          <span style={{ textAlign: 'right', color: colors.terracotta, fontWeight: '600' }}>
+                            {formatearMonedaDash(d.total)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Separador */}
+                    <div style={{ borderTop: `2px solid ${colors.sand}`, margin: '12px 0' }} />
+
+                    {/* Detalle individual */}
+                    <div style={{
+                      display: 'grid', gridTemplateColumns: '90px 1.2fr 2fr 0.8fr 1fr',
+                      padding: '8px 12px', background: colors.olive, borderRadius: '8px', marginBottom: '6px',
+                      fontSize: '11px', fontWeight: '600', color: 'white', textTransform: 'uppercase', letterSpacing: '0.5px'
+                    }}>
+                      <span>Fecha</span>
+                      <span>Categoría</span>
+                      <span>Descripción</span>
+                      <span style={{ textAlign: 'center' }}>Método</span>
+                      <span style={{ textAlign: 'right' }}>Monto</span>
+                    </div>
+                    {movs.map((m, idx) => (
+                      <div key={m.id || idx} style={{
+                        display: 'grid', gridTemplateColumns: '90px 1.2fr 2fr 0.8fr 1fr',
+                        padding: '7px 12px', borderBottom: `1px solid ${colors.sand}`,
+                        fontSize: '12px', alignItems: 'center',
+                        background: categoriasReinversion.includes(m.categoria) ? 'rgba(171,213,94,0.06)' : 'transparent'
+                      }}>
+                        <span style={{ color: colors.camel }}>
+                          {m.fecha ? new Date(m.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) : '—'}
+                        </span>
+                        <span style={{ color: colors.espresso, textTransform: 'capitalize' }}>
+                          {(m.categoria || '—').replace(/_/g, ' ')}
+                        </span>
+                        <span style={{ color: colors.camel, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {m.descripcion || '—'}
+                        </span>
+                        <span style={{ textAlign: 'center', color: colors.camel, fontSize: '11px' }}>
+                          {m.metodo_pago || '—'}
+                        </span>
+                        <span style={{ textAlign: 'right', color: colors.terracotta, fontWeight: '600' }}>
+                          {formatearMonedaDash(m.monto)}
+                        </span>
+                      </div>
+                    ))}
+
+                    {/* Footer total */}
+                    <div style={{
+                      display: 'grid', gridTemplateColumns: '90px 1.2fr 2fr 0.8fr 1fr',
+                      padding: '10px 12px', marginTop: '4px',
+                      fontSize: '13px', fontWeight: '700', borderTop: `2px solid ${colors.espresso}`,
+                      color: colors.espresso
+                    }}>
+                      <span>Total</span>
+                      <span />
+                      <span />
+                      <span />
+                      <span style={{ textAlign: 'right', color: colors.terracotta }}>{formatearMonedaDash(totalEgresos)}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* POSICIÓN ECONÓMICA */}
       <div style={{ marginBottom: '30px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
@@ -1329,12 +1487,19 @@ const DashboardView = ({ productosActualizados }) => {
                 <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Ganancia real sobre lo cobrado</div>
               </div>
 
-              <div style={{
-                background: colors.cotton,
-                borderRadius: '12px',
-                padding: '20px',
-                textAlign: 'center'
-              }}>
+              <div
+                onClick={() => setPopupEgresos(true)}
+                style={{
+                  background: colors.cotton,
+                  borderRadius: '12px',
+                  padding: '20px',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s, box-shadow 0.2s'
+                }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)'; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
+              >
                 <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Egresos</div>
                 <div style={{ fontSize: '26px', fontWeight: '700', color: colors.terracotta }}>{formatearMonedaDash(posEcon.egresos)}</div>
                 <div style={{ fontSize: '10px', color: colors.camel, marginTop: '3px' }}>
