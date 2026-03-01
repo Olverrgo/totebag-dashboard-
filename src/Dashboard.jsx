@@ -887,7 +887,8 @@ const DashboardView = ({ productosActualizados }) => {
       reinversionTotal: cajaGlobal.reinversion || 0,
       compraMaterialTotal: cajaGlobal.compraMaterial || 0,
       inversionCapitalTotal: cajaGlobal.inversionCapital || 0,
-      inversionTotal: (cajaGlobal.compraMaterial || 0) + (cajaGlobal.reinversion || 0) + (cajaGlobal.inversionCapital || 0)
+      inversionTotal: (cajaGlobal.compraMaterial || 0) + (cajaGlobal.reinversion || 0) + (cajaGlobal.inversionCapital || 0),
+      balanceCajaGlobal: cajaGlobal.balance
     });
   };
 
@@ -1352,7 +1353,7 @@ const DashboardView = ({ productosActualizados }) => {
                 <div style={{ fontSize: '28px', fontWeight: '700', color: posEcon.utilidadNeta >= 0 ? colors.olive : colors.terracotta }}>
                   {formatearMonedaDash(posEcon.utilidadNeta)}
                 </div>
-                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Utilidad bruta - Egresos reales</div>
+                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Utilidad bruta - Gastos operativos</div>
               </div>
             </div>
 
@@ -1432,15 +1433,15 @@ const DashboardView = ({ productosActualizados }) => {
               }}>
                 <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Capital total</div>
                 <div style={{ fontSize: '28px', fontWeight: '700', color: colors.sidebarBg }}>
-                  {formatearMonedaDash(posEcon.valorTaller + (posEcon.materiaPrima || 0) + posEcon.ventasPendientes + posEcon.porCobrarMaquila + posEcon.balanceCaja)}
+                  {formatearMonedaDash(posEcon.valorTaller + (posEcon.materiaPrima || 0) + posEcon.ventasPendientes + posEcon.porCobrarMaquila + (posEcon.balanceCajaGlobal || 0))}
                 </div>
                 <div style={{ fontSize: '11px', color: colors.camel, marginTop: '6px', lineHeight: '1.5' }}>
-                  Taller {formatearMonedaDash(posEcon.valorTaller)} + Mat. prima {formatearMonedaDash(posEcon.materiaPrima || 0)} + Por cobrar {formatearMonedaDash(posEcon.ventasPendientes + posEcon.porCobrarMaquila)} + Caja {formatearMonedaDash(posEcon.balanceCaja)}
+                  Taller {formatearMonedaDash(posEcon.valorTaller)} + Mat. prima {formatearMonedaDash(posEcon.materiaPrima || 0)} + Por cobrar {formatearMonedaDash(posEcon.ventasPendientes + posEcon.porCobrarMaquila)} + Caja {formatearMonedaDash(posEcon.balanceCajaGlobal || 0)}
                 </div>
               </div>
 
               {posEcon.inversionTotal > 0 && (() => {
-                const capitalTotal = posEcon.valorTaller + (posEcon.materiaPrima || 0) + posEcon.ventasPendientes + posEcon.porCobrarMaquila + posEcon.balanceCaja;
+                const capitalTotal = posEcon.valorTaller + (posEcon.materiaPrima || 0) + posEcon.ventasPendientes + posEcon.porCobrarMaquila + (posEcon.balanceCajaGlobal || 0);
                 const roiPct = posEcon.inversionTotal > 0 ? (((capitalTotal - posEcon.inversionTotal) / posEcon.inversionTotal) * 100).toFixed(1) : 0;
                 return (
                   <div style={{
