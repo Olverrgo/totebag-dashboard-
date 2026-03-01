@@ -8399,8 +8399,12 @@ const CajaView = ({ isAdmin }) => {
     categoria: 'gasto_operativo',
     metodoPago: 'efectivo',
     descripcion: '',
-    referencia: ''
+    referencia: '',
+    materialId: '',
+    cantidadMaterial: ''
   });
+
+  const [materialesList, setMaterialesList] = useState([]);
 
   const categoriasEgreso = [
     { value: 'compra_material', label: 'Compra de material' },
@@ -8493,6 +8497,14 @@ const CajaView = ({ isAdmin }) => {
     cargarDatos();
   }, [filtroPeriodo, filtroTipo]);
 
+  useEffect(() => {
+    const cargarMateriales = async () => {
+      const res = await getMateriales();
+      setMaterialesList(res.data || []);
+    };
+    cargarMateriales();
+  }, []);
+
   const formatearMoneda = (monto) => {
     return '$' + (parseFloat(monto) || 0).toLocaleString('es-MX', {
       minimumFractionDigits: 2,
@@ -8512,7 +8524,7 @@ const CajaView = ({ isAdmin }) => {
   };
 
   const resetForm = () => {
-    setFormMovimiento({ tipo: 'egreso', monto: '', categoria: 'gasto_operativo', metodoPago: 'efectivo', descripcion: '', referencia: '' });
+    setFormMovimiento({ tipo: 'egreso', monto: '', categoria: 'gasto_operativo', metodoPago: 'efectivo', descripcion: '', referencia: '', materialId: '', cantidadMaterial: '' });
     setEditandoMovimiento(null);
     setMostrarFormMovimiento(false);
   };
@@ -8546,21 +8558,49 @@ const CajaView = ({ isAdmin }) => {
           setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
         }
       } else {
-        const { error } = await createMovimientoCaja({
-          tipo: formMovimiento.tipo,
-          monto: parseFloat(formMovimiento.monto),
-          categoria: formMovimiento.categoria,
-          metodo_pago: formMovimiento.metodoPago,
-          descripcion: formMovimiento.descripcion.trim(),
-          referencia: formMovimiento.referencia.trim() || null
-        });
-        if (error) {
-          setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
+        const esMaterial = (formMovimiento.categoria === 'reinversion' || formMovimiento.categoria === 'compra_material') && formMovimiento.materialId;
+
+        if (esMaterial) {
+          if (!formMovimiento.cantidadMaterial || parseFloat(formMovimiento.cantidadMaterial) <= 0) {
+            setMensaje({ tipo: 'error', texto: 'Ingresa la cantidad de material' });
+            setGuardando(false);
+            return;
+          }
+          const { error } = await registrarCompraMaterial({
+            materialId: formMovimiento.materialId,
+            cantidad: parseFloat(formMovimiento.cantidadMaterial),
+            costoTotal: parseFloat(formMovimiento.monto),
+            metodoPago: formMovimiento.metodoPago,
+            notas: formMovimiento.descripcion.trim(),
+            categoriaCaja: formMovimiento.categoria
+          });
+          if (error) {
+            setMensaje({ tipo: 'error', texto: 'Error: ' + (error.message || error) });
+          } else {
+            setMensaje({ tipo: 'exito', texto: 'Compra de material registrada (caja + inventario)' });
+            resetForm();
+            cargarDatos();
+            const res = await getMateriales();
+            setMaterialesList(res.data || []);
+            setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+          }
         } else {
-          setMensaje({ tipo: 'exito', texto: `${formMovimiento.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'} registrado` });
-          resetForm();
-          cargarDatos();
-          setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+          const { error } = await createMovimientoCaja({
+            tipo: formMovimiento.tipo,
+            monto: parseFloat(formMovimiento.monto),
+            categoria: formMovimiento.categoria,
+            metodo_pago: formMovimiento.metodoPago,
+            descripcion: formMovimiento.descripcion.trim(),
+            referencia: formMovimiento.referencia.trim() || null
+          });
+          if (error) {
+            setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
+          } else {
+            setMensaje({ tipo: 'exito', texto: `${formMovimiento.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'} registrado` });
+            resetForm();
+            cargarDatos();
+            setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+          }
         }
       }
     } catch (err) {
@@ -8862,6 +8902,37 @@ const CajaView = ({ isAdmin }) => {
                 ))}
               </select>
             </div>
+            {(formMovimiento.categoria === 'reinversion' || formMovimiento.categoria === 'compra_material') && !editandoMovimiento && (
+              <>
+                <div>
+                  <label style={{ fontSize: '13px', color: colors.camel, display: 'block', marginBottom: '4px' }}>Material</label>
+                  <select
+                    value={formMovimiento.materialId}
+                    onChange={e => setFormMovimiento({ ...formMovimiento, materialId: e.target.value })}
+                    style={inputStyle}
+                  >
+                    <option value="">-- Sin vincular a material --</option>
+                    {materialesList.map(m => (
+                      <option key={m.id} value={m.id}>{m.nombre} ({m.stock} {m.unidad})</option>
+                    ))}
+                  </select>
+                </div>
+                {formMovimiento.materialId && (
+                  <div>
+                    <label style={{ fontSize: '13px', color: colors.camel, display: 'block', marginBottom: '4px' }}>Cantidad comprada</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={formMovimiento.cantidadMaterial}
+                      onChange={e => setFormMovimiento({ ...formMovimiento, cantidadMaterial: e.target.value })}
+                      placeholder={(() => { const mat = materialesList.find(m => m.id === formMovimiento.materialId); return mat ? `En ${mat.unidad}` : '0'; })()}
+                      style={inputStyle}
+                    />
+                  </div>
+                )}
+              </>
+            )}
             <div>
               <label style={{ fontSize: '13px', color: colors.camel, display: 'block', marginBottom: '4px' }}>Método de pago</label>
               <select

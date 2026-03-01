@@ -2388,7 +2388,7 @@ export const completarOrdenProduccion = async (ordenId) => {
 // 1. Actualizar stock y costo promedio ponderado
 // 2. Crear movimiento_material tipo 'compra'
 // 3. Crear movimiento_caja egreso
-export const registrarCompraMaterial = async ({ materialId, cantidad, costoTotal, metodoPago, notas }) => {
+export const registrarCompraMaterial = async ({ materialId, cantidad, costoTotal, metodoPago, notas, categoriaCaja }) => {
   if (!supabase) return { data: null, error: 'Supabase no configurado' };
 
   // 1. Obtener material actual
@@ -2438,7 +2438,7 @@ export const registrarCompraMaterial = async ({ materialId, cantidad, costoTotal
     .from('movimientos_caja')
     .insert([{
       tipo: 'egreso',
-      categoria: 'compra_material',
+      categoria: categoriaCaja || 'compra_material',
       monto: costoCompra,
       descripcion: `Compra material: ${material.nombre} - ${cantidadCompra} ${material.unidad}`,
       metodo_pago: metodoPago || 'efectivo',
