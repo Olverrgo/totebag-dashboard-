@@ -8615,7 +8615,13 @@ const CajaView = ({ isAdmin }) => {
       if (error) {
         setMensaje({ tipo: 'error', texto: 'Error: ' + (error.message || error) });
       } else {
-        setMensaje({ tipo: 'exito', texto: 'Pago ajustado correctamente' });
+        // Sincronizar el monto en movimientos_caja para que el balance refleje el cambio real
+        const { error: errorCaja } = await updateMovimientoCaja(mov.id, { monto: nuevoMonto });
+        if (errorCaja) {
+          setMensaje({ tipo: 'error', texto: 'Pago ajustado pero error al actualizar caja: ' + (errorCaja.message || errorCaja) });
+        } else {
+          setMensaje({ tipo: 'exito', texto: 'Pago ajustado correctamente' });
+        }
         setEditandoPagoCaja(null);
         setMontoEditPagoCaja('');
         cargarDatos();
