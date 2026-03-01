@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import "./Dashboard.css";
 import { useAuth } from './AuthContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart } from 'recharts';
+import VentasPorLineaChart from './components/VentasPorLineaChart';
 import {
   isSupabaseConfigured,
   cargarDatosDashboard,
@@ -1499,24 +1500,7 @@ const DashboardView = ({ productosActualizados }) => {
 
       {/* Gráficos */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '25px' }}>
-        <div style={{ background: colors.cotton, padding: '20px', border: `1px solid ${colors.sand}` }}>
-          <h3 style={{ margin: '0 0 15px', fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>VENTAS POR LÍNEA DE PRODUCTO</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={proyeccionData}>
-              <CartesianGrid strokeDasharray="3 3" stroke={colors.sand} />
-              <XAxis dataKey="mes" tick={{ fontSize: 10 }} stroke={colors.camel} />
-              <YAxis stroke={colors.camel} />
-              <Tooltip contentStyle={{ background: colors.cotton, border: `1px solid ${colors.camel}` }} />
-              <Legend wrapperStyle={{ fontSize: '11px' }} />
-              <Bar dataKey="publicitaria" stackId="a" fill={productos.publicitaria.color} name="Publicitaria 10%" />
-              <Bar dataKey="eco" stackId="a" fill={productos.eco.color} name="Eco 15%" />
-              <Bar dataKey="ecoForro" stackId="a" fill={productos.ecoForro.color} name="Eco+Forro 15%" />
-              <Bar dataKey="basica" stackId="a" fill={productos.basica.color} name="Básica 15%" />
-              <Bar dataKey="estandar" stackId="a" fill={productos.estandar.color} name="Estándar 25%" />
-              <Bar dataKey="premium" stackId="a" fill={productos.premium.color} name="Premium 20%" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <VentasPorLineaChart colors={colors} />
 
         <div style={{ background: colors.cotton, padding: '20px', border: `1px solid ${colors.sand}` }}>
           <h3 style={{ margin: '0 0 15px', fontSize: '14px', letterSpacing: '1px', color: colors.espresso }}>UTILIDAD ACUMULADA</h3>
