@@ -2002,11 +2002,15 @@ export const getBalanceCaja = async (fechaInicio = null, fechaFin = null) => {
 
   if (error) return { data: null, error: handleRLSError(error) };
 
-  const resumen = { totalIngresos: 0, totalEgresos: 0, balance: 0, compraMaterial: 0 };
+  const resumen = { totalIngresos: 0, totalEgresos: 0, balance: 0, compraMaterial: 0, inversionCapital: 0 };
 
   (data || []).forEach(mov => {
     const monto = parseFloat(mov.monto) || 0;
     if (mov.tipo === 'ingreso') {
+      // Inversiones de capital se trackean aparte (no son ingreso por ventas)
+      if (mov.categoria === 'inversion_capital') {
+        resumen.inversionCapital += monto;
+      }
       resumen.totalIngresos += monto;
     } else {
       resumen.totalEgresos += monto;

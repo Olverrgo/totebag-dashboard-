@@ -825,9 +825,11 @@ const DashboardView = ({ productosActualizados }) => {
 
     const valorInventarioTotal = valorTaller + valorConsignacion;
 
-    // Materia prima: usar inventario real de materiales si hay datos, si no, usar histórico de compras en caja
+    // Materia prima: inventario real de materiales; fallback a compras históricas si aún no hay materiales registrados
     const invMat = invMatRes.data || { valorTotal: 0, alertas: 0, totalMateriales: 0 };
     const materiaPrima = invMat.totalMateriales > 0 ? invMat.valorTotal : (cajaGlobal.compraMaterial || 0);
+    // Nota: una vez reclasificadas las compras como inversion_capital, compraMaterial será 0
+    // y materia prima vendrá del inventario real en la tabla 'materiales'
 
     // Utilidad neta = utilidad bruta - gastos operativos (egresos SIN compra de material)
     const gastosOperativos = cajaData.totalEgresos - (cajaData.compraMaterial || 0);
