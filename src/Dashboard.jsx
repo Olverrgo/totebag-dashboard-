@@ -676,6 +676,7 @@ const DashboardView = ({ productosActualizados }) => {
   const [posEcon, setPosEcon] = useState(null);
   const [periodoEcon, setPeriodoEcon] = useState('mes');
   const [popupInventario, setPopupInventario] = useState(null); // 'taller' | 'consignacion' | null
+  const [popupUtilidad, setPopupUtilidad] = useState(false);
   const [productosInventario, setProductosInventario] = useState([]);
   const [ventasConsignacion, setVentasConsignacion] = useState([]);
 
@@ -748,6 +749,8 @@ const DashboardView = ({ productosActualizados }) => {
     let piezasVendidas = 0;
     let ventasCobradas = 0;
 
+    const desgloseUtilidad = {};
+
     ventasData.forEach(v => {
       const total = parseFloat(v.total) || 0;
       const costo = (parseFloat(v.costo_unitario) || 0) * (v.cantidad || 0);
@@ -759,7 +762,18 @@ const DashboardView = ({ productosActualizados }) => {
       // Utilidad bruta basada en lo COBRADO: proporción de ganancia por peso cobrado
       if (total > 0 && pagado > 0) {
         const margen = (total - costo) / total; // margen por peso vendido
-        utilidadBruta += pagado * margen;
+        const utilVenta = pagado * margen;
+        utilidadBruta += utilVenta;
+
+        const nombreProd = v.producto_nombre || v.variante_nombre || 'Producto desconocido';
+        if (!desgloseUtilidad[nombreProd]) {
+          desgloseUtilidad[nombreProd] = { pzas: 0, totalVendido: 0, totalCobrado: 0, costoTotal: 0, utilidad: 0 };
+        }
+        desgloseUtilidad[nombreProd].pzas += v.cantidad || 0;
+        desgloseUtilidad[nombreProd].totalVendido += total;
+        desgloseUtilidad[nombreProd].totalCobrado += pagado;
+        desgloseUtilidad[nombreProd].costoTotal += costo;
+        desgloseUtilidad[nombreProd].utilidad += utilVenta;
       }
     });
 
@@ -866,7 +880,8 @@ const DashboardView = ({ productosActualizados }) => {
       valorInventarioTotal,
       materiaPrima,
       pzasTaller,
-      pzasConsignacion
+      pzasConsignacion,
+      desgloseUtilidad
     });
   };
 
@@ -1124,6 +1139,122 @@ const DashboardView = ({ productosActualizados }) => {
         );
       })()}
 
+      {/* Popup desglose de utilidad bruta */}
+      {popupUtilidad && posEcon && (() => {
+        const desglose = posEcon.desgloseUtilidad || {};
+        const entries = Object.entries(desglose).sort((a, b) => b[1].utilidad - a[1].utilidad);
+        const totalUtil = entries.reduce((s, [, d]) => s + d.utilidad, 0) + (posEcon.cobradoServicios || 0);
+
+        return (
+          <div
+            onClick={() => setPopupUtilidad(false)}
+            style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', zIndex: 2000, padding: '20px', boxSizing: 'border-box'
+            }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: colors.cotton, borderRadius: '16px', padding: '24px',
+                maxWidth: '700px', width: '100%', maxHeight: '80vh',
+                display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+              }}
+            >
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexShrink: 0 }}>
+                <div>
+                  <h3 style={{ margin: 0, color: colors.espresso, fontSize: '20px' }}>Utilidad Bruta</h3>
+                  <div style={{ fontSize: '13px', color: colors.camel, marginTop: '4px' }}>
+                    Total: {formatearMonedaDash(totalUtil)}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setPopupUtilidad(false)}
+                  style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: colors.camel, padding: '4px', lineHeight: 1 }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Tabla scrollable */}
+              <div style={{ overflowY: 'auto', flex: 1 }}>
+                {/* Encabezados */}
+                <div style={{
+                  display: 'grid', gridTemplateColumns: '2fr repeat(5, 1fr)',
+                  padding: '8px 12px', background: colors.olive, borderRadius: '8px', marginBottom: '8px',
+                  fontSize: '11px', fontWeight: '600', color: 'white', textTransform: 'uppercase', letterSpacing: '0.5px'
+                }}>
+                  <span>Producto</span>
+                  <span style={{ textAlign: 'right' }}>Pzas</span>
+                  <span style={{ textAlign: 'right' }}>Vendido</span>
+                  <span style={{ textAlign: 'right' }}>Cobrado</span>
+                  <span style={{ textAlign: 'right' }}>Costo</span>
+                  <span style={{ textAlign: 'right' }}>Utilidad</span>
+                </div>
+
+                {entries.length === 0 && !posEcon.cobradoServicios ? (
+                  <div style={{ textAlign: 'center', padding: '30px', color: colors.camel }}>Sin datos de utilidad</div>
+                ) : (
+                  <>
+                    {entries.map(([nombre, d], idx) => (
+                      <div key={idx} style={{
+                        display: 'grid', gridTemplateColumns: '2fr repeat(5, 1fr)',
+                        padding: '8px 12px', borderBottom: `1px solid ${colors.sand}`,
+                        fontSize: '13px', alignItems: 'center'
+                      }}>
+                        <span style={{ color: colors.espresso, fontWeight: '500' }}>{nombre}</span>
+                        <span style={{ textAlign: 'right', color: colors.camel }}>{d.pzas}</span>
+                        <span style={{ textAlign: 'right', color: colors.camel }}>{formatearMonedaDash(d.totalVendido)}</span>
+                        <span style={{ textAlign: 'right', color: colors.camel }}>{formatearMonedaDash(d.totalCobrado)}</span>
+                        <span style={{ textAlign: 'right', color: colors.terracotta }}>{formatearMonedaDash(d.costoTotal)}</span>
+                        <span style={{ textAlign: 'right', color: d.utilidad >= 0 ? colors.olive : colors.terracotta, fontWeight: '600' }}>
+                          {formatearMonedaDash(d.utilidad)}
+                        </span>
+                      </div>
+                    ))}
+
+                    {/* Fila de servicios maquila */}
+                    {(posEcon.cobradoServicios || 0) > 0 && (
+                      <div style={{
+                        display: 'grid', gridTemplateColumns: '2fr repeat(5, 1fr)',
+                        padding: '8px 12px', borderBottom: `1px solid ${colors.sand}`,
+                        fontSize: '13px', alignItems: 'center', background: 'rgba(171,213,94,0.06)'
+                      }}>
+                        <span style={{ color: colors.espresso, fontWeight: '500', fontStyle: 'italic' }}>Servicios maquila</span>
+                        <span style={{ textAlign: 'right', color: colors.camel }}>—</span>
+                        <span style={{ textAlign: 'right', color: colors.camel }}>{formatearMonedaDash(posEcon.ingresoServicios || 0)}</span>
+                        <span style={{ textAlign: 'right', color: colors.camel }}>{formatearMonedaDash(posEcon.cobradoServicios)}</span>
+                        <span style={{ textAlign: 'right', color: colors.camel }}>—</span>
+                        <span style={{ textAlign: 'right', color: colors.olive, fontWeight: '600' }}>
+                          {formatearMonedaDash(posEcon.cobradoServicios)}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Footer con totales */}
+                <div style={{
+                  display: 'grid', gridTemplateColumns: '2fr repeat(5, 1fr)',
+                  padding: '10px 12px', marginTop: '4px',
+                  fontSize: '13px', fontWeight: '700', borderTop: `2px solid ${colors.espresso}`,
+                  color: colors.espresso
+                }}>
+                  <span>Total</span>
+                  <span style={{ textAlign: 'right' }}>{entries.reduce((s, [, d]) => s + d.pzas, 0)}</span>
+                  <span style={{ textAlign: 'right' }}>{formatearMonedaDash(entries.reduce((s, [, d]) => s + d.totalVendido, 0) + (posEcon.ingresoServicios || 0))}</span>
+                  <span style={{ textAlign: 'right' }}>{formatearMonedaDash(entries.reduce((s, [, d]) => s + d.totalCobrado, 0) + (posEcon.cobradoServicios || 0))}</span>
+                  <span style={{ textAlign: 'right', color: colors.terracotta }}>{formatearMonedaDash(entries.reduce((s, [, d]) => s + d.costoTotal, 0))}</span>
+                  <span style={{ textAlign: 'right', color: colors.olive }}>{formatearMonedaDash(totalUtil)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* POSICIÓN ECONÓMICA */}
       <div style={{ marginBottom: '30px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
@@ -1172,13 +1303,20 @@ const DashboardView = ({ productosActualizados }) => {
                 <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>{posEcon.numVentas} ventas • {posEcon.piezasVendidas} pzas{posEcon.numServicios > 0 ? ` • ${posEcon.numServicios} servicios` : ''}</div>
               </div>
 
-              <div style={{
+              <div
+                onClick={() => setPopupUtilidad(true)}
+                style={{
                 background: colors.cotton,
                 borderRadius: '12px',
                 padding: '20px',
                 textAlign: 'center',
-                border: `2px solid ${colors.olive}`
-              }}>
+                border: `2px solid ${colors.olive}`,
+                cursor: 'pointer',
+                transition: 'transform 0.15s, box-shadow 0.15s'
+              }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
+              >
                 <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Utilidad bruta</div>
                 <div style={{ fontSize: '26px', fontWeight: '700', color: colors.olive }}>{formatearMonedaDash(posEcon.utilidadBruta)}</div>
                 <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Ganancia real sobre lo cobrado</div>
