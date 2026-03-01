@@ -825,9 +825,9 @@ const DashboardView = ({ productosActualizados }) => {
 
     const valorInventarioTotal = valorTaller + valorConsignacion;
 
-    // Materia prima = valor real del inventario de materiales (stock × costo unitario)
-    const invMat = invMatRes.data || { valorTotal: 0, alertas: 0 };
-    const materiaPrima = invMat.valorTotal || 0;
+    // Materia prima: usar inventario real de materiales si hay datos, si no, usar histórico de compras en caja
+    const invMat = invMatRes.data || { valorTotal: 0, alertas: 0, totalMateriales: 0 };
+    const materiaPrima = invMat.totalMateriales > 0 ? invMat.valorTotal : (cajaGlobal.compraMaterial || 0);
 
     // Utilidad neta = utilidad bruta - gastos operativos (egresos SIN compra de material)
     const gastosOperativos = cajaData.totalEgresos - (cajaData.compraMaterial || 0);
