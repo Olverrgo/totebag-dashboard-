@@ -731,7 +731,7 @@ const DashboardView = ({ productosActualizados }) => {
     const ventasData = ventasRes.data || [];
     const todasVentas = todasVentasRes.data || [];
     const cajaData = cajaRes.data || { totalIngresos: 0, totalEgresos: 0, balance: 0 };
-    const cajaGlobal = cajaGlobalRes.data || { totalIngresos: 0, totalEgresos: 0, balance: 0, compraMaterial: 0 };
+    const cajaGlobal = cajaGlobalRes.data || { totalIngresos: 0, totalEgresos: 0, balance: 0, compraMaterial: 0, reinversion: 0 };
     const serviciosData = serviciosRes.data || [];
     const productosData = productosRes.data || [];
     setProductosInventario(productosData);
@@ -845,8 +845,8 @@ const DashboardView = ({ productosActualizados }) => {
     // Nota: una vez reclasificadas las compras como inversion_capital, compraMaterial será 0
     // y materia prima vendrá del inventario real en la tabla 'materiales'
 
-    // Utilidad neta = utilidad bruta - gastos operativos (egresos SIN compra de material)
-    const gastosOperativos = cajaData.totalEgresos - (cajaData.compraMaterial || 0);
+    // Utilidad neta = utilidad bruta - gastos operativos (egresos SIN compra de material ni reinversión)
+    const gastosOperativos = cajaData.totalEgresos - (cajaData.compraMaterial || 0) - (cajaData.reinversion || 0);
     const utilidadNeta = utilidadBruta - gastosOperativos;
 
     // Contar servicios del período
@@ -881,7 +881,12 @@ const DashboardView = ({ productosActualizados }) => {
       materiaPrima,
       pzasTaller,
       pzasConsignacion,
-      desgloseUtilidad
+      desgloseUtilidad,
+      reinversionPeriodo: cajaData.reinversion || 0,
+      reinversionTotal: cajaGlobal.reinversion || 0,
+      compraMaterialTotal: cajaGlobal.compraMaterial || 0,
+      inversionCapitalTotal: cajaGlobal.inversionCapital || 0,
+      inversionTotal: (cajaGlobal.compraMaterial || 0) + (cajaGlobal.reinversion || 0) + (cajaGlobal.inversionCapital || 0)
     });
   };
 
@@ -1432,6 +1437,31 @@ const DashboardView = ({ productosActualizados }) => {
                   Taller {formatearMonedaDash(posEcon.valorTaller)} + Mat. prima {formatearMonedaDash(posEcon.materiaPrima || 0)} + Por cobrar {formatearMonedaDash(posEcon.ventasPendientes + posEcon.porCobrarMaquila)} + Caja {formatearMonedaDash(posEcon.balanceCaja)}
                 </div>
               </div>
+
+              {posEcon.inversionTotal > 0 && (() => {
+                const capitalTotal = posEcon.valorTaller + (posEcon.materiaPrima || 0) + posEcon.ventasPendientes + posEcon.porCobrarMaquila + posEcon.balanceCaja;
+                const roiPct = posEcon.inversionTotal > 0 ? (((capitalTotal - posEcon.inversionTotal) / posEcon.inversionTotal) * 100).toFixed(1) : 0;
+                return (
+                  <div style={{
+                    background: colors.cotton,
+                    borderRadius: '12px',
+                    padding: '20px',
+                    textAlign: 'center',
+                    border: `1px solid ${colors.sand}`
+                  }}>
+                    <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Inversión acumulada / ROI</div>
+                    <div style={{ fontSize: '24px', fontWeight: '700', color: colors.sidebarBg }}>
+                      {formatearMonedaDash(posEcon.inversionTotal)}
+                    </div>
+                    <div style={{ fontSize: '18px', fontWeight: '600', color: roiPct >= 0 ? colors.olive : colors.terracotta, marginTop: '4px' }}>
+                      ROI: {roiPct}%
+                    </div>
+                    <div style={{ fontSize: '11px', color: colors.camel, marginTop: '6px', lineHeight: '1.5' }}>
+                      Material {formatearMonedaDash(posEcon.compraMaterialTotal || 0)} + Reinversión {formatearMonedaDash(posEcon.reinversionTotal || 0)} + Inv. capital {formatearMonedaDash(posEcon.inversionCapitalTotal || 0)}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </>
         ) : (
@@ -8393,6 +8423,7 @@ const CajaView = ({ isAdmin }) => {
     { value: 'gasto_operativo', label: 'Gasto operativo' },
     { value: 'gasto_envio', label: 'Gasto de envío' },
     { value: 'gasto_produccion', label: 'Gasto de producción' },
+    { value: 'reinversion', label: 'Reinversión (compra material)' },
     { value: 'retiro', label: 'Retiro' },
     { value: 'ajuste', label: 'Ajuste de caja' },
     { value: 'otro', label: 'Otro' }
@@ -8413,6 +8444,7 @@ const CajaView = ({ isAdmin }) => {
     gasto_operativo: 'Gasto operativo',
     gasto_envio: 'Gasto envío',
     gasto_produccion: 'Gasto producción',
+    reinversion: 'Reinversión',
     retiro: 'Retiro',
     ajuste: 'Ajuste',
     otro: 'Otro'
@@ -8703,6 +8735,20 @@ const CajaView = ({ isAdmin }) => {
           <div style={{ fontSize: '24px', fontWeight: '700', color: colors.terracotta }}>
             {formatearMoneda(balance.totalEgresos)}
           </div>
+        </div>
+
+        <div style={{
+          background: colors.cotton,
+          borderRadius: '12px',
+          padding: '20px',
+          textAlign: 'center',
+          border: `1px solid ${colors.sand}`
+        }}>
+          <div style={{ fontSize: '13px', color: colors.camel, marginBottom: '8px' }}>Reinversión</div>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: colors.sidebarBg }}>
+            {formatearMoneda((balance.compraMaterial || 0) + (balance.reinversion || 0))}
+          </div>
+          <div style={{ fontSize: '11px', color: colors.camel, marginTop: '4px' }}>Dinero convertido en inventario</div>
         </div>
       </div>
 
