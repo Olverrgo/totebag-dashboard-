@@ -55,6 +55,8 @@ const ProduccionView = ({ isAdmin }) => {
 
   const categoriasM = ['todas', 'tela', 'cierre', 'hilo', 'etiqueta', 'empaque', 'otro'];
   const unidades = ['metros', 'piezas', 'kilos', 'rollos', 'litros', 'conos'];
+  const inputBase = { width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit', boxSizing: 'border-box', color: colors.espresso, background: '#fff' };
+  const selectBase = { width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit', color: colors.espresso, background: '#fff' };
   const tabs = [
     { id: 'materiales', nombre: 'Materiales', icon: '🧶' },
     { id: 'recetas', nombre: 'Recetas', icon: '📋' },
@@ -414,18 +416,18 @@ const ProduccionView = ({ isAdmin }) => {
                     <div style={{ display: 'grid', gap: '12px' }}>
                       <div>
                         <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Nombre *</label>
-                        <input value={formMaterial.nombre} onChange={e => setFormMaterial(p => ({ ...p, nombre: e.target.value }))} style={{ width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                        <input value={formMaterial.nombre} onChange={e => setFormMaterial(p => ({ ...p, nombre: e.target.value }))} style={inputBase} />
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                         <div>
                           <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Categoría</label>
-                          <select value={formMaterial.categoria} onChange={e => setFormMaterial(p => ({ ...p, categoria: e.target.value }))} style={{ width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit' }}>
+                          <select value={formMaterial.categoria} onChange={e => setFormMaterial(p => ({ ...p, categoria: e.target.value }))} style={selectBase}>
                             {['tela', 'cierre', 'hilo', 'etiqueta', 'empaque', 'otro'].map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
                           </select>
                         </div>
                         <div>
                           <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Unidad</label>
-                          <select value={formMaterial.unidad} onChange={e => setFormMaterial(p => ({ ...p, unidad: e.target.value }))} style={{ width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit' }}>
+                          <select value={formMaterial.unidad} onChange={e => setFormMaterial(p => ({ ...p, unidad: e.target.value }))} style={selectBase}>
                             {unidades.map(u => <option key={u} value={u}>{u}</option>)}
                           </select>
                         </div>
@@ -433,24 +435,24 @@ const ProduccionView = ({ isAdmin }) => {
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
                         <div>
                           <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Stock inicial</label>
-                          <input type="number" value={formMaterial.stock} onChange={e => setFormMaterial(p => ({ ...p, stock: e.target.value }))} style={{ width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                          <input type="number" value={formMaterial.stock} onChange={e => setFormMaterial(p => ({ ...p, stock: e.target.value }))} style={inputBase} />
                         </div>
                         <div>
                           <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Stock mínimo</label>
-                          <input type="number" value={formMaterial.stock_minimo} onChange={e => setFormMaterial(p => ({ ...p, stock_minimo: e.target.value }))} style={{ width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                          <input type="number" value={formMaterial.stock_minimo} onChange={e => setFormMaterial(p => ({ ...p, stock_minimo: e.target.value }))} style={inputBase} />
                         </div>
                         <div>
                           <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Costo/unidad</label>
-                          <input type="number" step="0.01" value={formMaterial.costo_unitario} onChange={e => setFormMaterial(p => ({ ...p, costo_unitario: e.target.value }))} style={{ width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                          <input type="number" step="0.01" value={formMaterial.costo_unitario} onChange={e => setFormMaterial(p => ({ ...p, costo_unitario: e.target.value }))} style={inputBase} />
                         </div>
                       </div>
                       <div>
                         <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Proveedor</label>
-                        <input value={formMaterial.proveedor} onChange={e => setFormMaterial(p => ({ ...p, proveedor: e.target.value }))} style={{ width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                        <input value={formMaterial.proveedor} onChange={e => setFormMaterial(p => ({ ...p, proveedor: e.target.value }))} style={inputBase} />
                       </div>
                       <div>
                         <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Notas</label>
-                        <textarea value={formMaterial.notas} onChange={e => setFormMaterial(p => ({ ...p, notas: e.target.value }))} rows={2} style={{ width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+                        <textarea value={formMaterial.notas} onChange={e => setFormMaterial(p => ({ ...p, notas: e.target.value }))} rows={2} style={{ ...inputBase, resize: 'vertical' }} />
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
@@ -472,11 +474,11 @@ const ProduccionView = ({ isAdmin }) => {
                     <div style={{ display: 'grid', gap: '12px' }}>
                       <div>
                         <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Cantidad ({mostrarCompra.unidad})</label>
-                        <input type="number" step="0.01" value={formCompra.cantidad} onChange={e => setFormCompra(p => ({ ...p, cantidad: e.target.value }))} style={{ width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                        <input type="number" step="0.01" value={formCompra.cantidad} onChange={e => setFormCompra(p => ({ ...p, cantidad: e.target.value }))} style={inputBase} />
                       </div>
                       <div>
                         <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Costo total $</label>
-                        <input type="number" step="0.01" value={formCompra.costoTotal} onChange={e => setFormCompra(p => ({ ...p, costoTotal: e.target.value }))} style={{ width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                        <input type="number" step="0.01" value={formCompra.costoTotal} onChange={e => setFormCompra(p => ({ ...p, costoTotal: e.target.value }))} style={inputBase} />
                       </div>
                       {formCompra.cantidad && formCompra.costoTotal && (
                         <div style={{ fontSize: '13px', color: colors.sidebarBg, fontWeight: '600' }}>
@@ -485,7 +487,7 @@ const ProduccionView = ({ isAdmin }) => {
                       )}
                       <div>
                         <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Método de pago</label>
-                        <select value={formCompra.metodoPago} onChange={e => setFormCompra(p => ({ ...p, metodoPago: e.target.value }))} style={{ width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit' }}>
+                        <select value={formCompra.metodoPago} onChange={e => setFormCompra(p => ({ ...p, metodoPago: e.target.value }))} style={selectBase}>
                           <option value="efectivo">Efectivo</option>
                           <option value="transferencia">Transferencia</option>
                           <option value="tarjeta">Tarjeta</option>
@@ -510,7 +512,7 @@ const ProduccionView = ({ isAdmin }) => {
               {/* Selector de producto */}
               <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '1px' }}>Selecciona un producto</label>
-                <select value={productoReceta} onChange={e => cargarReceta(e.target.value)} style={{ width: '100%', maxWidth: '400px', padding: '10px 14px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit' }}>
+                <select value={productoReceta} onChange={e => cargarReceta(e.target.value)} style={{ ...selectBase, maxWidth: '400px', padding: '10px 14px' }}>
                   <option value="">-- Seleccionar producto --</option>
                   {productos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                 </select>
@@ -579,18 +581,18 @@ const ProduccionView = ({ isAdmin }) => {
                         <div style={{ display: 'grid', gap: '12px' }}>
                           <div>
                             <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Material *</label>
-                            <select value={formReceta.material_id} onChange={e => setFormReceta(p => ({ ...p, material_id: e.target.value }))} style={{ width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit' }}>
+                            <select value={formReceta.material_id} onChange={e => setFormReceta(p => ({ ...p, material_id: e.target.value }))} style={selectBase}>
                               <option value="">-- Seleccionar --</option>
                               {materiales.map(m => <option key={m.id} value={m.id}>{m.nombre} ({m.unidad})</option>)}
                             </select>
                           </div>
                           <div>
                             <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Cantidad por pieza *</label>
-                            <input type="number" step="0.001" value={formReceta.cantidad} onChange={e => setFormReceta(p => ({ ...p, cantidad: e.target.value }))} style={{ width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                            <input type="number" step="0.001" value={formReceta.cantidad} onChange={e => setFormReceta(p => ({ ...p, cantidad: e.target.value }))} style={inputBase} />
                           </div>
                           <div>
                             <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Notas</label>
-                            <input value={formReceta.notas} onChange={e => setFormReceta(p => ({ ...p, notas: e.target.value }))} style={{ width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                            <input value={formReceta.notas} onChange={e => setFormReceta(p => ({ ...p, notas: e.target.value }))} style={inputBase} />
                           </div>
                         </div>
                         <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
@@ -696,7 +698,7 @@ const ProduccionView = ({ isAdmin }) => {
                       <div style={{ display: 'grid', gap: '14px' }}>
                         <div>
                           <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Producto *</label>
-                          <select value={formOrden.producto_id} onChange={e => handleSeleccionarProductoOrden(e.target.value)} style={{ width: '100%', padding: '10px 14px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit' }}>
+                          <select value={formOrden.producto_id} onChange={e => handleSeleccionarProductoOrden(e.target.value)} style={{ ...selectBase, padding: '10px 14px' }}>
                             <option value="">-- Seleccionar producto --</option>
                             {productos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                           </select>
@@ -704,7 +706,7 @@ const ProduccionView = ({ isAdmin }) => {
                         {variantesProducto.length > 0 && (
                           <div>
                             <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Variante</label>
-                            <select value={formOrden.variante_id} onChange={e => setFormOrden(p => ({ ...p, variante_id: e.target.value }))} style={{ width: '100%', padding: '10px 14px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit' }}>
+                            <select value={formOrden.variante_id} onChange={e => setFormOrden(p => ({ ...p, variante_id: e.target.value }))} style={{ ...selectBase, padding: '10px 14px' }}>
                               <option value="">-- Sin variante --</option>
                               {variantesProducto.map(v => <option key={v.id} value={v.id}>{[v.material, v.color, v.talla].filter(Boolean).join(' - ')} ({v.sku || ''})</option>)}
                             </select>
@@ -712,7 +714,7 @@ const ProduccionView = ({ isAdmin }) => {
                         )}
                         <div>
                           <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Cantidad a producir *</label>
-                          <input type="number" value={formOrden.cantidad} onChange={e => setFormOrden(p => ({ ...p, cantidad: e.target.value }))} style={{ width: '100%', padding: '10px 14px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                          <input type="number" value={formOrden.cantidad} onChange={e => setFormOrden(p => ({ ...p, cantidad: e.target.value }))} style={{ ...inputBase, padding: '10px 14px' }} />
                         </div>
                         <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                           <button onClick={() => setMostrarWizard(false)} style={{ padding: '8px 20px', background: colors.sand, border: 'none', borderRadius: '8px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
