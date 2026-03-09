@@ -10,6 +10,7 @@ import {
   cargarDatosDashboard,
   getTiposTela,
   updateTipoTela,
+  createTipoTela,
   getConfigEnvio,
   updateConfigEnvio,
   createProducto,
@@ -2949,6 +2950,38 @@ const ProductosView = ({ isAdmin }) => {
     }
   };
 
+  // Agregar nuevo tipo de tela
+  const agregarTipoTela = async () => {
+    if (!isAdmin) return;
+    setGuardando(true);
+    try {
+      const { data, error } = await createTipoTela({
+        nombre: 'Nueva tela',
+        ancho: 1.50,
+        precio_metro: 0
+      });
+      if (error) {
+        setMensaje({ tipo: 'error', texto: error.message || 'Error al crear tela' });
+      } else if (data) {
+        setAnchosTela(prev => [...prev, { id: data.id, nombre: data.nombre, ancho: parseFloat(data.ancho), precio: parseFloat(data.precio_metro) }]);
+        setMensaje({ tipo: 'exito', texto: 'Tela agregada. Edita nombre, ancho y precio.' });
+      }
+      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: err.message });
+    }
+    setGuardando(false);
+  };
+
+  // Eliminar tipo de tela
+  const eliminarTipoTela = (idx) => {
+    if (!window.confirm('¿Eliminar este tipo de tela?')) return;
+    const nuevo = anchosTela.filter((_, i) => i !== idx);
+    setAnchosTela(nuevo);
+    setMensaje({ tipo: 'exito', texto: 'Tela eliminada del listado. Guarda cambios para confirmar.' });
+    setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+  };
+
   // Guardar tipos de tela (solo admin)
   const guardarTiposTela = async () => {
     if (!isAdmin) {
@@ -3866,7 +3899,7 @@ const ProductosView = ({ isAdmin }) => {
                   </button>
                 </div>
                 {anchosTela.map((tela, idx) => (
-                  <div key={tela.id} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px', gap: '8px', marginBottom: '8px' }}>
+                  <div key={tela.id} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px 32px', gap: '8px', marginBottom: '8px', alignItems: 'center' }}>
                     <input type="text" value={tela.nombre}
                       onChange={(e) => {
                         const nuevo = [...anchosTela];
@@ -3891,10 +3924,20 @@ const ProductosView = ({ isAdmin }) => {
                         }}
                         style={{ ...inputStyle, padding: '8px', flex: 1 }} />
                     </div>
+                    <button onClick={() => eliminarTipoTela(idx)} title="Eliminar tela"
+                      style={{ padding: '4px 8px', background: colors.terracotta, color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}>
+                      X
+                    </button>
                   </div>
                 ))}
-                <div style={{ fontSize: '11px', color: colors.camel, marginTop: '5px' }}>
-                  Nombre | Ancho (m) | Precio/m
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
+                  <div style={{ fontSize: '11px', color: colors.camel }}>
+                    Nombre | Ancho (m) | Precio/m
+                  </div>
+                  <button onClick={agregarTipoTela} disabled={guardando}
+                    style={{ padding: '6px 14px', background: colors.olive, color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}>
+                    + Nueva Tela
+                  </button>
                 </div>
               </div>
             )}
