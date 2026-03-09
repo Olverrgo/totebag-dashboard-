@@ -7741,7 +7741,7 @@ const VentasView = ({ isAdmin }) => {
   };
 
   // Registrar pago
-  const hacerPagoCliente = async (clienteId, monto, ventasCliente) => {
+  const hacerPagoCliente = async (clienteId, monto, ventasCliente, metodoPago = 'efectivo') => {
     if (!monto || monto <= 0) {
       setMensaje({ tipo: 'error', texto: 'Ingresa un monto válido' });
       return;
@@ -7760,7 +7760,7 @@ const VentasView = ({ isAdmin }) => {
 
         // Servicios de maquila se pagan con registrarPagoServicio (tabla servicios_maquila)
         if (venta._es_servicio) {
-          const { error } = await registrarPagoServicio(venta.id, montoAplicar);
+          const { error } = await registrarPagoServicio(venta.id, montoAplicar, metodoPago);
           if (error) {
             setMensaje({ tipo: 'error', texto: 'Error en pago servicio: ' + error.message });
             cargarDatos();
@@ -7770,7 +7770,7 @@ const VentasView = ({ isAdmin }) => {
           continue;
         }
 
-        const { error } = await registrarPagoVenta(venta.id, montoAplicar);
+        const { error } = await registrarPagoVenta(venta.id, montoAplicar, {}, metodoPago);
         if (error) {
           setMensaje({ tipo: 'error', texto: 'Error en pago: ' + error.message });
           cargarDatos();
@@ -8159,10 +8159,20 @@ const VentasView = ({ isAdmin }) => {
                                     defaultValue={cliente.montoPorCobrar.toFixed(2)}
                                     style={{ ...inputStyle, width: '130px', fontSize: '13px' }}
                                   />
+                                  <select
+                                    id={`metodo-pago-${cId}`}
+                                    defaultValue="efectivo"
+                                    style={{ ...inputStyle, width: '130px', fontSize: '13px' }}
+                                  >
+                                    <option value="efectivo">Efectivo</option>
+                                    <option value="transferencia">Transferencia</option>
+                                    <option value="tarjeta">Tarjeta</option>
+                                  </select>
                                   <button
                                     onClick={() => {
                                       const input = document.getElementById(`pago-cliente-${cId}`);
-                                      hacerPagoCliente(cId, input.value, cliente.ventas);
+                                      const metodo = document.getElementById(`metodo-pago-${cId}`);
+                                      hacerPagoCliente(cId, input.value, cliente.ventas, metodo.value);
                                     }}
                                     disabled={guardando}
                                     style={{
@@ -9830,6 +9840,7 @@ const ServiciosView = ({ isAdmin }) => {
   const [filtroCliente, setFiltroCliente] = useState('todos');
   const [mostrarPago, setMostrarPago] = useState(null);
   const [montoPago, setMontoPago] = useState('');
+  const [metodoPagoServicio, setMetodoPagoServicio] = useState('efectivo');
   const [editando, setEditando] = useState(null);
 
   const [form, setForm] = useState({
@@ -9995,13 +10006,14 @@ const ServiciosView = ({ isAdmin }) => {
     }
     setGuardando(true);
     try {
-      const { error } = await registrarPagoServicio(servicioId, monto);
+      const { error } = await registrarPagoServicio(servicioId, monto, metodoPagoServicio);
       if (error) {
         setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
       } else {
         setMensaje({ tipo: 'exito', texto: 'Pago registrado' });
         setMostrarPago(null);
         setMontoPago('');
+        setMetodoPagoServicio('efectivo');
         cargarDatos();
         setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
       }
@@ -10437,6 +10449,15 @@ const ServiciosView = ({ isAdmin }) => {
                       placeholder={`Máx ${formatearMoneda(pendiente)}`}
                       style={{ ...inputStyle, width: '160px' }}
                     />
+                    <select
+                      value={metodoPagoServicio}
+                      onChange={e => setMetodoPagoServicio(e.target.value)}
+                      style={{ ...inputStyle, width: '140px' }}
+                    >
+                      <option value="efectivo">Efectivo</option>
+                      <option value="transferencia">Transferencia</option>
+                      <option value="tarjeta">Tarjeta</option>
+                    </select>
                     <button
                       onClick={() => handlePago(s.id)}
                       disabled={guardando}

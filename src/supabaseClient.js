@@ -1068,7 +1068,7 @@ export const getResumenVentas = async (fechaInicio = null, fechaFin = null) => {
 
 // Registrar pago de venta (centralizado: maneja stock_consignacion y movimientos para consignaciones)
 // options.skipMovimientoStock: true para evitar duplicar movimiento cuando ya fue creado externamente
-export const registrarPagoVenta = async (ventaId, montoPago, options = {}) => {
+export const registrarPagoVenta = async (ventaId, montoPago, options = {}, metodoPago = 'efectivo') => {
   if (!supabase) return { data: null, error: 'Supabase no configurado' };
 
   // Obtener venta actual con campos necesarios para consignaciones
@@ -1179,7 +1179,7 @@ export const registrarPagoVenta = async (ventaId, montoPago, options = {}) => {
         monto: montoReal,
         venta_id: ventaId,
         categoria: categoriaCaja,
-        metodo_pago: 'efectivo',
+        metodo_pago: metodoPago,
         descripcion: descripcionCaja
       }])
       .select()
@@ -1719,7 +1719,7 @@ export const deleteServicioMaquila = async (id) => {
 };
 
 // Registrar pago de servicio de maquila
-export const registrarPagoServicio = async (servicioId, montoPago) => {
+export const registrarPagoServicio = async (servicioId, montoPago, metodoPago = 'efectivo') => {
   if (!supabase) return { data: null, error: 'Supabase no configurado' };
 
   const { data: servicio, error: errorGet } = await supabase
@@ -1768,7 +1768,7 @@ export const registrarPagoServicio = async (servicioId, montoPago) => {
         tipo: 'ingreso',
         monto: montoReal,
         categoria: 'venta',
-        metodo_pago: 'efectivo',
+        metodo_pago: metodoPago,
         descripcion: `Cobro servicio maquila - Servicio #${servicioId}`,
         servicio_id: servicioId
       }]);
