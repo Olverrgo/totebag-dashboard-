@@ -4,12 +4,17 @@
   box-sizing: border-box;
 }
 
+:root {
+  color-scheme: light only;
+}
+
 select,
 select option {
   color: #333 !important;
   background-color: #fff !important;
   -webkit-appearance: menulist;
   appearance: menulist;
+  color-scheme: light;
 }
 
 body {
