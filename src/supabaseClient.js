@@ -2192,7 +2192,7 @@ export const getOrdenesProduccion = async (filtros = {}) => {
     .from('ordenes_produccion')
     .select(`
       *,
-      producto:productos(id, nombre, categoria_id),
+      producto:productos(id, linea_nombre, categoria_id),
       variante:variantes_producto(id, material, color, talla, sku, stock),
       materiales_usados(
         id, material_id, cantidad_planeada, cantidad_real, costo_unitario, costo_total,
@@ -2283,7 +2283,7 @@ export const completarOrdenProduccion = async (ordenId) => {
     .from('ordenes_produccion')
     .select(`
       *,
-      producto:productos(id, nombre, stock, tiene_variantes),
+      producto:productos(id, linea_nombre, stock, tiene_variantes),
       variante:variantes_producto(id, material, color, talla, sku, stock, stock_consignacion),
       materiales_usados(
         id, material_id, cantidad_planeada, cantidad_real, costo_unitario,
@@ -2334,7 +2334,7 @@ export const completarOrdenProduccion = async (ordenId) => {
         cantidad: -cantidadFinal,
         referencia_id: ordenId,
         referencia_tipo: 'orden_produccion',
-        notas: `Orden de producción: ${orden.cantidad} pzas de ${orden.producto?.nombre || ''}`
+        notas: `Orden de producción: ${orden.cantidad} pzas de ${orden.producto?.linea_nombre || ''}`
       }]);
   }
 

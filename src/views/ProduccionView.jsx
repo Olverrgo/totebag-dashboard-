@@ -72,7 +72,6 @@ const ProduccionView = ({ isAdmin }) => {
       getProductos(),
       getOrdenesProduccion()
     ]);
-    if (prodRes.data?.[0]) console.log('[Produccion] keys:', Object.keys(prodRes.data[0]), 'nombre:', prodRes.data[0].nombre, 'total:', prodRes.data.length);
     setMateriales(matRes.data || []);
     setProductos(prodRes.data || []);
     setOrdenes(ordRes.data || []);
@@ -516,7 +515,7 @@ const ProduccionView = ({ isAdmin }) => {
                 <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '1px' }}>Selecciona un producto</label>
                 <select value={productoReceta} onChange={e => cargarReceta(e.target.value)} style={{ ...selectBase, maxWidth: '400px', padding: '10px 14px' }}>
                   <option value="" style={optStyle}>-- Seleccionar producto --</option>
-                  {productos.map(p => <option key={p.id} value={p.id} style={optStyle}>{p.nombre}</option>)}
+                  {productos.map(p => <option key={p.id} value={p.id} style={optStyle}>{p.linea_nombre || p.nombre}</option>)}
                 </select>
               </div>
 
@@ -631,7 +630,7 @@ const ProduccionView = ({ isAdmin }) => {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px' }}>
                       <div>
                         <div style={{ fontWeight: '700', color: colors.espresso, fontSize: '16px' }}>
-                          {o.producto?.nombre || 'Producto'}
+                          {o.producto?.linea_nombre || 'Producto'}
                           {o.variante && <span style={{ fontWeight: '400', color: colors.camel, fontSize: '14px' }}> / {[o.variante.material, o.variante.color, o.variante.talla].filter(Boolean).join(' - ') || o.variante.sku}</span>}
                         </div>
                         <div style={{ fontSize: '13px', color: colors.camel, marginTop: '4px' }}>
@@ -702,7 +701,7 @@ const ProduccionView = ({ isAdmin }) => {
                           <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Producto *</label>
                           <select value={formOrden.producto_id} onChange={e => handleSeleccionarProductoOrden(e.target.value)} style={{ ...selectBase, padding: '10px 14px' }}>
                             <option value="">-- Seleccionar producto --</option>
-                            {productos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                            {productos.map(p => <option key={p.id} value={p.id}>{p.linea_nombre || p.nombre}</option>)}
                           </select>
                         </div>
                         {variantesProducto.length > 0 && (
@@ -788,7 +787,7 @@ const ProduccionView = ({ isAdmin }) => {
                         <div style={{ background: colors.cream, borderRadius: '10px', padding: '16px', marginBottom: '16px' }}>
                           <div style={{ fontWeight: '700', fontSize: '16px', color: colors.espresso, marginBottom: '8px' }}>Resumen de la orden</div>
                           <div style={{ fontSize: '14px', color: colors.espresso }}>
-                            <strong>Producto:</strong> {productos.find(p => p.id === formOrden.producto_id)?.nombre || '-'}
+                            <strong>Producto:</strong> {(() => { const pr = productos.find(p => p.id === formOrden.producto_id); return pr?.linea_nombre || pr?.nombre || '-'; })()}
                             {formOrden.variante_id && (() => { const vr = variantesProducto.find(v => v.id === parseInt(formOrden.variante_id)); return <span> / {vr ? [vr.material, vr.color, vr.talla].filter(Boolean).join(' - ') : '-'}</span>; })()}
                           </div>
                           <div style={{ fontSize: '14px', color: colors.espresso, marginTop: '4px' }}>
