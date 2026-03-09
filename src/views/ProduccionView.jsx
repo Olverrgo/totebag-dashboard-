@@ -72,6 +72,7 @@ const ProduccionView = ({ isAdmin }) => {
       getProductos(),
       getOrdenesProduccion()
     ]);
+    if (prodRes.data?.[0]) console.log('[Produccion] keys:', Object.keys(prodRes.data[0]), 'nombre:', prodRes.data[0].nombre, 'total:', prodRes.data.length);
     setMateriales(matRes.data || []);
     setProductos(prodRes.data || []);
     setOrdenes(ordRes.data || []);
