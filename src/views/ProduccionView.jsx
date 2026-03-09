@@ -57,6 +57,7 @@ const ProduccionView = ({ isAdmin }) => {
   const unidades = ['metros', 'piezas', 'kilos', 'rollos', 'litros', 'conos'];
   const inputBase = { width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit', boxSizing: 'border-box', color: colors.espresso, background: '#fff' };
   const selectBase = { width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit', color: colors.espresso, background: '#fff' };
+  const optStyle = { color: '#333', background: '#fff' };
   const tabs = [
     { id: 'materiales', nombre: 'Materiales', icon: '🧶' },
     { id: 'recetas', nombre: 'Recetas', icon: '📋' },
@@ -422,13 +423,13 @@ const ProduccionView = ({ isAdmin }) => {
                         <div>
                           <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Categoría</label>
                           <select value={formMaterial.categoria} onChange={e => setFormMaterial(p => ({ ...p, categoria: e.target.value }))} style={selectBase}>
-                            {['tela', 'cierre', 'hilo', 'etiqueta', 'empaque', 'otro'].map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+                            {['tela', 'cierre', 'hilo', 'etiqueta', 'empaque', 'otro'].map(c => <option key={c} value={c} style={optStyle}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
                           </select>
                         </div>
                         <div>
                           <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Unidad</label>
                           <select value={formMaterial.unidad} onChange={e => setFormMaterial(p => ({ ...p, unidad: e.target.value }))} style={selectBase}>
-                            {unidades.map(u => <option key={u} value={u}>{u}</option>)}
+                            {unidades.map(u => <option key={u} value={u} style={optStyle}>{u}</option>)}
                           </select>
                         </div>
                       </div>
@@ -488,9 +489,9 @@ const ProduccionView = ({ isAdmin }) => {
                       <div>
                         <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Método de pago</label>
                         <select value={formCompra.metodoPago} onChange={e => setFormCompra(p => ({ ...p, metodoPago: e.target.value }))} style={selectBase}>
-                          <option value="efectivo">Efectivo</option>
-                          <option value="transferencia">Transferencia</option>
-                          <option value="tarjeta">Tarjeta</option>
+                          <option value="efectivo" style={optStyle}>Efectivo</option>
+                          <option value="transferencia" style={optStyle}>Transferencia</option>
+                          <option value="tarjeta" style={optStyle}>Tarjeta</option>
                         </select>
                       </div>
                     </div>
@@ -513,8 +514,8 @@ const ProduccionView = ({ isAdmin }) => {
               <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '1px' }}>Selecciona un producto</label>
                 <select value={productoReceta} onChange={e => cargarReceta(e.target.value)} style={{ ...selectBase, maxWidth: '400px', padding: '10px 14px' }}>
-                  <option value="">-- Seleccionar producto --</option>
-                  {productos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                  <option value="" style={optStyle}>-- Seleccionar producto --</option>
+                  {productos.map(p => <option key={p.id} value={p.id} style={optStyle}>{p.nombre}</option>)}
                 </select>
               </div>
 
@@ -582,8 +583,8 @@ const ProduccionView = ({ isAdmin }) => {
                           <div>
                             <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Material *</label>
                             <select value={formReceta.material_id} onChange={e => setFormReceta(p => ({ ...p, material_id: e.target.value }))} style={selectBase}>
-                              <option value="">-- Seleccionar --</option>
-                              {materiales.map(m => <option key={m.id} value={m.id}>{m.nombre} ({m.unidad})</option>)}
+                              <option value="" style={optStyle}>-- Seleccionar --</option>
+                              {materiales.map(m => <option key={m.id} value={m.id} style={optStyle}>{m.nombre} ({m.unidad})</option>)}
                             </select>
                           </div>
                           <div>
@@ -707,8 +708,8 @@ const ProduccionView = ({ isAdmin }) => {
                           <div>
                             <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Variante</label>
                             <select value={formOrden.variante_id} onChange={e => setFormOrden(p => ({ ...p, variante_id: e.target.value }))} style={{ ...selectBase, padding: '10px 14px' }}>
-                              <option value="">-- Sin variante --</option>
-                              {variantesProducto.map(v => <option key={v.id} value={v.id}>{[v.material, v.color, v.talla].filter(Boolean).join(' - ')} ({v.sku || ''})</option>)}
+                              <option value="" style={optStyle}>-- Sin variante --</option>
+                              {variantesProducto.map(v => <option key={v.id} value={v.id} style={optStyle}>{[v.material, v.color, v.talla].filter(Boolean).join(' - ')} ({v.sku || ''})</option>)}
                             </select>
                           </div>
                         )}
