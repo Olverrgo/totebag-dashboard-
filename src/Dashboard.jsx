@@ -775,8 +775,10 @@ const DashboardView = ({ productosActualizados }) => {
     ventasCobradas += cobradoServicios;
 
     // Por cobrar GLOBAL (todas las ventas, sin filtro de período)
+    // Excluir ventas canceladas y pagadas para no inflar la deuda
     let ventasPendientes = 0;
     todasVentas.forEach(v => {
+      if (v.estado_pago === 'cancelado' || v.estado_pago === 'pagado') return;
       const total = parseFloat(v.total) || 0;
       const pagado = parseFloat(v.monto_pagado) || 0;
       ventasPendientes += Math.max(0, total - pagado);
