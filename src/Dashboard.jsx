@@ -3,6 +3,8 @@ import "./Dashboard.css";
 import { useAuth } from './AuthContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart } from 'recharts';
 import VentasPorLineaChart from './components/VentasPorLineaChart';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 import { colors } from './utils/colors';
 import ProduccionView from './views/ProduccionView';
 import {
@@ -1291,12 +1293,82 @@ const DashboardView = ({ productosActualizados }) => {
                     Total: {formatearMonedaDash(totalEgresos)} — {movs.length} movimiento{movs.length !== 1 ? 's' : ''}
                   </div>
                 </div>
-                <button
-                  onClick={() => setPopupEgresos(false)}
-                  style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: colors.camel, padding: '4px', lineHeight: 1 }}
-                >
-                  ✕
-                </button>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  {movs.length > 0 && (
+                    <button
+                      onClick={() => {
+                        const doc = new jsPDF();
+                        const periodoLabel = { hoy: 'Hoy', semana: 'Semana', mes: 'Mes', todo: 'Todo' }[periodoEcon] || periodoEcon;
+
+                        // Título
+                        doc.setFontSize(18);
+                        doc.setTextColor(60, 40, 30);
+                        doc.text('Blancos Sinai - Reporte de Egresos', 14, 20);
+                        doc.setFontSize(11);
+                        doc.setTextColor(120, 100, 80);
+                        doc.text(`Periodo: ${periodoLabel}  |  Total: ${formatearMonedaDash(totalEgresos)}  |  ${movs.length} movimiento${movs.length !== 1 ? 's' : ''}`, 14, 28);
+                        doc.text(`Generado: ${new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`, 14, 34);
+
+                        // Tabla resumen por categoría
+                        doc.setFontSize(13);
+                        doc.setTextColor(60, 40, 30);
+                        doc.text('Resumen por categoria', 14, 44);
+
+                        doc.autoTable({
+                          startY: 48,
+                          head: [['Categoria', 'Movimientos', 'Total']],
+                          body: catEntries.map(([cat, d]) => [
+                            cat.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase()),
+                            d.count.toString(),
+                            formatearMonedaDash(d.total)
+                          ]),
+                          foot: [['Total', movs.length.toString(), formatearMonedaDash(totalEgresos)]],
+                          styles: { fontSize: 10, cellPadding: 3 },
+                          headStyles: { fillColor: [196, 120, 74], textColor: 255 },
+                          footStyles: { fillColor: [240, 235, 228], textColor: [60, 40, 30], fontStyle: 'bold' },
+                          columnStyles: { 1: { halign: 'center' }, 2: { halign: 'right' } }
+                        });
+
+                        // Tabla detalle
+                        const detalleY = doc.lastAutoTable.finalY + 10;
+                        doc.setFontSize(13);
+                        doc.setTextColor(60, 40, 30);
+                        doc.text('Detalle de movimientos', 14, detalleY);
+
+                        doc.autoTable({
+                          startY: detalleY + 4,
+                          head: [['Fecha', 'Categoria', 'Descripcion', 'Metodo', 'Monto']],
+                          body: movs.map(m => [
+                            m.fecha ? new Date(m.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '-',
+                            (m.categoria || '-').replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase()),
+                            m.descripcion || '-',
+                            m.metodo_pago || '-',
+                            formatearMonedaDash(m.monto)
+                          ]),
+                          foot: [['', '', '', 'Total', formatearMonedaDash(totalEgresos)]],
+                          styles: { fontSize: 9, cellPadding: 3 },
+                          headStyles: { fillColor: [139, 160, 86], textColor: 255 },
+                          footStyles: { fillColor: [240, 235, 228], textColor: [60, 40, 30], fontStyle: 'bold' },
+                          columnStyles: { 0: { cellWidth: 28 }, 4: { halign: 'right' } }
+                        });
+
+                        doc.save(`egresos-${periodoLabel.toLowerCase()}-${new Date().toISOString().split('T')[0]}.pdf`);
+                      }}
+                      style={{
+                        padding: '6px 14px', background: colors.terracotta, color: '#fff', border: 'none',
+                        borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: '600', fontFamily: 'inherit'
+                      }}
+                    >
+                      Exportar PDF
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setPopupEgresos(false)}
+                    style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: colors.camel, padding: '4px', lineHeight: 1 }}
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
 
               {/* Contenido scrollable */}
