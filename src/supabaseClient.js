@@ -1787,7 +1787,11 @@ export const getMovimientosCaja = async (filtros = {}) => {
 
   let query = supabase
     .from('movimientos_caja')
-    .select('*')
+    .select(`
+      *,
+      venta:ventas(cliente:clientes(nombre)),
+      servicio:servicios_maquila(cliente_nombre)
+    `)
     .eq('activo', true)
     .order('fecha', { ascending: false });
 

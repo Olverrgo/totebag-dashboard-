@@ -9252,6 +9252,10 @@ const CajaView = ({ isAdmin }) => {
                 </div>
                 <div style={{ fontSize: '12px', color: colors.camel, marginTop: '2px' }}>
                   {formatearFecha(mov.fecha)}
+                  {(() => {
+                    const nombreCliente = mov.venta?.cliente?.nombre || mov.servicio?.cliente_nombre;
+                    return nombreCliente ? <span style={{ marginLeft: '6px', color: colors.sidebarBg, fontWeight: '600' }}>• {nombreCliente}</span> : null;
+                  })()}
                   {mov.referencia ? ` • Ref: ${mov.referencia}` : ''}
                 </div>
               </div>
