@@ -2283,7 +2283,7 @@ export const completarOrdenProduccion = async (ordenId) => {
     .from('ordenes_produccion')
     .select(`
       *,
-      producto:productos(id, linea_nombre, stock, tiene_variantes),
+      producto:productos(id, linea_nombre, stock),
       variante:variantes_producto(id, material, color, talla, sku, stock, stock_consignacion),
       materiales_usados(
         id, material_id, cantidad_planeada, cantidad_real, costo_unitario,
