@@ -72,6 +72,8 @@ import {
   ajustarPagoVenta,
   ajustarPagoServicio,
   editarPagoCaja,
+  obtenerImpactoEliminacion,
+  eliminarVentaCompleta,
   getResurtidos,
   createResurtido,
   getMateriales,
@@ -7483,6 +7485,9 @@ const VentasView = ({ isAdmin }) => {
   const [clienteDesglose, setClienteDesglose] = useState(null); // ID cliente para ver desglose de deuda
   const [editandoPago, setEditandoPago] = useState(null); // ID de venta/servicio para editar pago
   const [montoEditPago, setMontoEditPago] = useState('');
+  const [popupEliminar, setPopupEliminar] = useState(null); // { impacto, ventaId }
+  const [motivoEliminacion, setMotivoEliminacion] = useState('');
+  const [cargandoImpacto, setCargandoImpacto] = useState(false);
 
   // Formulario de nueva venta
   const [formVenta, setFormVenta] = useState({
@@ -7866,18 +7871,41 @@ const VentasView = ({ isAdmin }) => {
     }
   };
 
-  // Eliminar venta
-  const eliminarVentaHandler = async (ventaId) => {
-    if (!window.confirm('¿Eliminar esta venta?')) return;
-
-    const { error } = await deleteVenta(ventaId);
+  // Paso 1: Obtener impacto y mostrar popup de confirmación
+  const iniciarEliminacionVenta = async (ventaId) => {
+    setCargandoImpacto(true);
+    const { data: impacto, error } = await obtenerImpactoEliminacion(ventaId);
+    setCargandoImpacto(false);
     if (error) {
-      setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
-    } else {
-      setMensaje({ tipo: 'exito', texto: 'Venta eliminada' });
-      cargarDatos();
-      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
+      setMensaje({ tipo: 'error', texto: 'Error al analizar impacto: ' + (error.message || error) });
+      return;
     }
+    setMotivoEliminacion('');
+    setPopupEliminar({ impacto, ventaId });
+  };
+
+  // Paso 2: Confirmar y ejecutar eliminación completa
+  const confirmarEliminacionVenta = async () => {
+    if (!popupEliminar) return;
+    if (!motivoEliminacion.trim()) {
+      setMensaje({ tipo: 'error', texto: 'Ingresa el motivo de la eliminación para auditoría' });
+      return;
+    }
+    setGuardando(true);
+    const { error, resumen } = await eliminarVentaCompleta(popupEliminar.ventaId, motivoEliminacion.trim());
+    setGuardando(false);
+    if (error) {
+      setMensaje({ tipo: 'error', texto: 'Error: ' + (error.message || error) });
+    } else {
+      setMensaje({
+        tipo: 'exito',
+        texto: `Venta eliminada. Caja: ${resumen.cajaMomentosDesactivados} mov. revertidos ($${resumen.totalRevertidoCaja.toFixed(2)}). Stock: +${resumen.stockRestaurado} pzas restauradas.`
+      });
+      cargarDatos();
+      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 5000);
+    }
+    setPopupEliminar(null);
+    setMotivoEliminacion('');
   };
 
   const handleAjustarPago = async (venta) => {
@@ -8618,7 +8646,8 @@ const VentasView = ({ isAdmin }) => {
                         Editar
                       </button>
                       <button
-                        onClick={() => eliminarVentaHandler(registro.id)}
+                        onClick={() => iniciarEliminacionVenta(registro.id)}
+                        disabled={cargandoImpacto}
                         style={{
                           padding: '6px 12px',
                           background: colors.terracotta,
@@ -8626,10 +8655,11 @@ const VentasView = ({ isAdmin }) => {
                           border: 'none',
                           borderRadius: '4px',
                           cursor: 'pointer',
-                          fontSize: '12px'
+                          fontSize: '12px',
+                          opacity: cargandoImpacto ? 0.5 : 1
                         }}
                       >
-                        Eliminar
+                        {cargandoImpacto ? 'Analizando...' : 'Eliminar'}
                       </button>
                     </div>
                   )}
@@ -8649,6 +8679,114 @@ const VentasView = ({ isAdmin }) => {
         </div>
       );
       })()}
+
+      {/* Popup de confirmación de eliminación */}
+      {popupEliminar && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.6)', zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '20px'
+        }} onClick={() => setPopupEliminar(null)}>
+          <div style={{
+            background: 'white', borderRadius: '16px', padding: '28px',
+            maxWidth: '520px', width: '100%', maxHeight: '90vh', overflowY: 'auto',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+          }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ color: colors.terracotta, marginTop: 0, marginBottom: '16px', fontSize: '18px' }}>
+              Confirmar eliminación de venta
+            </h3>
+
+            {/* Datos de la venta */}
+            <div style={{ background: colors.cotton, borderRadius: '10px', padding: '14px', marginBottom: '16px', border: `1px solid ${colors.sand}` }}>
+              <div style={{ fontWeight: '700', color: colors.espresso, marginBottom: '6px' }}>
+                {popupEliminar.impacto.resumen.producto}
+                {popupEliminar.impacto.resumen.variante && <span style={{ fontWeight: '400', color: colors.camel }}> — {popupEliminar.impacto.resumen.variante}</span>}
+              </div>
+              <div style={{ fontSize: '13px', color: colors.camel, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+                <span>Cliente: <b style={{ color: colors.espresso }}>{popupEliminar.impacto.resumen.cliente}</b></span>
+                <span>Tipo: <b style={{ color: colors.espresso }}>{popupEliminar.impacto.resumen.tipoVenta}</b></span>
+                <span>Cantidad: <b style={{ color: colors.espresso }}>{popupEliminar.impacto.resumen.cantidad} pzas</b></span>
+                <span>Total: <b style={{ color: colors.espresso }}>${popupEliminar.impacto.resumen.total.toFixed(2)}</b></span>
+                <span>Pagado: <b style={{ color: colors.olive }}>${popupEliminar.impacto.resumen.montoPagado.toFixed(2)}</b></span>
+                <span>Pendiente: <b style={{ color: popupEliminar.impacto.resumen.pendiente > 0 ? colors.terracotta : colors.olive }}>${popupEliminar.impacto.resumen.pendiente.toFixed(2)}</b></span>
+              </div>
+            </div>
+
+            {/* Áreas afectadas */}
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ fontWeight: '700', color: colors.espresso, marginBottom: '8px', fontSize: '14px' }}>
+                Áreas que serán afectadas:
+              </div>
+              <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: colors.espresso, lineHeight: '1.8' }}>
+                {popupEliminar.impacto.impactoDashboard.areas.map((area, i) => (
+                  <li key={i} style={{ borderBottom: `1px solid ${colors.cream}`, paddingBottom: '2px' }}>{area}</li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Movimientos de caja que se revertirán */}
+            {popupEliminar.impacto.impactoCaja.movimientos.length > 0 && (
+              <div style={{ background: 'rgba(196,120,74,0.08)', borderRadius: '8px', padding: '12px', marginBottom: '16px', border: '1px solid rgba(196,120,74,0.2)' }}>
+                <div style={{ fontWeight: '600', color: colors.terracotta, fontSize: '13px', marginBottom: '6px' }}>
+                  Movimientos de caja a desactivar:
+                </div>
+                {popupEliminar.impacto.impactoCaja.movimientos.map((m, i) => (
+                  <div key={i} style={{ fontSize: '12px', color: colors.espresso, padding: '3px 0' }}>
+                    ${parseFloat(m.monto).toFixed(2)} — {m.categoria} ({m.metodo_pago}) — {new Date(m.fecha).toLocaleDateString('es-MX')}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Nota de auditoría */}
+            <div style={{ background: 'rgba(0,95,132,0.06)', borderRadius: '8px', padding: '10px', marginBottom: '16px', fontSize: '12px', color: colors.sidebarBg, border: '1px solid rgba(0,95,132,0.15)' }}>
+              Esta eliminación quedará registrada en el historial de movimientos de stock para auditoría futura.
+            </div>
+
+            {/* Motivo obligatorio */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontWeight: '600', color: colors.espresso, marginBottom: '6px', fontSize: '13px' }}>
+                Motivo de eliminación (obligatorio):
+              </label>
+              <textarea
+                value={motivoEliminacion}
+                onChange={e => setMotivoEliminacion(e.target.value)}
+                placeholder="Ej: Venta duplicada, error de captura, ajuste de inventario..."
+                style={{
+                  width: '100%', padding: '10px', border: `1px solid ${colors.sand}`,
+                  borderRadius: '8px', fontSize: '13px', minHeight: '60px',
+                  resize: 'vertical', boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            {/* Botones */}
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => { setPopupEliminar(null); setMotivoEliminacion(''); }}
+                style={{
+                  padding: '10px 20px', background: colors.sand, color: colors.espresso,
+                  border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600'
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarEliminacionVenta}
+                disabled={guardando || !motivoEliminacion.trim()}
+                style={{
+                  padding: '10px 20px', background: colors.terracotta, color: 'white',
+                  border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700',
+                  opacity: (guardando || !motivoEliminacion.trim()) ? 0.5 : 1
+                }}
+              >
+                {guardando ? 'Eliminando...' : 'Confirmar eliminación'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

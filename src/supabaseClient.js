@@ -995,7 +995,7 @@ export const updateVenta = async (id, updates) => {
   return { data, error: handleRLSError(error) };
 };
 
-// Eliminar venta (soft delete)
+// Eliminar venta (soft delete) — LEGACY: usar eliminarVentaCompleta para cascada
 export const deleteVenta = async (id) => {
   if (!supabase) return { error: 'Supabase no configurado' };
 
@@ -1005,6 +1005,228 @@ export const deleteVenta = async (id) => {
     .eq('id', id);
 
   return { error: handleRLSError(error) };
+};
+
+// Obtener resumen de impacto antes de eliminar una venta
+export const obtenerImpactoEliminacion = async (ventaId) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  // 1. Obtener la venta con producto y cliente
+  const { data: venta, error: errorVenta } = await supabase
+    .from('ventas')
+    .select(`
+      *,
+      producto:productos(id, linea_nombre, linea_medidas),
+      variante:variantes_producto(id, material, color, talla, sku),
+      cliente:clientes(id, nombre)
+    `)
+    .eq('id', ventaId)
+    .single();
+
+  if (errorVenta) return { data: null, error: handleRLSError(errorVenta) };
+  if (!venta) return { data: null, error: 'Venta no encontrada' };
+
+  // 2. Obtener movimientos de caja vinculados (activos)
+  const { data: movsCaja } = await supabase
+    .from('movimientos_caja')
+    .select('id, tipo, monto, categoria, metodo_pago, fecha')
+    .eq('venta_id', ventaId)
+    .eq('activo', true);
+
+  // 3. Obtener movimientos de stock vinculados
+  const { data: movsStock } = await supabase
+    .from('movimientos_stock')
+    .select('id, tipo_movimiento, cantidad, notas')
+    .or(`movimiento_id.eq.${ventaId},notas.ilike.%Venta #${ventaId}%`);
+
+  const totalCobrado = (movsCaja || []).reduce((sum, m) => sum + (parseFloat(m.monto) || 0), 0);
+  const esConsignacion = venta.tipo_venta === 'consignacion';
+  const cantidad = parseInt(venta.cantidad) || 0;
+  const total = parseFloat(venta.total) || 0;
+  const montoPagado = parseFloat(venta.monto_pagado) || 0;
+  const pendiente = Math.max(0, total - montoPagado);
+
+  const impacto = {
+    venta,
+    resumen: {
+      producto: venta.producto?.linea_nombre || 'Producto desconocido',
+      variante: venta.variante ? `${venta.variante.material || ''} ${venta.variante.color || ''} ${venta.variante.talla || ''}`.trim() : null,
+      cliente: venta.cliente?.nombre || 'Sin cliente',
+      tipoVenta: venta.tipo_venta,
+      cantidad,
+      total,
+      montoPagado,
+      pendiente,
+      estadoPago: venta.estado_pago,
+    },
+    impactoCaja: {
+      movimientos: movsCaja || [],
+      totalCobrado,
+      descripcion: totalCobrado > 0
+        ? `Se desactivarán ${(movsCaja || []).length} movimiento(s) de caja por $${totalCobrado.toFixed(2)}`
+        : 'Sin movimientos de caja vinculados',
+    },
+    impactoStock: {
+      descripcion: esConsignacion
+        ? `Se restaurarán ${cantidad} pza(s) al stock de taller (desde consignación)`
+        : `Se restaurarán ${cantidad} pza(s) al stock de taller`,
+      cantidad,
+      esConsignacion,
+    },
+    impactoDashboard: {
+      areas: [],
+    },
+    movsStock: movsStock || [],
+  };
+
+  // Construir lista de áreas afectadas
+  const areas = impacto.impactoDashboard.areas;
+  areas.push(`Balance de Caja: ${totalCobrado > 0 ? `-$${totalCobrado.toFixed(2)} en ingresos` : 'sin cambio'}`);
+  if (pendiente > 0) areas.push(`Por Cobrar: -$${pendiente.toFixed(2)} (se elimina deuda pendiente)`);
+  if (esConsignacion) areas.push(`Inventario Consignación: -${cantidad} pza(s) (regresan a taller)`);
+  areas.push(`Stock Taller: +${cantidad} pza(s) (se devuelven al inventario)`);
+  areas.push(`Ventas Totales: -$${total.toFixed(2)} del período`);
+  areas.push(`Utilidad: se ajustará al eliminar la ganancia/pérdida de esta venta`);
+
+  return { data: impacto, error: null };
+};
+
+// Eliminar venta con cascada completa (auditoría + reversión de stock + caja)
+export const eliminarVentaCompleta = async (ventaId, motivoEliminacion = '') => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+
+  // 1. Obtener la venta
+  const { data: venta, error: errorVenta } = await supabase
+    .from('ventas')
+    .select('*')
+    .eq('id', ventaId)
+    .single();
+
+  if (errorVenta) return { error: handleRLSError(errorVenta) };
+  if (!venta) return { error: 'Venta no encontrada' };
+
+  const cantidad = parseInt(venta.cantidad) || 0;
+  const esConsignacion = venta.tipo_venta === 'consignacion';
+
+  // 2. Desactivar movimientos de caja vinculados
+  const { data: movsCaja } = await supabase
+    .from('movimientos_caja')
+    .select('id, monto')
+    .eq('venta_id', ventaId)
+    .eq('activo', true);
+
+  if (movsCaja && movsCaja.length > 0) {
+    const ids = movsCaja.map(m => m.id);
+    await supabase
+      .from('movimientos_caja')
+      .update({ activo: false })
+      .in('id', ids);
+  }
+
+  // 3. Restaurar stock según tipo de venta
+  if (esConsignacion && cantidad > 0) {
+    // Consignación: restaurar stock_consignacion → stock (las piezas estaban en consignación)
+    // Primero ver cuántas piezas ya se pagaron (ya salieron de consignación)
+    const montoPagado = parseFloat(venta.monto_pagado) || 0;
+    const precioUnitario = parseFloat(venta.precio_unitario) || 0;
+    const piezasPagadas = precioUnitario > 0 ? Math.floor(montoPagado / precioUnitario) : 0;
+    const piezasEnConsignacion = Math.max(0, cantidad - piezasPagadas);
+
+    if (venta.variante_id) {
+      const { data: varData } = await supabase
+        .from('variantes_producto')
+        .select('stock, stock_consignacion')
+        .eq('id', venta.variante_id)
+        .single();
+      if (varData) {
+        await supabase
+          .from('variantes_producto')
+          .update({
+            stock: (varData.stock || 0) + piezasEnConsignacion,
+            stock_consignacion: Math.max(0, (varData.stock_consignacion || 0) - piezasEnConsignacion)
+          })
+          .eq('id', venta.variante_id);
+      }
+    } else if (venta.producto_id) {
+      const { data: prodData } = await supabase
+        .from('productos')
+        .select('stock, stock_consignacion')
+        .eq('id', venta.producto_id)
+        .single();
+      if (prodData) {
+        await supabase
+          .from('productos')
+          .update({
+            stock: (prodData.stock || 0) + piezasEnConsignacion,
+            stock_consignacion: Math.max(0, (prodData.stock_consignacion || 0) - piezasEnConsignacion)
+          })
+          .eq('id', venta.producto_id);
+      }
+    }
+  } else if (!esConsignacion && cantidad > 0) {
+    // Venta directa: restaurar stock al taller
+    if (venta.variante_id) {
+      const { data: varData } = await supabase
+        .from('variantes_producto')
+        .select('stock')
+        .eq('id', venta.variante_id)
+        .single();
+      if (varData) {
+        await supabase
+          .from('variantes_producto')
+          .update({ stock: (varData.stock || 0) + cantidad })
+          .eq('id', venta.variante_id);
+      }
+    } else if (venta.producto_id) {
+      const { data: prodData } = await supabase
+        .from('productos')
+        .select('stock')
+        .eq('id', venta.producto_id)
+        .single();
+      if (prodData) {
+        await supabase
+          .from('productos')
+          .update({ stock: (prodData.stock || 0) + cantidad })
+          .eq('id', venta.producto_id);
+      }
+    }
+  }
+
+  // 4. Crear movimiento_stock de auditoría
+  await supabase
+    .from('movimientos_stock')
+    .insert([{
+      producto_id: venta.producto_id,
+      tipo_movimiento: 'eliminacion_venta',
+      cantidad: cantidad,
+      notas: `Eliminación de venta #${ventaId}${esConsignacion ? ' (consignación)' : ' (directa)'} - ${motivoEliminacion || 'Sin motivo especificado'}`,
+      ...(venta.variante_id ? { variante_id: venta.variante_id } : {}),
+      ...(venta.cliente_id ? { cliente_id: venta.cliente_id } : {})
+    }]);
+
+  // 5. Soft-delete de la venta con motivo
+  const { error: errorDelete } = await supabase
+    .from('ventas')
+    .update({
+      activo: false,
+      notas: `[ELIMINADA ${new Date().toLocaleDateString('es-MX')}] ${motivoEliminacion || ''} | Datos: $${venta.total} total, $${venta.monto_pagado || 0} pagado, ${cantidad} pzas | ${venta.notas || ''}`
+    })
+    .eq('id', ventaId);
+
+  if (errorDelete) return { error: handleRLSError(errorDelete) };
+
+  const totalRevertidoCaja = (movsCaja || []).reduce((s, m) => s + (parseFloat(m.monto) || 0), 0);
+
+  return {
+    error: null,
+    resumen: {
+      ventaId,
+      cajaMomentosDesactivados: (movsCaja || []).length,
+      totalRevertidoCaja,
+      stockRestaurado: cantidad,
+      tipo: esConsignacion ? 'consignacion' : 'directa',
+    }
+  };
 };
 
 // Obtener resumen de ventas por período
