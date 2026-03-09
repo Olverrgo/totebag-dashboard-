@@ -71,6 +71,7 @@ import {
   updateMovimientoCaja,
   ajustarPagoVenta,
   ajustarPagoServicio,
+  editarPagoCaja,
   getResurtidos,
   createResurtido,
   getMateriales,
@@ -8934,24 +8935,11 @@ const CajaView = ({ isAdmin }) => {
     }
     setGuardando(true);
     try {
-      let error = null;
-      if (mov.venta_id) {
-        const res = await ajustarPagoVenta(mov.venta_id, nuevoMonto);
-        error = res.error;
-      } else if (mov.servicio_id) {
-        const res = await ajustarPagoServicio(mov.servicio_id, nuevoMonto);
-        error = res.error;
-      }
+      const { error } = await editarPagoCaja(mov.id, nuevoMonto);
       if (error) {
         setMensaje({ tipo: 'error', texto: 'Error: ' + (error.message || error) });
       } else {
-        // Sincronizar el monto en movimientos_caja para que el balance refleje el cambio real
-        const { error: errorCaja } = await updateMovimientoCaja(mov.id, { monto: nuevoMonto });
-        if (errorCaja) {
-          setMensaje({ tipo: 'error', texto: 'Pago ajustado pero error al actualizar caja: ' + (errorCaja.message || errorCaja) });
-        } else {
-          setMensaje({ tipo: 'exito', texto: 'Pago ajustado correctamente' });
-        }
+        setMensaje({ tipo: 'exito', texto: 'Pago ajustado correctamente' });
         setEditandoPagoCaja(null);
         setMontoEditPagoCaja('');
         cargarDatos();

@@ -1870,11 +1870,11 @@ export const revertirPago = async (movimientoId) => {
 
   const monto = parseFloat(mov.monto) || 0;
 
-  // 2. Si tiene venta_id, restar monto de ventas.monto_pagado
+  // 2. Si tiene venta_id, restar monto de ventas.monto_pagado y restaurar stock_consignacion
   if (mov.venta_id) {
     const { data: venta, error: errorVenta } = await supabase
       .from('ventas')
-      .select('total, monto_pagado')
+      .select('total, monto_pagado, tipo_venta, precio_unitario, producto_id, variante_id')
       .eq('id', mov.venta_id)
       .single();
 
@@ -1892,6 +1892,54 @@ export const revertirPago = async (movimientoId) => {
       .eq('id', mov.venta_id);
 
     if (errorUpdate) return { error: handleRLSError(errorUpdate) };
+
+    // Restaurar stock_consignacion si era pago de consignación
+    const esConsignacion = venta.tipo_venta === 'consignacion';
+    const precioUnitario = parseFloat(venta.precio_unitario) || 0;
+
+    if (esConsignacion && precioUnitario > 0 && monto > 0) {
+      const piezasARestaurar = Math.floor(monto / precioUnitario);
+
+      if (piezasARestaurar > 0) {
+        // Restaurar stock_consignacion en variante o producto
+        if (venta.variante_id) {
+          const { data: varData } = await supabase
+            .from('variantes_producto')
+            .select('stock_consignacion')
+            .eq('id', venta.variante_id)
+            .single();
+          if (varData) {
+            await supabase
+              .from('variantes_producto')
+              .update({ stock_consignacion: (varData.stock_consignacion || 0) + piezasARestaurar })
+              .eq('id', venta.variante_id);
+          }
+        } else if (venta.producto_id) {
+          const { data: prodData } = await supabase
+            .from('productos')
+            .select('stock_consignacion')
+            .eq('id', venta.producto_id)
+            .single();
+          if (prodData) {
+            await supabase
+              .from('productos')
+              .update({ stock_consignacion: (prodData.stock_consignacion || 0) + piezasARestaurar })
+              .eq('id', venta.producto_id);
+          }
+        }
+
+        // Crear movimiento_stock de reversión
+        await supabase
+          .from('movimientos_stock')
+          .insert([{
+            producto_id: venta.producto_id,
+            tipo_movimiento: 'reversion_pago',
+            cantidad: piezasARestaurar,
+            notas: `Reversión de pago - ${piezasARestaurar} pzas devueltas a consignación`,
+            ...(venta.variante_id ? { variante_id: venta.variante_id } : {})
+          }]);
+      }
+    }
   }
 
   // 3. Si tiene servicio_id, restar monto de servicios_maquila.monto_pagado
@@ -1983,6 +2031,84 @@ export const ajustarPagoServicio = async (servicioId, nuevoMontoPagado) => {
     .single();
 
   return { data, error: handleRLSError(error) };
+};
+
+// Editar monto de un pago vinculado a venta/servicio (ajusta por diferencia)
+export const editarPagoCaja = async (movimientoId, nuevoMonto) => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+
+  // 1. Obtener el movimiento original
+  const { data: mov, error: errorGet } = await supabase
+    .from('movimientos_caja')
+    .select('*')
+    .eq('id', movimientoId)
+    .single();
+
+  if (errorGet) return { error: handleRLSError(errorGet) };
+  if (!mov) return { error: 'Movimiento no encontrado' };
+
+  const montoAnterior = parseFloat(mov.monto) || 0;
+  const diferencia = nuevoMonto - montoAnterior;
+
+  // 2. Si tiene venta_id, ajustar monto_pagado por diferencia
+  if (mov.venta_id) {
+    const { data: venta, error: errorVenta } = await supabase
+      .from('ventas')
+      .select('total, monto_pagado')
+      .eq('id', mov.venta_id)
+      .single();
+
+    if (errorVenta) return { error: handleRLSError(errorVenta) };
+
+    const pagadoActual = parseFloat(venta.monto_pagado) || 0;
+    const total = parseFloat(venta.total) || 0;
+    const nuevoPagado = Math.max(0, Math.min(total, pagadoActual + diferencia));
+
+    let nuevoEstado = 'parcial';
+    if (nuevoPagado >= total) nuevoEstado = 'pagado';
+    else if (nuevoPagado <= 0) nuevoEstado = 'pendiente';
+
+    const { error: errorUpdate } = await supabase
+      .from('ventas')
+      .update({ monto_pagado: nuevoPagado, estado_pago: nuevoEstado })
+      .eq('id', mov.venta_id);
+
+    if (errorUpdate) return { error: handleRLSError(errorUpdate) };
+  }
+
+  // 3. Si tiene servicio_id, ajustar monto_pagado por diferencia
+  if (mov.servicio_id) {
+    const { data: servicio, error: errorServicio } = await supabase
+      .from('servicios_maquila')
+      .select('total, monto_pagado')
+      .eq('id', mov.servicio_id)
+      .single();
+
+    if (errorServicio) return { error: handleRLSError(errorServicio) };
+
+    const pagadoActual = parseFloat(servicio.monto_pagado) || 0;
+    const total = parseFloat(servicio.total) || 0;
+    const nuevoPagado = Math.max(0, Math.min(total, pagadoActual + diferencia));
+
+    let nuevoEstado = 'parcial';
+    if (nuevoPagado >= total) nuevoEstado = 'pagado';
+    else if (nuevoPagado <= 0) nuevoEstado = 'pendiente';
+
+    const { error: errorUpdate } = await supabase
+      .from('servicios_maquila')
+      .update({ monto_pagado: nuevoPagado, estado_pago: nuevoEstado })
+      .eq('id', mov.servicio_id);
+
+    if (errorUpdate) return { error: handleRLSError(errorUpdate) };
+  }
+
+  // 4. Actualizar el monto en movimientos_caja
+  const { error: errorCaja } = await supabase
+    .from('movimientos_caja')
+    .update({ monto: nuevoMonto })
+    .eq('id', movimientoId);
+
+  return { error: handleRLSError(errorCaja) };
 };
 
 // Obtener balance de caja (ingresos - egresos)
