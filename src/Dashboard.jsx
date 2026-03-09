@@ -7,6 +7,7 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { colors } from './utils/colors';
 import ProduccionView from './views/ProduccionView';
+import AnalyticsView from './views/AnalyticsView';
 import {
   isSupabaseConfigured,
   cargarDatosDashboard,
@@ -542,6 +543,7 @@ const Sidebar = ({ seccionActiva, setSeccionActiva, menuAbierto, setMenuAbierto,
     { id: 'ecommerce', nombre: 'E-commerce', icon: '🛒' },
     { id: 'promociones', nombre: 'Promociones', icon: '🎉' },
     { id: 'costos', nombre: 'Costos', icon: '💰' },
+    { id: 'analytics', nombre: 'Analytics', icon: '📈' },
   ];
 
 
@@ -12022,6 +12024,7 @@ export default function DashboardToteBag() {
       case 'ecommerce': return <EcommerceView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} datosDB={datosDB} costosAmazon={costosAmazon} setCostosAmazon={setCostosAmazon} isAdmin={isAdmin} />;
       case 'promociones': return <PromocionesView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} />;
       case 'costos': return <CostosView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} datosDB={datosDB} />;
+      case 'analytics': return <AnalyticsView isAdmin={isAdmin} />;
       default: return <DashboardView productosActualizados={productosActualizados} />;
     }
   };
