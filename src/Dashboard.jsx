@@ -571,14 +571,15 @@ const Sidebar = ({ seccionActiva, setSeccionActiva, menuAbierto, setMenuAbierto,
 
       <div style={{
         width: '220px',
-        minHeight: '100vh',
+        height: '100vh',
         background: colors.sidebarBg,
         padding: '20px 0',
         position: 'fixed',
         left: menuAbierto || !isMobile ? 0 : '-220px',
         top: 0,
         zIndex: 100,
-        transition: 'left 0.3s ease'
+        transition: 'left 0.3s ease',
+        overflowY: 'auto'
       }}>
         {/* Botón cerrar en móvil */}
         <button
