@@ -2019,7 +2019,9 @@ const ProductosView = ({ isAdmin }) => {
     costoUnitario: 0,
     clienteId: null,
     precioVenta: 0,
-    notas: ''
+    notas: '',
+    origenFinanciero: 'caja', // 'caja' | 'inversion_externa' | 'ajuste'
+    metodoPago: 'efectivo'
   });
   const [guardandoResurtido, setGuardandoResurtido] = useState(false);
 
@@ -2605,7 +2607,9 @@ const ProductosView = ({ isAdmin }) => {
     clienteId: null,
     envio: 0,
     minPiezasEnvio: 20,
-    precioVenta: 0 // Precio de venta sugerido
+    precioVenta: 0, // Precio de venta sugerido
+    origenFinanciero: 'caja', // 'caja' | 'inversion_externa' | 'ajuste'
+    metodoPago: 'efectivo'
   });
 
   // Cálculos automáticos
@@ -2912,6 +2916,38 @@ const ProductosView = ({ isAdmin }) => {
                 fecha: new Date().toISOString().split('T')[0],
                 notas: 'Compra inicial'
               });
+
+              // Registrar movimiento financiero según origen
+              const totalInversion = cantidadAdquirida * costoUnitario;
+              if (totalInversion > 0 && formProducto.origenFinanciero !== 'ajuste') {
+                if (formProducto.origenFinanciero === 'caja') {
+                  await createMovimientoCaja({
+                    tipo: 'egreso',
+                    categoria: 'compra_material',
+                    monto: totalInversion,
+                    descripcion: `Compra inicial: ${data.linea_nombre} - ${cantidadAdquirida} pzas`,
+                    metodo_pago: formProducto.metodoPago || 'efectivo',
+                    activo: true
+                  });
+                } else if (formProducto.origenFinanciero === 'inversion_externa') {
+                  await createMovimientoCaja({
+                    tipo: 'ingreso',
+                    categoria: 'inversion_capital',
+                    monto: totalInversion,
+                    descripcion: `Inversión externa para: ${data.linea_nombre}`,
+                    metodo_pago: formProducto.metodoPago || 'efectivo',
+                    activo: true
+                  });
+                  await createMovimientoCaja({
+                    tipo: 'egreso',
+                    categoria: 'compra_material',
+                    monto: totalInversion,
+                    descripcion: `Compra inicial (inv. externa): ${data.linea_nombre} - ${cantidadAdquirida} pzas`,
+                    metodo_pago: formProducto.metodoPago || 'efectivo',
+                    activo: true
+                  });
+                }
+              }
             }
           }
         }
@@ -2940,7 +2976,9 @@ const ProductosView = ({ isAdmin }) => {
       costoUnitario: parseFloat(producto.campos_dinamicos?.costo_unitario) || 0,
       clienteId: producto.campos_dinamicos?.cliente_id || null,
       precioVenta: parseFloat(producto.precio_venta) || 0,
-      notas: ''
+      notas: '',
+      origenFinanciero: 'caja',
+      metodoPago: 'efectivo'
     });
     // Cargar historial
     const { data } = await getResurtidos(producto.id);
@@ -3012,12 +3050,49 @@ const ProductosView = ({ isAdmin }) => {
         setProductosGuardados(productosActualizados);
       }
 
-      // 5. Refrescar historial
+      // 5. Registrar movimiento financiero según origen
+      const totalInversion = cantidad * costoUnitario;
+      if (totalInversion > 0 && formResurtido.origenFinanciero !== 'ajuste') {
+        if (formResurtido.origenFinanciero === 'caja') {
+          // Egreso de caja: el dinero salió de la caja para comprar producto
+          await createMovimientoCaja({
+            tipo: 'egreso',
+            categoria: 'compra_material',
+            monto: totalInversion,
+            descripcion: `Compra producto: ${mostrarResurtir.linea_nombre} - ${cantidad} pzas`,
+            metodo_pago: formResurtido.metodoPago || 'efectivo',
+            activo: true
+          });
+        } else if (formResurtido.origenFinanciero === 'inversion_externa') {
+          // Inversión externa: primero entra el dinero como ingreso, luego sale como compra
+          await createMovimientoCaja({
+            tipo: 'ingreso',
+            categoria: 'inversion_capital',
+            monto: totalInversion,
+            descripcion: `Inversión externa para: ${mostrarResurtir.linea_nombre}`,
+            metodo_pago: formResurtido.metodoPago || 'efectivo',
+            activo: true
+          });
+          await createMovimientoCaja({
+            tipo: 'egreso',
+            categoria: 'compra_material',
+            monto: totalInversion,
+            descripcion: `Compra producto (inv. externa): ${mostrarResurtir.linea_nombre} - ${cantidad} pzas`,
+            metodo_pago: formResurtido.metodoPago || 'efectivo',
+            activo: true
+          });
+        }
+      }
+
+      // 6. Refrescar historial
       const { data: nuevoHistorial } = await getResurtidos(mostrarResurtir.id);
       setHistorialResurtidos(nuevoHistorial || []);
 
-      setMensaje({ tipo: 'exito', texto: `Resurtido registrado: +${cantidad} unidades` });
-      setFormResurtido({ cantidad: 0, costoUnitario: costoUnitario, clienteId: formResurtido.clienteId, precioVenta, notas: '' });
+      const msgOrigen = formResurtido.origenFinanciero === 'caja' ? ' (egreso de caja registrado)'
+        : formResurtido.origenFinanciero === 'inversion_externa' ? ' (inversión externa registrada)'
+        : ' (ajuste de inventario, sin mov. caja)';
+      setMensaje({ tipo: 'exito', texto: `Resurtido registrado: +${cantidad} unidades${msgOrigen}` });
+      setFormResurtido({ cantidad: 0, costoUnitario: costoUnitario, clienteId: formResurtido.clienteId, precioVenta, notas: '', origenFinanciero: 'caja', metodoPago: formResurtido.metodoPago });
 
       // Actualizar referencia del producto en mostrarResurtir
       const prodActualizado = productosActualizados?.find(p => p.id === mostrarResurtir.id);
@@ -3904,6 +3979,53 @@ const ProductosView = ({ isAdmin }) => {
                   </select>
                 </div>
               </div>
+
+              {/* Origen financiero (solo al crear producto nuevo con stock) */}
+              {!productoEditandoId && cantidadAdquirida > 0 && costoUnitario > 0 && (
+                <div style={{ marginBottom: '20px' }}>
+                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px', letterSpacing: '0.5px' }}>ORIGEN DEL DINERO</div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                    {[
+                      { value: 'caja', label: 'Dinero de Caja', desc: 'Se descuenta de caja', color: '#e65100' },
+                      { value: 'inversion_externa', label: 'Inversión Externa', desc: 'Capital nuevo entrante', color: '#1565c0' },
+                      { value: 'ajuste', label: 'Ya registré el egreso', desc: 'No crear mov. de caja', color: '#6a6a6a' }
+                    ].map(opt => (
+                      <button key={opt.value}
+                        onClick={() => setFormProducto({ ...formProducto, origenFinanciero: opt.value })}
+                        style={{
+                          flex: 1, minWidth: '120px', padding: '10px 8px', borderRadius: '8px', cursor: 'pointer',
+                          border: formProducto.origenFinanciero === opt.value ? `2px solid ${opt.color}` : '2px solid rgba(255,255,255,0.2)',
+                          background: formProducto.origenFinanciero === opt.value ? `${opt.color}33` : 'rgba(255,255,255,0.05)',
+                          color: colors.sidebarText, textAlign: 'center', transition: 'all 0.2s ease'
+                        }}>
+                        <div style={{ fontSize: '12px', fontWeight: '600' }}>{opt.label}</div>
+                        <div style={{ fontSize: '10px', opacity: 0.7, marginTop: '2px' }}>{opt.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                  {formProducto.origenFinanciero !== 'ajuste' && (
+                    <div>
+                      <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '6px' }}>MÉTODO DE PAGO</div>
+                      <select value={formProducto.metodoPago || 'efectivo'}
+                        onChange={(e) => setFormProducto({ ...formProducto, metodoPago: e.target.value })}
+                        disabled={!isAdmin} style={selectStyle}>
+                        <option value="efectivo">Efectivo</option>
+                        <option value="transferencia">Transferencia</option>
+                        <option value="tarjeta">Tarjeta</option>
+                      </select>
+                    </div>
+                  )}
+                  <div style={{
+                    padding: '10px', borderRadius: '6px', marginTop: '10px',
+                    background: formProducto.origenFinanciero === 'ajuste' ? 'rgba(106,106,106,0.2)' : formProducto.origenFinanciero === 'inversion_externa' ? 'rgba(21,101,192,0.2)' : 'rgba(230,81,0,0.2)',
+                    fontSize: '12px'
+                  }}>
+                    {formProducto.origenFinanciero === 'caja' && `Caja: -$${totalInversion.toLocaleString('es-MX', { minimumFractionDigits: 2 })} | Inventario: +${cantidadAdquirida} pzas | Capital: igual`}
+                    {formProducto.origenFinanciero === 'inversion_externa' && `Capital externo: +$${totalInversion.toLocaleString('es-MX', { minimumFractionDigits: 2 })} | Inventario: +${cantidadAdquirida} pzas | Capital: sube`}
+                    {formProducto.origenFinanciero === 'ajuste' && 'Sin movimiento de caja. Asegúrate de haber registrado el egreso manualmente.'}
+                  </div>
+                </div>
+              )}
 
               {/* Resumen visual */}
               <div style={{ display: 'grid', gridTemplateColumns: productoEditandoId ? '1fr 1fr 1fr' : '1fr 1fr', gap: '10px' }}>
@@ -4955,6 +5077,71 @@ const ProductosView = ({ isAdmin }) => {
                     placeholder="Ej: Resurtido mensual" />
                 </div>
               </div>
+
+              {/* Origen financiero */}
+              <div style={{ marginBottom: '15px' }}>
+                <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '8px', letterSpacing: '0.5px' }}>ORIGEN DEL DINERO</div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {[
+                    { value: 'caja', label: 'Dinero de Caja', desc: 'Se descuenta de caja', color: '#e65100' },
+                    { value: 'inversion_externa', label: 'Inversión Externa', desc: 'Capital nuevo entrante', color: '#1565c0' },
+                    { value: 'ajuste', label: 'Ajuste de Inventario', desc: 'Solo corregir conteo', color: '#6a6a6a' }
+                  ].map(opt => (
+                    <button key={opt.value}
+                      onClick={() => setFormResurtido({ ...formResurtido, origenFinanciero: opt.value })}
+                      style={{
+                        flex: 1, minWidth: '120px', padding: '10px 8px', borderRadius: '8px', cursor: 'pointer',
+                        border: formResurtido.origenFinanciero === opt.value ? `2px solid ${opt.color}` : '2px solid rgba(255,255,255,0.2)',
+                        background: formResurtido.origenFinanciero === opt.value ? `${opt.color}33` : 'rgba(255,255,255,0.05)',
+                        color: colors.sidebarText, textAlign: 'center', transition: 'all 0.2s ease'
+                      }}>
+                      <div style={{ fontSize: '12px', fontWeight: '600' }}>{opt.label}</div>
+                      <div style={{ fontSize: '10px', opacity: 0.7, marginTop: '2px' }}>{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Método de pago (solo si no es ajuste) */}
+              {formResurtido.origenFinanciero !== 'ajuste' && (
+                <div style={{ marginBottom: '15px' }}>
+                  <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '6px' }}>MÉTODO DE PAGO</div>
+                  <select value={formResurtido.metodoPago || 'efectivo'}
+                    onChange={(e) => setFormResurtido({ ...formResurtido, metodoPago: e.target.value })}
+                    style={{ width: '100%', padding: '10px', fontSize: '14px', border: '2px solid rgba(255,255,255,0.3)', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', color: colors.sidebarText, cursor: 'pointer', appearance: 'auto' }}>
+                    <option value="efectivo">Efectivo</option>
+                    <option value="transferencia">Transferencia</option>
+                    <option value="tarjeta">Tarjeta</option>
+                  </select>
+                </div>
+              )}
+
+              {/* Resumen financiero */}
+              {(parseInt(formResurtido.cantidad) || 0) > 0 && (parseFloat(formResurtido.costoUnitario) || 0) > 0 && (
+                <div style={{
+                  padding: '12px', borderRadius: '8px', marginBottom: '15px',
+                  background: formResurtido.origenFinanciero === 'ajuste' ? 'rgba(106,106,106,0.2)' : formResurtido.origenFinanciero === 'inversion_externa' ? 'rgba(21,101,192,0.2)' : 'rgba(230,81,0,0.2)',
+                  border: `1px solid ${formResurtido.origenFinanciero === 'ajuste' ? 'rgba(106,106,106,0.4)' : formResurtido.origenFinanciero === 'inversion_externa' ? 'rgba(21,101,192,0.4)' : 'rgba(230,81,0,0.4)'}`
+                }}>
+                  <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '4px' }}>IMPACTO EN BALANCE</div>
+                  {formResurtido.origenFinanciero === 'caja' && (
+                    <div style={{ fontSize: '13px' }}>
+                      Caja: <strong>-${((parseInt(formResurtido.cantidad) || 0) * (parseFloat(formResurtido.costoUnitario) || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</strong> | Inventario: <strong>+{parseInt(formResurtido.cantidad) || 0} pzas</strong> | Capital: <strong>igual</strong>
+                    </div>
+                  )}
+                  {formResurtido.origenFinanciero === 'inversion_externa' && (
+                    <div style={{ fontSize: '13px' }}>
+                      Capital externo: <strong>+${((parseInt(formResurtido.cantidad) || 0) * (parseFloat(formResurtido.costoUnitario) || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</strong> | Inventario: <strong>+{parseInt(formResurtido.cantidad) || 0} pzas</strong> | Capital: <strong>sube</strong>
+                    </div>
+                  )}
+                  {formResurtido.origenFinanciero === 'ajuste' && (
+                    <div style={{ fontSize: '13px' }}>
+                      Sin movimiento de dinero. Solo se corrige el conteo de inventario.
+                    </div>
+                  )}
+                </div>
+              )}
+
               <button onClick={resurtirProducto} disabled={guardandoResurtido || (parseInt(formResurtido.cantidad) || 0) <= 0}
                 style={{
                   width: '100%', padding: '12px', background: (parseInt(formResurtido.cantidad) || 0) > 0 ? '#388e3c' : 'rgba(255,255,255,0.2)',
