@@ -3054,17 +3054,17 @@ const ProductosView = ({ isAdmin }) => {
       const totalInversion = cantidad * costoUnitario;
       if (totalInversion > 0 && formResurtido.origenFinanciero !== 'ajuste') {
         if (formResurtido.origenFinanciero === 'caja') {
-          // Egreso de caja: el dinero salió de la caja para comprar producto
+          // Egreso de caja: reinversión de utilidades para resurtir producto
           await createMovimientoCaja({
             tipo: 'egreso',
-            categoria: 'compra_material',
+            categoria: 'reinversion',
             monto: totalInversion,
-            descripcion: `Compra producto: ${mostrarResurtir.linea_nombre} - ${cantidad} pzas`,
+            descripcion: `Resurtido: ${mostrarResurtir.linea_nombre} - ${cantidad} pzas`,
             metodo_pago: formResurtido.metodoPago || 'efectivo',
             activo: true
           });
         } else if (formResurtido.origenFinanciero === 'inversion_externa') {
-          // Inversión externa: primero entra el dinero como ingreso, luego sale como compra
+          // Inversión externa: primero entra el dinero como ingreso, luego sale como reinversión
           await createMovimientoCaja({
             tipo: 'ingreso',
             categoria: 'inversion_capital',
@@ -3075,9 +3075,9 @@ const ProductosView = ({ isAdmin }) => {
           });
           await createMovimientoCaja({
             tipo: 'egreso',
-            categoria: 'compra_material',
+            categoria: 'reinversion',
             monto: totalInversion,
-            descripcion: `Compra producto (inv. externa): ${mostrarResurtir.linea_nombre} - ${cantidad} pzas`,
+            descripcion: `Resurtido (inv. externa): ${mostrarResurtir.linea_nombre} - ${cantidad} pzas`,
             metodo_pago: formResurtido.metodoPago || 'efectivo',
             activo: true
           });
