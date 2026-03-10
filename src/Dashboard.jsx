@@ -6606,6 +6606,162 @@ const SalidasView = ({ isAdmin }) => {
     cargarDatos();
   }, []);
 
+  const formatearMonedaSalida = (monto) => {
+    return '$' + (parseFloat(monto) || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  // Generar nota de salida/consignación PDF
+  const generarNotaSalidaPDF = (mov) => {
+    const doc = new jsPDF();
+    const fecha = mov.fecha ? new Date(mov.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' }) : '-';
+    const esConsignacion = mov.tipo_movimiento === 'consignacion';
+    const esDevolucion = mov.tipo_movimiento === 'devolucion';
+    const esVentaDirecta = mov.tipo_movimiento === 'venta_directa';
+    const esVentaConsig = mov.tipo_movimiento === 'venta_consignacion';
+
+    const tipoDoc = esConsignacion ? 'NOTA DE CONSIGNACIÓN' :
+                    esDevolucion ? 'NOTA DE DEVOLUCIÓN' :
+                    esVentaDirecta ? 'NOTA DE VENTA DIRECTA' :
+                    esVentaConsig ? 'NOTA DE VENTA (CONSIGNACIÓN)' : 'NOTA DE MOVIMIENTO';
+
+    const colorHeader = esConsignacion ? [243, 156, 18] :
+                       esDevolucion ? [196, 120, 74] :
+                       esVentaDirecta ? [107, 123, 94] : [25, 118, 210];
+
+    // Header
+    doc.setFontSize(20);
+    doc.setTextColor(0, 95, 132);
+    doc.text('Blancos Sinai', 14, 20);
+    doc.setFontSize(11);
+    doc.setTextColor(120, 100, 80);
+    doc.text('Productos textiles artesanales', 14, 27);
+
+    // Línea separadora
+    doc.setDrawColor(...colorHeader);
+    doc.setLineWidth(0.8);
+    doc.line(14, 31, 196, 31);
+
+    // Título del documento
+    doc.setFontSize(16);
+    doc.setTextColor(...colorHeader);
+    doc.text(tipoDoc, 14, 40);
+
+    // Folio y fecha
+    doc.setFontSize(10);
+    doc.setTextColor(120, 100, 80);
+    doc.text(`Folio: S-${String(mov.id).padStart(4, '0')}`, 150, 40);
+    doc.text(`Fecha: ${fecha}`, 14, 47);
+    doc.text(`Generado: ${new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`, 14, 53);
+
+    // Datos del cliente
+    doc.setFontSize(12);
+    doc.setTextColor(60, 40, 30);
+    doc.text('Cliente:', 14, 63);
+    doc.setFontSize(11);
+    doc.text(mov.cliente?.nombre || 'Sin cliente', 45, 63);
+    if (mov.cliente?.contacto) {
+      doc.setFontSize(10);
+      doc.setTextColor(120, 100, 80);
+      doc.text(`Contacto: ${mov.cliente.contacto}`, 14, 69);
+    }
+
+    // Producto
+    const productoNombre = mov.producto?.linea_nombre || 'Producto';
+    const varianteInfo = mov.variante ? [mov.variante.material, mov.variante.color, mov.variante.talla].filter(Boolean).join(' / ') : '';
+    const precioUnit = parseFloat(mov.precio_unitario) || 0;
+    const cantidad = mov.cantidad || 0;
+    const total = precioUnit * cantidad;
+
+    const bodyRows = [
+      [
+        productoNombre,
+        varianteInfo || '-',
+        cantidad.toString(),
+        precioUnit > 0 ? formatearMonedaSalida(precioUnit) : '-',
+        total > 0 ? formatearMonedaSalida(total) : '-'
+      ]
+    ];
+
+    doc.autoTable({
+      startY: mov.cliente?.contacto ? 75 : 70,
+      head: [['Producto', 'Variante', 'Cantidad', 'P. Unitario', 'Total']],
+      body: bodyRows,
+      styles: { fontSize: 10, cellPadding: 4 },
+      headStyles: { fillColor: colorHeader, textColor: 255, fontStyle: 'bold' },
+      columnStyles: {
+        2: { halign: 'center' },
+        3: { halign: 'right' },
+        4: { halign: 'right' }
+      }
+    });
+
+    let currentY = doc.lastAutoTable.finalY + 10;
+
+    // Total (si aplica)
+    if (total > 0) {
+      doc.autoTable({
+        startY: currentY,
+        body: [['TOTAL', formatearMonedaSalida(total)]],
+        styles: { fontSize: 12, cellPadding: 3, fontStyle: 'bold' },
+        columnStyles: {
+          0: { halign: 'right', cellWidth: 140 },
+          1: { halign: 'right', cellWidth: 42 }
+        },
+        theme: 'plain'
+      });
+      currentY = doc.lastAutoTable.finalY + 8;
+    }
+
+    // Tipo de movimiento info
+    doc.setFontSize(11);
+    doc.setTextColor(...colorHeader);
+    if (esConsignacion) {
+      doc.text('Mercancía entregada en consignación. Pendiente de pago.', 14, currentY);
+      currentY += 7;
+      doc.setFontSize(10);
+      doc.setTextColor(120, 100, 80);
+      doc.text('El cliente se compromete a pagar las piezas vendidas o devolver las restantes.', 14, currentY);
+    } else if (esDevolucion) {
+      doc.text('Mercancía devuelta al taller.', 14, currentY);
+    } else if (esVentaDirecta) {
+      doc.text('Venta realizada y pagada al momento.', 14, currentY);
+    } else if (esVentaConsig) {
+      doc.text('Piezas vendidas de mercancía en consignación.', 14, currentY);
+    }
+
+    // Notas
+    if (mov.notas) {
+      currentY += 12;
+      doc.setFontSize(10);
+      doc.setTextColor(120, 100, 80);
+      doc.text(`Notas: ${mov.notas}`, 14, currentY);
+    }
+
+    // Firma
+    currentY += 25;
+    if (currentY < 240) {
+      doc.setDrawColor(180, 180, 180);
+      doc.line(14, currentY, 90, currentY);
+      doc.line(120, currentY, 196, currentY);
+      doc.setFontSize(9);
+      doc.setTextColor(160, 160, 160);
+      doc.text('Firma de entrega', 35, currentY + 5);
+      doc.text('Firma de recepción', 142, currentY + 5);
+    }
+
+    // Pie de página
+    const pageHeight = doc.internal.pageSize.height;
+    doc.setDrawColor(200, 200, 200);
+    doc.line(14, pageHeight - 25, 196, pageHeight - 25);
+    doc.setFontSize(9);
+    doc.setTextColor(160, 160, 160);
+    doc.text('Blancos Sinai - Gracias por su preferencia', 105, pageHeight - 18, { align: 'center' });
+
+    const clienteSlug = (mov.cliente?.nombre || 'sin-cliente').replace(/\s+/g, '-').toLowerCase().substring(0, 20);
+    const tipoSlug = mov.tipo_movimiento.replace(/_/g, '-');
+    doc.save(`nota-${tipoSlug}-${clienteSlug}-S${mov.id}-${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   // Calcular resumen por producto
   const calcularResumen = (productoId) => {
     const movsProd = movimientos.filter(m => m.producto_id === productoId);
@@ -7569,6 +7725,17 @@ const SalidasView = ({ isAdmin }) => {
                   <span style={{ fontWeight: '700', fontSize: '16px', color: colors.sidebarBg }}>
                     {mov.tipo_movimiento === 'devolucion' ? '+' : '-'}{mov.cantidad}
                   </span>
+                  <button
+                    onClick={() => generarNotaSalidaPDF(mov)}
+                    style={{
+                      padding: '4px 10px', background: '#6B7B5E', color: 'white',
+                      border: 'none', borderRadius: '4px', cursor: 'pointer',
+                      fontSize: '11px', fontWeight: '600'
+                    }}
+                    title="Descargar nota PDF"
+                  >
+                    PDF
+                  </button>
                   {isAdmin && (
                     <button
                       onClick={() => setConfirmEliminar(mov)}
@@ -8136,6 +8303,155 @@ const VentasView = ({ isAdmin }) => {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     });
+  };
+
+  // Generar nota de venta PDF
+  const generarNotaVentaPDF = (venta) => {
+    const doc = new jsPDF();
+    const fecha = venta.created_at ? new Date(venta.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' }) : '-';
+    const pendiente = Math.max(0, (parseFloat(venta.total) || 0) - (parseFloat(venta.monto_pagado) || 0));
+    const esConsignacion = venta.tipo_venta === 'consignacion';
+
+    // Header
+    doc.setFontSize(20);
+    doc.setTextColor(0, 95, 132);
+    doc.text('Blancos Sinai', 14, 20);
+    doc.setFontSize(11);
+    doc.setTextColor(120, 100, 80);
+    doc.text('Productos textiles artesanales', 14, 27);
+
+    // Línea separadora
+    doc.setDrawColor(0, 95, 132);
+    doc.setLineWidth(0.5);
+    doc.line(14, 31, 196, 31);
+
+    // Título del documento
+    doc.setFontSize(16);
+    doc.setTextColor(60, 40, 30);
+    doc.text(esConsignacion ? 'NOTA DE CONSIGNACIÓN' : 'NOTA DE VENTA', 14, 40);
+
+    // Folio y fecha
+    doc.setFontSize(10);
+    doc.setTextColor(120, 100, 80);
+    doc.text(`Folio: V-${String(venta.id).padStart(4, '0')}`, 150, 40);
+    doc.text(`Fecha: ${fecha}`, 14, 47);
+    doc.text(`Generado: ${new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`, 14, 53);
+
+    // Datos del cliente
+    doc.setFontSize(12);
+    doc.setTextColor(60, 40, 30);
+    doc.text('Cliente:', 14, 63);
+    doc.setFontSize(11);
+    doc.text(venta.cliente_nombre || 'Venta directa (público general)', 45, 63);
+
+    // Tabla de productos
+    const precioUnit = parseFloat(venta.precio_unitario) || 0;
+    const descPct = parseFloat(venta.descuento_porcentaje) || 0;
+    const descMonto = parseFloat(venta.descuento_monto) || 0;
+    const cantidad = venta.cantidad || 0;
+    const subtotal = precioUnit * cantidad;
+
+    const bodyRows = [
+      [
+        venta.producto_nombre || 'Producto',
+        venta.producto_medidas || '-',
+        cantidad.toString(),
+        formatearMoneda(precioUnit),
+        formatearMoneda(subtotal)
+      ]
+    ];
+
+    doc.autoTable({
+      startY: 70,
+      head: [['Producto', 'Medidas', 'Cant.', 'P. Unitario', 'Subtotal']],
+      body: bodyRows,
+      styles: { fontSize: 10, cellPadding: 4 },
+      headStyles: { fillColor: [0, 95, 132], textColor: 255, fontStyle: 'bold' },
+      columnStyles: {
+        2: { halign: 'center' },
+        3: { halign: 'right' },
+        4: { halign: 'right' }
+      }
+    });
+
+    // Resumen de totales
+    let resumenY = doc.lastAutoTable.finalY + 8;
+    const resumenRows = [];
+    resumenRows.push(['Subtotal', formatearMoneda(subtotal)]);
+    if (descPct > 0 || descMonto > 0) {
+      const descTexto = descPct > 0 ? `Descuento (${descPct}%)` : 'Descuento';
+      resumenRows.push([descTexto, '-' + formatearMoneda(descMonto > 0 ? descMonto : subtotal * descPct / 100)]);
+    }
+    resumenRows.push(['TOTAL', formatearMoneda(venta.total)]);
+    if (parseFloat(venta.monto_pagado) > 0) {
+      resumenRows.push(['Pagado', formatearMoneda(venta.monto_pagado)]);
+    }
+    if (pendiente > 0) {
+      resumenRows.push(['Pendiente', formatearMoneda(pendiente)]);
+    }
+
+    doc.autoTable({
+      startY: resumenY,
+      body: resumenRows,
+      styles: { fontSize: 10, cellPadding: 3 },
+      columnStyles: {
+        0: { halign: 'right', fontStyle: 'bold', cellWidth: 140 },
+        1: { halign: 'right', cellWidth: 42 }
+      },
+      theme: 'plain',
+      didParseCell: (data) => {
+        if (data.row.index === resumenRows.length - 1 || data.cell.raw === 'TOTAL') {
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.fontSize = 12;
+        }
+        if (data.cell.raw === 'Pendiente' || (data.column.index === 1 && data.row.raw?.[0] === 'Pendiente')) {
+          data.cell.styles.textColor = [196, 120, 74];
+        }
+      }
+    });
+
+    // Estado de pago
+    let estadoY = doc.lastAutoTable.finalY + 10;
+    doc.setFontSize(11);
+    if (venta.estado_pago === 'pagado') {
+      doc.setTextColor(107, 123, 94);
+      doc.text('PAGADO', 14, estadoY);
+    } else if (venta.estado_pago === 'parcial') {
+      doc.setTextColor(247, 183, 49);
+      doc.text('PAGO PARCIAL', 14, estadoY);
+    } else {
+      doc.setTextColor(196, 120, 74);
+      doc.text('PENDIENTE DE PAGO', 14, estadoY);
+    }
+
+    if (venta.metodo_pago) {
+      doc.setTextColor(120, 100, 80);
+      doc.text(`Método: ${venta.metodo_pago}`, 80, estadoY);
+    }
+
+    if (esConsignacion) {
+      doc.setTextColor(120, 100, 80);
+      doc.text('Tipo: Consignación', 140, estadoY);
+    }
+
+    // Notas
+    if (venta.notas) {
+      estadoY += 10;
+      doc.setFontSize(10);
+      doc.setTextColor(120, 100, 80);
+      doc.text(`Notas: ${venta.notas}`, 14, estadoY);
+    }
+
+    // Pie de página
+    const pageHeight = doc.internal.pageSize.height;
+    doc.setDrawColor(200, 200, 200);
+    doc.line(14, pageHeight - 25, 196, pageHeight - 25);
+    doc.setFontSize(9);
+    doc.setTextColor(160, 160, 160);
+    doc.text('Blancos Sinai - Gracias por su preferencia', 105, pageHeight - 18, { align: 'center' });
+
+    const clienteSlug = (venta.cliente_nombre || 'publico').replace(/\s+/g, '-').toLowerCase().substring(0, 20);
+    doc.save(`nota-venta-${clienteSlug}-V${venta.id}-${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   const inputStyle = {
@@ -8817,40 +9133,59 @@ const VentasView = ({ isAdmin }) => {
                   </div>
 
                   {/* Acciones */}
-                  {isAdmin && !esServicio && (
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    {!esServicio && (
                       <button
-                        onClick={() => editarVenta(registro)}
+                        onClick={() => generarNotaVentaPDF(registro)}
                         style={{
                           padding: '6px 12px',
-                          background: colors.sidebarBg,
-                          color: colors.sidebarText,
+                          background: '#6B7B5E',
+                          color: 'white',
                           border: 'none',
                           borderRadius: '4px',
                           cursor: 'pointer',
                           fontSize: '12px'
                         }}
+                        title="Descargar nota de venta PDF"
                       >
-                        Editar
+                        PDF
                       </button>
-                      <button
-                        onClick={() => iniciarEliminacionVenta(registro.id)}
-                        disabled={cargandoImpacto}
-                        style={{
-                          padding: '6px 12px',
-                          background: colors.terracotta,
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '12px',
-                          opacity: cargandoImpacto ? 0.5 : 1
-                        }}
-                      >
-                        {cargandoImpacto ? 'Analizando...' : 'Eliminar'}
-                      </button>
-                    </div>
-                  )}
+                    )}
+                    {isAdmin && !esServicio && (
+                      <>
+                        <button
+                          onClick={() => editarVenta(registro)}
+                          style={{
+                            padding: '6px 12px',
+                            background: colors.sidebarBg,
+                            color: colors.sidebarText,
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '12px'
+                          }}
+                        >
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => iniciarEliminacionVenta(registro.id)}
+                          disabled={cargandoImpacto}
+                          style={{
+                            padding: '6px 12px',
+                            background: colors.terracotta,
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            opacity: cargandoImpacto ? 0.5 : 1
+                          }}
+                        >
+                          {cargandoImpacto ? 'Analizando...' : 'Eliminar'}
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
 
               </div>
