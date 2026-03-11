@@ -2690,19 +2690,30 @@ export const completarOrdenProduccion = async (ordenId) => {
       }]);
   }
 
-  // 3. Calcular costo unitario de producción
+  // 3. Calcular costo unitario de producción (desde materiales de la receta)
   const costoUnitarioCalc = orden.cantidad > 0 ? costoTotal / orden.cantidad : 0;
   const costoUnitarioRedondeado = Math.round(costoUnitarioCalc * 100) / 100;
 
-  // 4. Sumar stock al producto o variante Y propagar costo unitario (promedio ponderado)
+  // 4. Sumar stock al producto o variante
+  // Si la variante/producto ya tiene costo_unitario definido (ej: desde configuración de corte
+  // que incluye tela + mano de obra + empaque), se respeta ese costo y no se sobreescribe.
+  // Solo se propaga el costo de materiales si no hay costo previo definido.
   if (orden.variante_id && orden.variante) {
     const stockAnterior = parseInt(orden.variante.stock) || 0;
     const costoAnterior = parseFloat(orden.variante.costo_unitario) || 0;
     const nuevoStock = stockAnterior + orden.cantidad;
-    // Costo promedio ponderado: (stock_viejo × costo_viejo + pzas_nuevas × costo_nuevo) / stock_total
-    const nuevoCosto = nuevoStock > 0
-      ? Math.round(((stockAnterior * costoAnterior + orden.cantidad * costoUnitarioCalc) / nuevoStock) * 100) / 100
-      : costoUnitarioRedondeado;
+
+    let nuevoCosto;
+    if (costoAnterior > 0) {
+      // Ya tiene costo definido (ej: configuración de corte con tela+confección+empaque)
+      // Respetar el costo existente, no sobreescribir con solo materiales
+      nuevoCosto = costoAnterior;
+    } else {
+      // Sin costo previo: usar cálculo de materiales (promedio ponderado)
+      nuevoCosto = nuevoStock > 0
+        ? Math.round(((stockAnterior * costoAnterior + orden.cantidad * costoUnitarioCalc) / nuevoStock) * 100) / 100
+        : costoUnitarioRedondeado;
+    }
     const { error: errVar } = await supabase
       .from('variantes_producto')
       .update({ stock: nuevoStock, costo_unitario: nuevoCosto })
@@ -2712,9 +2723,16 @@ export const completarOrdenProduccion = async (ordenId) => {
     const stockAnterior = parseInt(orden.producto.stock) || 0;
     const costoAnterior = parseFloat(orden.producto.costo_unitario) || 0;
     const nuevoStock = stockAnterior + orden.cantidad;
-    const nuevoCosto = nuevoStock > 0
-      ? Math.round(((stockAnterior * costoAnterior + orden.cantidad * costoUnitarioCalc) / nuevoStock) * 100) / 100
-      : costoUnitarioRedondeado;
+
+    let nuevoCosto;
+    if (costoAnterior > 0) {
+      // Ya tiene costo definido, respetar
+      nuevoCosto = costoAnterior;
+    } else {
+      nuevoCosto = nuevoStock > 0
+        ? Math.round(((stockAnterior * costoAnterior + orden.cantidad * costoUnitarioCalc) / nuevoStock) * 100) / 100
+        : costoUnitarioRedondeado;
+    }
     const { error: errProd } = await supabase
       .from('productos')
       .update({ stock: nuevoStock, costo_unitario: nuevoCosto })
