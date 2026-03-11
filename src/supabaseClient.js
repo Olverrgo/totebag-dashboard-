@@ -2512,7 +2512,7 @@ export const upsertRecetaLinea = async (linea) => {
 
   const { data, error } = await supabase
     .from('recetas')
-    .upsert([linea], { onConflict: 'producto_id,material_id' })
+    .upsert([{ ...linea, activo: true }], { onConflict: 'producto_id,material_id' })
     .select(`
       *,
       material:materiales(id, nombre, unidad, costo_unitario, stock, categoria)
