@@ -265,6 +265,20 @@ export const createTipoTela = async (tela) => {
   return { data, error: handleRLSError(error) };
 };
 
+// Eliminar tipo de tela (soft delete, solo admin)
+export const deleteTipoTela = async (id) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('tipos_tela')
+    .update({ activo: false })
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
 // =====================================================
 // FUNCIONES PARA CONFIGURACIÓN DE ENVÍO (ADMIN)
 // =====================================================

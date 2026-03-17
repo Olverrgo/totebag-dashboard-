@@ -14,6 +14,7 @@ import {
   getTiposTela,
   updateTipoTela,
   createTipoTela,
+  deleteTipoTela,
   getConfigEnvio,
   updateConfigEnvio,
   createProducto,
@@ -3128,12 +3129,25 @@ const ProductosView = ({ isAdmin }) => {
     setGuardando(false);
   };
 
-  // Eliminar tipo de tela
-  const eliminarTipoTela = (idx) => {
+  // Eliminar tipo de tela (soft delete en Supabase)
+  const eliminarTipoTela = async (idx) => {
+    if (!isAdmin) {
+      setMensaje({ tipo: 'error', texto: 'Solo admin puede eliminar' });
+      return;
+    }
     if (!window.confirm('¿Eliminar este tipo de tela?')) return;
+    const tela = anchosTela[idx];
+    if (tela.id) {
+      const { error } = await deleteTipoTela(tela.id);
+      if (error) {
+        setMensaje({ tipo: 'error', texto: 'Error al eliminar tela: ' + (error.message || error) });
+        setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
+        return;
+      }
+    }
     const nuevo = anchosTela.filter((_, i) => i !== idx);
     setAnchosTela(nuevo);
-    setMensaje({ tipo: 'exito', texto: 'Tela eliminada del listado. Guarda cambios para confirmar.' });
+    setMensaje({ tipo: 'exito', texto: 'Tela eliminada correctamente' });
     setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
   };
 
