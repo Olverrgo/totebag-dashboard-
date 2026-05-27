@@ -927,7 +927,7 @@ const DashboardView = ({ productosActualizados }) => {
             if (!esTaller) {
               // Consignación: calcular valor a precio de venta REAL desde ventas
               const ventasVariante = ventasConsignacion.filter(vc =>
-                vc.producto_id === prod.id && vc.variante_id === v.id
+                Number(vc.producto_id) === Number(prod.id) && Number(vc.variante_id) === Number(v.id)
               );
               ventasVariante.forEach(vc => {
                 const pendiente = Math.max(0, (parseFloat(vc.total) || 0) - (parseFloat(vc.monto_pagado) || 0));
@@ -959,7 +959,7 @@ const DashboardView = ({ productosActualizados }) => {
 
           if (!esTaller) {
             const ventasProd = ventasConsignacion.filter(vc =>
-              vc.producto_id === prod.id && !vc.variante_id
+              Number(vc.producto_id) === Number(prod.id) && !vc.variante_id
             );
             ventasProd.forEach(vc => {
               const pendiente = Math.max(0, (parseFloat(vc.total) || 0) - (parseFloat(vc.monto_pagado) || 0));
@@ -2210,7 +2210,7 @@ const ProductosView = ({ isAdmin }) => {
     if (!isAdmin) return;
 
     // No permitir eliminar Totebags (categoría base)
-    const cat = categorias.find(c => c.id === categoriaId);
+    const cat = categorias.find(c => c.id === Number(categoriaId));
     if (cat?.slug === 'totebags') {
       setMensaje({ tipo: 'error', texto: 'No se puede eliminar la categoría principal Totebags' });
       setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
@@ -2227,7 +2227,7 @@ const ProductosView = ({ isAdmin }) => {
     } else {
       setCategorias(categorias.filter(c => c.id !== categoriaId));
       // Si la categoría eliminada era la activa, cambiar a la primera
-      if (categoriaActiva?.id === categoriaId) {
+      if (categoriaActiva?.id === Number(categoriaId)) {
         const nuevaActiva = categorias.find(c => c.id !== categoriaId);
         if (nuevaActiva) cambiarCategoria(nuevaActiva);
       }
@@ -2249,7 +2249,7 @@ const ProductosView = ({ isAdmin }) => {
       setMensaje({ tipo: 'error', texto: 'Error al eliminar: ' + error.message });
     } else {
       setSubcategorias(subcategorias.filter(s => s.id !== subcategoriaId));
-      if (subcategoriaActiva?.id === subcategoriaId) {
+      if (subcategoriaActiva?.id === Number(subcategoriaId)) {
         setSubcategoriaActiva(null);
       }
       setMensaje({ tipo: 'exito', texto: 'Subcategoría eliminada' });
@@ -2385,7 +2385,7 @@ const ProductosView = ({ isAdmin }) => {
   const actualizarStockVariante = async (varianteId, nuevoStock) => {
     const { error } = await updateStockVariante(varianteId, parseInt(nuevoStock) || 0);
     if (!error) {
-      setVariantes(variantes.map(v => v.id === varianteId ? { ...v, stock: parseInt(nuevoStock) || 0 } : v));
+      setVariantes(variantes.map(v => v.id === Number(varianteId) ? { ...v, stock: parseInt(nuevoStock) || 0 } : v));
     }
   };
 
@@ -2513,7 +2513,7 @@ const ProductosView = ({ isAdmin }) => {
           costo_unitario: parseFloat(calculos.costoTotal)
         });
         setVariantes(variantes.map(v =>
-          v.id === varianteConfigCorte.id ? { ...v, costo_unitario: parseFloat(calculos.costoTotal) } : v
+          v.id === Number(varianteConfigCorte.id) ? { ...v, costo_unitario: parseFloat(calculos.costoTotal) } : v
         ));
 
         // Recargar historial
@@ -2616,7 +2616,7 @@ const ProductosView = ({ isAdmin }) => {
 
   // Cálculos automáticos
   const calcularCostos = () => {
-    const tela = anchosTela.find(t => t.id === formProducto.telaSeleccionada);
+    const tela = anchosTela.find(t => Number(t.id) === Number(formProducto.telaSeleccionada));
     const costoTela = tela ? (tela.precio * formProducto.cantidadTela) / formProducto.piezasPorCorte : 0;
     const subtotal = costoTela + formProducto.costoMaquila + formProducto.insumos;
     const conMerma = subtotal * (1 + formProducto.merma / 100);
@@ -2896,7 +2896,7 @@ const ProductosView = ({ isAdmin }) => {
 
         // Actualizar lista de productos
         if (productoEditandoId) {
-          setProductosGuardados(productosGuardados.map(p => p.id === productoEditandoId ? data : p));
+          setProductosGuardados(productosGuardados.map(p => p.id === Number(productoEditandoId) ? data : p));
         } else {
           setProductosGuardados([data, ...productosGuardados]);
 
@@ -3097,7 +3097,7 @@ const ProductosView = ({ isAdmin }) => {
       setFormResurtido({ cantidad: 0, costoUnitario: costoUnitario, clienteId: formResurtido.clienteId, precioVenta, notas: '', origenFinanciero: 'caja', metodoPago: formResurtido.metodoPago });
 
       // Actualizar referencia del producto en mostrarResurtir
-      const prodActualizado = productosActualizados?.find(p => p.id === mostrarResurtir.id);
+      const prodActualizado = productosActualizados?.find(p => p.id === Number(mostrarResurtir.id));
       if (prodActualizado) setMostrarResurtir(prodActualizado);
 
     } catch (err) {
@@ -3229,7 +3229,7 @@ const ProductosView = ({ isAdmin }) => {
 
         // Actualizar estado local
         setProductosGuardados(productosGuardados.map(p =>
-          p.id === productoId ? { ...p, imagen_url: data.url, imagen_nombre: data.nombre } : p
+          p.id === Number(productoId) ? { ...p, imagen_url: data.url, imagen_nombre: data.nombre } : p
         ));
 
         setMensaje({ tipo: 'exito', texto: 'Imagen subida correctamente' });
@@ -3276,7 +3276,7 @@ const ProductosView = ({ isAdmin }) => {
 
         // Actualizar estado local
         setProductosGuardados(productosGuardados.map(p =>
-          p.id === productoId ? { ...p, ...updateFields } : p
+          p.id === Number(productoId) ? { ...p, ...updateFields } : p
         ));
 
         setMensaje({ tipo: 'exito', texto: `PDF de ${tipo === 'patron' ? 'patrón' : 'instrucciones'} subido correctamente` });
@@ -3904,7 +3904,7 @@ const ProductosView = ({ isAdmin }) => {
             const utilidad = precioVenta - costoUnitario;
             const margen = precioVenta > 0 ? ((utilidad / precioVenta) * 100) : 0;
             const stockActual = productoEditandoId
-              ? (productosGuardados.find(p => p.id === productoEditandoId)?.stock || 0)
+              ? (productosGuardados.find(p => p.id === Number(productoEditandoId))?.stock || 0)
               : null;
             const inputStyle = {
               width: '100%',
@@ -6353,7 +6353,7 @@ const SalidasView = ({ isAdmin }) => {
           if (formSalida.tipoMovimiento === 'venta_directa') {
             await updateProducto(productoId, { stock: stockActual - cantidad });
             setProductos(productos.map(p =>
-              p.id === productoId ? { ...p, stock: stockActual - cantidad } : p
+              p.id === Number(productoId) ? { ...p, stock: stockActual - cantidad } : p
             ));
           } else if (formSalida.tipoMovimiento === 'consignacion') {
             await updateProducto(productoId, {
@@ -6361,7 +6361,7 @@ const SalidasView = ({ isAdmin }) => {
               stock_consignacion: consignacionActual + cantidad
             });
             setProductos(productos.map(p =>
-              p.id === productoId ? {
+              p.id === Number(productoId) ? {
                 ...p,
                 stock: stockActual - cantidad,
                 stock_consignacion: consignacionActual + cantidad
@@ -6370,7 +6370,7 @@ const SalidasView = ({ isAdmin }) => {
           } else if (formSalida.tipoMovimiento === 'venta_consignacion') {
             // stock_consignacion ya fue reducido por registrarPagoVenta, solo actualizar estado local
             setProductos(productos.map(p =>
-              p.id === productoId ? { ...p, stock_consignacion: consignacionActual - cantidad } : p
+              p.id === Number(productoId) ? { ...p, stock_consignacion: consignacionActual - cantidad } : p
             ));
           } else if (formSalida.tipoMovimiento === 'devolucion') {
             await updateProducto(productoId, {
@@ -6378,7 +6378,7 @@ const SalidasView = ({ isAdmin }) => {
               stock_consignacion: consignacionActual - cantidad
             });
             setProductos(productos.map(p =>
-              p.id === productoId ? {
+              p.id === Number(productoId) ? {
                 ...p,
                 stock: stockActual + cantidad,
                 stock_consignacion: consignacionActual - cantidad
@@ -6441,12 +6441,12 @@ const SalidasView = ({ isAdmin }) => {
     setGuardando(true);
     try {
       // 1. Revertir el stock antes de eliminar
-      const producto = productos.find(p => p.id === mov.producto_id);
+      const producto = productos.find(p => Number(p.id) === Number(mov.producto_id));
       const cantidad = mov.cantidad || 0;
 
       if (mov.variante_id && producto?.tiene_variantes) {
         // Revertir stock de la variante
-        const variante = (producto.variantes || []).find(v => v.id === mov.variante_id);
+        const variante = (producto.variantes || []).find(v => Number(v.id) === Number(mov.variante_id));
         if (variante) {
           let nuevoStock = variante.stock || 0;
           let nuevaConsig = variante.stock_consignacion || 0;

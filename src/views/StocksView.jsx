@@ -88,9 +88,9 @@ const StocksView = ({ isAdmin }) => {
         setMensaje({ tipo: 'exito', texto: `Stock actualizado. ${cambios.join(' | ')}` });
         // Actualizar lista local
         setProductosGuardados(productosGuardados.map(p => {
-          if (p.id === productoId && p.variantes) {
+          if (Number(p.id) === Number(productoId) && p.variantes) {
             const nuevasVariantes = p.variantes.map(v =>
-              v.id === variante.id ? { ...v, stock: nuevoStock, stock_consignacion: nuevaConsig } : v
+              Number(v.id) === Number(variante.id) ? { ...v, stock: nuevoStock, stock_consignacion: nuevaConsig } : v
             );
             const variantesActivas = nuevasVariantes.filter(v => v.activo !== false);
             return {
@@ -131,7 +131,7 @@ const StocksView = ({ isAdmin }) => {
 
     setGuardando(true);
     try {
-      const producto = productosGuardados.find(p => p.id === productoId);
+      const producto = productosGuardados.find(p => Number(p.id) === Number(productoId));
       const stockActual = producto?.stock || 0;
       const nuevoStock = stockActual + cantidad;
 
@@ -152,7 +152,7 @@ const StocksView = ({ isAdmin }) => {
         setMensaje({ tipo: 'exito', texto: `Stock actualizado: ${stockActual} + ${cantidad} = ${nuevoStock}` });
         // Actualizar lista local
         setProductosGuardados(productosGuardados.map(p =>
-          p.id === productoId ? { ...p, stock: nuevoStock } : p
+          Number(p.id) === Number(productoId) ? { ...p, stock: nuevoStock } : p
         ));
         // Resetear campo de cantidad a 0
         setCantidadAgregar({ ...cantidadAgregar, [productoId]: 0 });
