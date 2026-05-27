@@ -28,3 +28,8 @@ tmpclaude-*
 .env
 .env.*
 !.env.example
+
+# Coordinación entre agentes (Claude + Gemini) — local, no se sube
+AGENTES.md
+CONTEXTO APP GESTION YOLOTL.txt
+CONTEXTO*.txt
