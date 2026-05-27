@@ -224,11 +224,17 @@ const ProduccionView = ({ isAdmin }) => {
     if (!formOrden.producto_id || !formOrden.cantidad || parseInt(formOrden.cantidad) <= 0) {
       mostrarMsg('error', 'Selecciona producto y cantidad'); return;
     }
+    if (variantesProducto.length === 0) {
+      mostrarMsg('error', 'Este producto no tiene variantes activas — crea una variante antes de producir'); return;
+    }
+    if (!formOrden.variante_id) {
+      mostrarMsg('error', 'Selecciona una variante para esta orden'); return;
+    }
     setGuardando(true);
     try {
       const ordenData = {
         producto_id: formOrden.producto_id,
-        variante_id: formOrden.variante_id || null,
+        variante_id: parseInt(formOrden.variante_id),
         cantidad: parseInt(formOrden.cantidad),
         estado: 'en_proceso'
       };
@@ -704,11 +710,16 @@ const ProduccionView = ({ isAdmin }) => {
                             {productos.map(p => <option key={p.id} value={p.id}>{p.linea_nombre || p.nombre}</option>)}
                           </select>
                         </div>
+                        {formOrden.producto_id && variantesProducto.length === 0 && (
+                          <div style={{ padding: '12px', background: '#fff3cd', border: '1px solid #ffeaa7', borderRadius: '8px', fontSize: '13px', color: '#856404' }}>
+                            ⚠ Este producto no tiene variantes activas. Crea al menos una variante en la pantalla de productos antes de poder producir.
+                          </div>
+                        )}
                         {variantesProducto.length > 0 && (
                           <div>
-                            <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Variante</label>
+                            <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Variante *</label>
                             <select value={formOrden.variante_id} onChange={e => setFormOrden(p => ({ ...p, variante_id: e.target.value }))} style={{ ...selectBase, padding: '10px 14px' }}>
-                              <option value="" style={optStyle}>-- Sin variante --</option>
+                              <option value="" style={optStyle}>-- Seleccionar variante --</option>
                               {variantesProducto.map(v => <option key={v.id} value={v.id} style={optStyle}>{[v.material, v.color, v.talla].filter(Boolean).join(' - ')} ({v.sku || ''})</option>)}
                             </select>
                           </div>
@@ -717,13 +728,20 @@ const ProduccionView = ({ isAdmin }) => {
                           <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Cantidad a producir *</label>
                           <input type="number" value={formOrden.cantidad} onChange={e => setFormOrden(p => ({ ...p, cantidad: e.target.value }))} style={{ ...inputBase, padding: '10px 14px' }} />
                         </div>
-                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                          <button onClick={() => setMostrarWizard(false)} style={{ padding: '8px 20px', background: colors.sand, border: 'none', borderRadius: '8px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
-                          <button onClick={cargarRecetaParaOrden} disabled={!formOrden.producto_id || !formOrden.cantidad} style={{
-                            padding: '8px 20px', background: colors.sidebarBg, color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontFamily: 'inherit',
-                            opacity: (!formOrden.producto_id || !formOrden.cantidad) ? 0.5 : 1
-                          }}>Siguiente</button>
-                        </div>
+                        {(() => {
+                          const sinVariantes = formOrden.producto_id && variantesProducto.length === 0;
+                          const variantesPendientes = variantesProducto.length > 0 && !formOrden.variante_id;
+                          const desactivado = !formOrden.producto_id || !formOrden.cantidad || sinVariantes || variantesPendientes;
+                          return (
+                            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                              <button onClick={() => setMostrarWizard(false)} style={{ padding: '8px 20px', background: colors.sand, border: 'none', borderRadius: '8px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
+                              <button onClick={cargarRecetaParaOrden} disabled={desactivado} style={{
+                                padding: '8px 20px', background: colors.sidebarBg, color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontFamily: 'inherit',
+                                opacity: desactivado ? 0.5 : 1
+                              }}>Siguiente</button>
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
 
