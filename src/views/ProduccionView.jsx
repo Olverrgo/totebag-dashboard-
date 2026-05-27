@@ -704,8 +704,13 @@ const ProduccionView = ({ isAdmin }) => {
                           <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Producto *</label>
                           <select value={formOrden.producto_id} onChange={e => handleSeleccionarProductoOrden(e.target.value)} style={{ ...selectBase, padding: '10px 14px' }}>
                             <option value="">-- Seleccionar producto --</option>
-                            {productos.map(p => <option key={p.id} value={p.id}>{p.linea_nombre || p.nombre}</option>)}
+                            {productos.filter(p => p.es_manufacturado).map(p => <option key={p.id} value={p.id}>{p.linea_nombre || p.nombre}</option>)}
                           </select>
+                          {productos.length > 0 && productos.filter(p => p.es_manufacturado).length === 0 && (
+                            <div style={{ marginTop: '8px', padding: '10px', background: '#fff3cd', border: '1px solid #ffeaa7', borderRadius: '6px', fontSize: '12px', color: '#856404' }}>
+                              ⚠ No hay productos marcados como manufactura. Activa el toggle "MANUFACTURA" en la pantalla de productos para los que vas a producir.
+                            </div>
+                          )}
                         </div>
                         {formOrden.producto_id && variantesProducto.length === 0 && (
                           <div style={{ padding: '12px', background: '#fff3cd', border: '1px solid #ffeaa7', borderRadius: '8px', fontSize: '13px', color: '#856404' }}>
