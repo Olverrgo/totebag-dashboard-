@@ -195,13 +195,10 @@ const ProduccionView = ({ isAdmin }) => {
   const handleSeleccionarProductoOrden = async (prodId) => {
     setFormOrden(prev => ({ ...prev, producto_id: prodId, variante_id: '' }));
     if (!prodId) { setVariantesProducto([]); return; }
-    const prod = productos.find(p => p.id === prodId);
-    if (prod?.tiene_variantes) {
-      const varRes = await getVariantes(prodId);
-      setVariantesProducto(varRes.data || []);
-    } else {
-      setVariantesProducto([]);
-    }
+    // Consultar variantes siempre: el flag productos.tiene_variantes puede estar
+    // desincronizado con la realidad de la tabla variantes_producto.
+    const varRes = await getVariantes(prodId);
+    setVariantesProducto(varRes.data || []);
   };
 
   const cargarRecetaParaOrden = async () => {
