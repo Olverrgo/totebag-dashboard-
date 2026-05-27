@@ -2610,6 +2610,7 @@ const ProductosView = ({ isAdmin }) => {
     envio: 0,
     minPiezasEnvio: 20,
     precioVenta: 0, // Precio de venta sugerido
+    es_manufacturado: false,
     origenFinanciero: 'caja', // 'caja' | 'inversion_externa' | 'ajuste'
     metodoPago: 'efectivo'
   });
@@ -2696,7 +2697,10 @@ const ProductosView = ({ isAdmin }) => {
         marcaProducto: productoExistente.campos_dinamicos?.marca || '',
         cantidadAdquirida: productoExistente.campos_dinamicos?.cantidad_adquirida || 0,
         costoUnitario: parseFloat(productoExistente.campos_dinamicos?.costo_unitario) || 0,
-        clienteId: productoExistente.campos_dinamicos?.cliente_id || null
+        clienteId: productoExistente.campos_dinamicos?.cliente_id || null,
+        es_manufacturado: productoExistente.es_manufacturado !== undefined 
+          ? productoExistente.es_manufacturado 
+          : (categoriaActiva?.slug === 'totebags')
       });
     } else {
       // Nuevo producto - valores por defecto
@@ -2722,7 +2726,8 @@ const ProductosView = ({ isAdmin }) => {
         clienteId: null,
         envio: formProducto.envio || 0,
         minPiezasEnvio: formProducto.minPiezasEnvio || 20,
-        precioVenta: 0
+        precioVenta: 0,
+        es_manufacturado: (categoriaActiva?.slug === 'totebags')
       });
     }
   };
@@ -2810,46 +2815,49 @@ const ProductosView = ({ isAdmin }) => {
         descripcion: formProducto.descripcion,
         categoria_id: categoriaActiva?.id || null,
         subcategoria_id: subcategoriaActiva?.id || null,
+        es_manufacturado: formProducto.es_manufacturado,
         campos_dinamicos: Object.keys(camposDinamicos).length > 0 ? camposDinamicos : {},
         precio_venta: parseFloat(formProducto.precioVenta) || 0
       };
 
-      // Si es categoría legacy (Totebags), incluir campos específicos
-      if (esCategoriaLegacy()) {
-        Object.assign(productoData, {
-          tipo_tela_id: formProducto.telaSeleccionada,
-          cantidad_tela: formProducto.cantidadTela,
-          piezas_por_corte: formProducto.piezasPorCorte,
-          costo_maquila: formProducto.costoMaquila,
-          insumos: formProducto.insumos,
-          merma: formProducto.merma,
-          serigrafia_1_tinta: formProducto.serigrafia1,
-          serigrafia_2_tintas: formProducto.serigrafia2,
-          serigrafia_3_tintas: formProducto.serigrafia3,
-          serigrafia_4_tintas: formProducto.serigrafia4,
-          tipo_entrega: formProducto.tipoEntrega,
-          empaque: formProducto.empaque,
-          envio_id: configEnvioId,
-          costo_total_1_tinta: parseFloat(costosCalculados.total1Tinta),
-          costo_total_2_tintas: parseFloat(costosCalculados.total2Tintas),
-          costo_total_3_tintas: parseFloat(costosCalculados.total3Tintas),
-          costo_total_4_tintas: parseFloat(costosCalculados.total4Tintas)
-        });
-      } else if (camposCategoria.length > 0) {
-        // Para categorías con campos dinámicos (Ropa de Cama, etc.)
-        const costoMaterial = parseFloat(camposDinamicos.costo_material) || 0;
-        const costoConfeccion = parseFloat(camposDinamicos.costo_confeccion) || 0;
-        const costoEmpaque = parseFloat(camposDinamicos.costo_empaque) || 0;
-        const costoTotal = costoMaterial + costoConfeccion + costoEmpaque;
+      // 1. Caso Manufactura (Totebags o Categorías Dinámicas)
+      if (formProducto.es_manufacturado) {
+        if (esCategoriaLegacy()) {
+          Object.assign(productoData, {
+            tipo_tela_id: formProducto.telaSeleccionada,
+            cantidad_tela: formProducto.cantidadTela,
+            piezas_por_corte: formProducto.piezasPorCorte,
+            costo_maquila: formProducto.costoMaquila,
+            insumos: formProducto.insumos,
+            merma: formProducto.merma,
+            serigrafia_1_tinta: formProducto.serigrafia1,
+            serigrafia_2_tintas: formProducto.serigrafia2,
+            serigrafia_3_tintas: formProducto.serigrafia3,
+            serigrafia_4_tintas: formProducto.serigrafia4,
+            tipo_entrega: formProducto.tipoEntrega,
+            empaque: formProducto.empaque,
+            envio_id: configEnvioId,
+            costo_total_1_tinta: parseFloat(costosCalculados.total1Tinta),
+            costo_total_2_tintas: parseFloat(costosCalculados.total2Tintas),
+            costo_total_3_tintas: parseFloat(costosCalculados.total3Tintas),
+            costo_total_4_tintas: parseFloat(costosCalculados.total4Tintas)
+          });
+        } else {
+          // Categorías con campos dinámicos (Ropa de Cama, etc.)
+          const costoMaterial = parseFloat(camposDinamicos.costo_material) || 0;
+          const costoConfeccion = parseFloat(camposDinamicos.costo_confeccion) || 0;
+          const costoEmpaque = parseFloat(camposDinamicos.costo_empaque) || 0;
+          const costoTotal = costoMaterial + costoConfeccion + costoEmpaque;
 
-        Object.assign(productoData, {
-          costo_total_1_tinta: costoTotal,
-          costo_total_2_tintas: costoTotal,
-          costo_total_3_tintas: costoTotal,
-          costo_total_4_tintas: costoTotal
-        });
+          Object.assign(productoData, {
+            costo_total_1_tinta: costoTotal,
+            costo_total_2_tintas: costoTotal,
+            costo_total_3_tintas: costoTotal,
+            costo_total_4_tintas: costoTotal
+          });
+        }
       } else {
-        // Para categorías de compra/reventa (sin campos dinámicos configurados)
+        // 2. Caso Reventa / Compra Directa
         const costoUnitario = parseFloat(formProducto.costoUnitario) || 0;
         const cantidadAdquirida = parseInt(formProducto.cantidadAdquirida) || 0;
 
@@ -3820,6 +3828,54 @@ const ProductosView = ({ isAdmin }) => {
             </button>
           </div>
 
+          {/* Selector de tipo de producto (Manufactura vs Reventa) */}
+          <div style={{ ...sectionStyle, background: 'rgba(218,159,23,0.05)', padding: '20px', border: `1px solid ${colors.sand}`, borderRadius: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <label style={{ ...labelStyle, marginBottom: '5px' }}>Modelo de Negocio</label>
+                <p style={{ margin: 0, fontSize: '12px', color: colors.camel }}>
+                  {formProducto.es_manufacturado 
+                    ? 'Este producto se fabrica internamente (requiere receta y producción).' 
+                    : 'Este producto se compra terminado para su reventa directa.'}
+                </p>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '12px', fontWeight: '600', color: !formProducto.es_manufacturado ? colors.espresso : colors.camel }}>REVENTA</span>
+                <div 
+                  onClick={() => setFormProducto({ ...formProducto, es_manufacturado: !formProducto.es_manufacturado })}
+                  style={{
+                    width: '50px',
+                    height: '24px',
+                    background: formProducto.es_manufacturado ? colors.olive : colors.sand,
+                    borderRadius: '12px',
+                    position: 'relative',
+                    cursor: 'pointer',
+                    transition: 'background 0.3s'
+                  }}
+                >
+                  <div style={{
+                    width: '18px',
+                    height: '18px',
+                    background: 'white',
+                    borderRadius: '50%',
+                    position: 'absolute',
+                    top: '3px',
+                    left: formProducto.es_manufacturado ? '29px' : '3px',
+                    transition: 'left 0.3s',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                  }} />
+                </div>
+                <span style={{ fontSize: '12px', fontWeight: '600', color: formProducto.es_manufacturado ? colors.olive : colors.camel }}>MANUFACTURA</span>
+              </div>
+            </div>
+            {/* Advertencia si hay historial (simulada por ahora) */}
+            {productoEditandoId && (
+              <div style={{ marginTop: '10px', fontSize: '11px', color: colors.terracotta, fontStyle: 'italic' }}>
+                * Cambiar el modelo de un producto existente puede afectar el historial de costos.
+              </div>
+            )}
+          </div>
+
           {/* 1. Descripción */}
           <div style={sectionStyle}>
             <label style={labelStyle}>1. Descripción del Producto</label>
@@ -3829,8 +3885,8 @@ const ProductosView = ({ isAdmin }) => {
               style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }} />
           </div>
 
-          {/* Campos dinámicos para categorías nuevas (no Totebags) */}
-          {!esCategoriaLegacy() && camposCategoria.length > 0 && (
+          {/* Campos dinámicos para categorías nuevas (Manufactura no Totebags) */}
+          {formProducto.es_manufacturado && !esCategoriaLegacy() && camposCategoria.length > 0 && (
             <>
               {/* Agrupar campos por sección */}
               {Object.entries(camposPorSeccion).map(([seccion, campos]) => (
@@ -3895,8 +3951,8 @@ const ProductosView = ({ isAdmin }) => {
             </>
           )}
 
-          {/* Formulario de costos para categorías de compra/reventa (sin campos dinámicos) */}
-          {!esCategoriaLegacy() && camposCategoria.length === 0 && (() => {
+          {/* Formulario de costos para categorías de compra/reventa (NO Manufacturado) */}
+          {!formProducto.es_manufacturado && (() => {
             const costoUnitario = parseFloat(formProducto.costoUnitario) || 0;
             const cantidadAdquirida = parseInt(formProducto.cantidadAdquirida) || 0;
             const totalInversion = costoUnitario * cantidadAdquirida;
@@ -4085,8 +4141,8 @@ const ProductosView = ({ isAdmin }) => {
             );
           })()}
 
-          {/* Formulario legacy para Totebags */}
-          {esCategoriaLegacy() && (
+          {/* Formulario legacy para Totebags (Manufactura Legacy) */}
+          {formProducto.es_manufacturado && esCategoriaLegacy() && (
           <>
           {/* 2. Parámetros de Producción */}
           <div style={sectionStyle}>
