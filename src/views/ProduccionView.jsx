@@ -802,7 +802,7 @@ const ProduccionView = ({ isAdmin }) => {
                         <div style={{ background: colors.cream, borderRadius: '10px', padding: '16px', marginBottom: '16px' }}>
                           <div style={{ fontWeight: '700', fontSize: '16px', color: colors.espresso, marginBottom: '8px' }}>Resumen de la orden</div>
                           <div style={{ fontSize: '14px', color: colors.espresso }}>
-                            <strong>Producto:</strong> {(() => { const pr = productos.find(p => p.id === formOrden.producto_id); return pr?.linea_nombre || pr?.nombre || '-'; })()}
+                            <strong>Producto:</strong> {(() => { const pr = productos.find(p => p.id === parseInt(formOrden.producto_id)); return pr?.linea_nombre || pr?.nombre || '-'; })()}
                             {formOrden.variante_id && (() => { const vr = variantesProducto.find(v => v.id === parseInt(formOrden.variante_id)); return <span> / {vr ? [vr.material, vr.color, vr.talla].filter(Boolean).join(' - ') : '-'}</span>; })()}
                           </div>
                           <div style={{ fontSize: '14px', color: colors.espresso, marginTop: '4px' }}>
