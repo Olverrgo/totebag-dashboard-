@@ -910,29 +910,22 @@ export const duplicarConfiguracionConNuevoPrecio = async (configId, nuevoPrecioT
 
   if (errorGet) return { data: null, error: handleRLSError(errorGet) };
 
-  // Crear nueva configuración con el nuevo precio
+  // Crear nueva configuración con el nuevo precio.
+  // Copiamos TODO el original (spread) en vez de listar columnas a mano:
+  // así sobreviven medidas_json (Fase 7) y los campos v2 (metros_sabana_*)
+  // sin riesgo de desincronizar con el schema en el futuro.
+  // Quitamos id/timestamps; el trigger recalcula total_metros_lineales,
+  // costo_material y costo_total al insertar.
+  const {
+    id: _id,
+    created_at: _createdAt,
+    updated_at: _updatedAt,
+    ...camposOriginal
+  } = configOriginal;
+
   const nuevaConfig = {
-    producto_id: configOriginal.producto_id,
-    variante_id: configOriginal.variante_id,
-    nombre: configOriginal.nombre,
-    descripcion: configOriginal.descripcion,
-    sabana_plana_largo: configOriginal.sabana_plana_largo,
-    sabana_plana_ancho: configOriginal.sabana_plana_ancho,
-    incluye_sabana_plana: configOriginal.incluye_sabana_plana,
-    sabana_cajon_largo: configOriginal.sabana_cajon_largo,
-    sabana_cajon_ancho: configOriginal.sabana_cajon_ancho,
-    sabana_cajon_alto: configOriginal.sabana_cajon_alto,
-    incluye_sabana_cajon: configOriginal.incluye_sabana_cajon,
-    funda_largo: configOriginal.funda_largo,
-    funda_ancho: configOriginal.funda_ancho,
-    cantidad_fundas: configOriginal.cantidad_fundas,
-    incluye_fundas: configOriginal.incluye_fundas,
-    piezas_adicionales: configOriginal.piezas_adicionales,
-    ancho_tela: configOriginal.ancho_tela,
-    porcentaje_desperdicio: configOriginal.porcentaje_desperdicio,
+    ...camposOriginal,
     precio_tela_metro: nuevoPrecioTela,
-    costo_confeccion: configOriginal.costo_confeccion,
-    costo_empaque: configOriginal.costo_empaque,
     fecha_vigencia: nuevaFecha || new Date().toISOString().split('T')[0],
     es_configuracion_actual: true,
     notas: `Actualización de precio desde $${configOriginal.precio_tela_metro} a $${nuevoPrecioTela}`
@@ -2980,3 +2973,129 @@ export const getInventarioMateriales = async () => {
 };
 
 export default supabase;
+
+// =====================================================
+// MÓDULO DE COMPRAS Y PROVEEDORES (FASE 9)
+// =====================================================
+
+// Proveedores
+export const getProveedores = async () => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  const { data, error } = await supabase
+    .from('proveedores')
+    .select('*')
+    .eq('activo', true)
+    .order('nombre');
+  return { data, error: handleRLSError(error) };
+};
+
+export const createProveedor = async (proveedor) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  const { data, error } = await supabase
+    .from('proveedores')
+    .insert([proveedor])
+    .select()
+    .single();
+  return { data, error: handleRLSError(error) };
+};
+
+// Compras de Material
+export const getComprasMaterial = async () => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  const { data, error } = await supabase
+    .from('compras_material')
+    .select(`
+      *,
+      proveedores (nombre)
+    `)
+    .order('fecha_compra', { ascending: false });
+  return { data, error: handleRLSError(error) };
+};
+
+export const getCompraDetalles = async (compraId) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  const { data, error } = await supabase
+    .from('detalle_compra_material')
+    .select(`
+      *,
+      materiales (nombre, unidad)
+    `)
+    .eq('compra_id', compraId);
+  return { data, error: handleRLSError(error) };
+};
+
+export const crearCompraCompleta = async (compra, detalles) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  // 1. Crear cabecera
+  const { data: nuevaCompra, error: errCabecera } = await supabase
+    .from('compras_material')
+    .insert([compra])
+    .select()
+    .single();
+
+  if (errCabecera) return { data: null, error: handleRLSError(errCabecera) };
+
+  // 2. Crear detalles (esto dispara los triggers de stock y total)
+  const lineasDetalle = detalles.map(d => ({
+    compra_id: nuevaCompra.id,
+    material_id: d.material_id,
+    cantidad: d.cantidad,
+    costo_unitario: d.costo_unitario
+  }));
+
+  const { error: errDetalle } = await supabase
+    .from('detalle_compra_material')
+    .insert(lineasDetalle);
+
+  if (errDetalle) return { data: null, error: handleRLSError(errDetalle) };
+
+  return { data: nuevaCompra, error: null };
+};
+
+// Pagos a Proveedores
+export const getPagosProveedor = async (compraId) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  const { data, error } = await supabase
+    .from('pagos_proveedores')
+    .select('*')
+    .eq('compra_id', compraId)
+    .order('fecha_pago', { ascending: false });
+  return { data, error: handleRLSError(error) };
+};
+
+export const registrarPagoProveedor = async (pago, datosCaja) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  // 1. Crear movimiento en caja si aplica
+  let movimientoCajaId = null;
+  if (datosCaja) {
+    const { data: movCaja, error: errCaja } = await supabase
+      .from('movimientos_caja')
+      .insert([{
+        tipo: 'egreso',
+        monto: pago.monto,
+        categoria: 'compra_material',
+        descripcion: datosCaja.descripcion || `Pago a proveedor: ${datosCaja.proveedorNombre}`,
+        metodo_pago: pago.metodo_pago,
+        activo: true
+      }])
+      .select()
+      .single();
+    
+    if (errCaja) return { data: null, error: handleRLSError(errCaja) };
+    movimientoCajaId = movCaja.id;
+  }
+
+  // 2. Registrar pago
+  const { data: nuevoPago, error: errPago } = await supabase
+    .from('pagos_proveedores')
+    .insert([{
+      ...pago,
+      movimiento_caja_id: movimientoCajaId
+    }])
+    .select()
+    .single();
+
+  return { data: nuevoPago, error: handleRLSError(errPago) };
+};
