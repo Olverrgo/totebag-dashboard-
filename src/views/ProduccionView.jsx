@@ -43,7 +43,7 @@ const ProduccionView = ({ isAdmin }) => {
   const [productoReceta, setProductoReceta] = useState('');
   const [recetaLineas, setRecetaLineas] = useState([]);
   const [mostrarFormReceta, setMostrarFormReceta] = useState(false);
-  const [formReceta, setFormReceta] = useState({ material_id: '', cantidad: '', notas: '' });
+  const [formReceta, setFormReceta] = useState({ material_id: '', cantidad: '', notas: '', opcional: false });
 
   // --- Producción state ---
   const [mostrarWizard, setMostrarWizard] = useState(false);
@@ -168,10 +168,11 @@ const ProduccionView = ({ isAdmin }) => {
         producto_id: productoReceta,
         material_id: formReceta.material_id,
         cantidad: parseFloat(formReceta.cantidad),
-        notas: formReceta.notas || null
+        notas: formReceta.notas || null,
+        opcional: formReceta.opcional
       });
       if (res.error) mostrarMsg('error', res.error.message || 'Error');
-      else { mostrarMsg('ok', 'Línea guardada'); setFormReceta({ material_id: '', cantidad: '', notas: '' }); setMostrarFormReceta(false); cargarReceta(productoReceta); }
+      else { mostrarMsg('ok', 'Línea guardada'); setFormReceta({ material_id: '', cantidad: '', notas: '', opcional: false }); setMostrarFormReceta(false); cargarReceta(productoReceta); }
     } catch (e) { mostrarMsg('error', e.message); }
     setGuardando(false);
   };
@@ -204,15 +205,23 @@ const ProduccionView = ({ isAdmin }) => {
   const cargarRecetaParaOrden = async () => {
     if (!formOrden.producto_id) return;
     const res = await getRecetasProducto(formOrden.producto_id);
-    const lineas = (res.data || []).map(r => ({
-      material_id: r.material_id,
-      nombre: r.material?.nombre || '',
-      unidad: r.material?.unidad || '',
-      cantidad_por_pieza: parseFloat(r.cantidad) || 0,
-      cantidad_total: (parseFloat(r.cantidad) || 0) * (parseInt(formOrden.cantidad) || 0),
-      costo_unitario: parseFloat(r.material?.costo_unitario) || 0,
-      stock_disponible: parseFloat(r.material?.stock) || 0
-    }));
+    
+    const vId = parseInt(formOrden.variante_id);
+    const lineas = (res.data || [])
+      .filter(r => r.variante_id === null || r.variante_id === vId)
+      .map(r => {
+        const opcional = r.opcional === true;
+        return {
+          material_id: r.material_id,
+          nombre: r.material?.nombre || '',
+          unidad: r.material?.unidad || '',
+          cantidad_por_pieza: parseFloat(r.cantidad) || 0,
+          cantidad_total: opcional ? 0 : (parseFloat(r.cantidad) || 0) * (parseInt(formOrden.cantidad) || 0),
+          costo_unitario: parseFloat(r.material?.costo_unitario) || 0,
+          stock_disponible: parseFloat(r.material?.stock) || 0,
+          es_opcional: opcional
+        };
+      });
     setMaterialesOrden(lineas);
     setPasoWizard(2);
   };
@@ -527,7 +536,7 @@ const ProduccionView = ({ isAdmin }) => {
                   {/* Botón agregar línea */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <h3 style={{ margin: 0, color: colors.espresso, fontSize: '18px' }}>Receta (BOM)</h3>
-                    <button onClick={() => { setFormReceta({ material_id: '', cantidad: '', notas: '' }); setMostrarFormReceta(true); }} style={{
+                    <button onClick={() => { setFormReceta({ material_id: '', cantidad: '', notas: '', opcional: false }); setMostrarFormReceta(true); }} style={{
                       padding: '8px 20px', background: colors.sidebarBg, color: '#fff', border: 'none',
                       borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '13px', fontFamily: 'inherit'
                     }}>
@@ -546,8 +555,11 @@ const ProduccionView = ({ isAdmin }) => {
                     </thead>
                     <tbody>
                       {recetaLineas.map(r => (
-                        <tr key={r.id} style={{ borderBottom: `1px solid ${colors.sand}` }}>
-                          <td style={{ padding: '10px 8px', fontWeight: '600' }}>{r.material?.nombre || '-'}</td>
+                        <tr key={r.id} style={{ borderBottom: `1px solid ${colors.sand}`, background: r.opcional ? 'rgba(218,159,23,0.03)' : 'transparent' }}>
+                          <td style={{ padding: '10px 8px' }}>
+                            <div style={{ fontWeight: '600' }}>{r.material?.nombre || '-'}</div>
+                            {r.opcional && <div style={{ fontSize: '10px', color: colors.camel, fontStyle: 'italic' }}>Opcional / Alternativo</div>}
+                          </td>
                           <td style={{ padding: '10px 8px' }}>{parseFloat(r.cantidad).toLocaleString('es-MX', { maximumFractionDigits: 4 })}</td>
                           <td style={{ padding: '10px 8px' }}>{r.material?.unidad || '-'}</td>
                           <td style={{ padding: '10px 8px', fontWeight: '600' }}>{formatearMoneda((parseFloat(r.cantidad) || 0) * (parseFloat(r.material?.costo_unitario) || 0))}</td>
@@ -597,6 +609,17 @@ const ProduccionView = ({ isAdmin }) => {
                           <div>
                             <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Notas</label>
                             <input value={formReceta.notas} onChange={e => setFormReceta(p => ({ ...p, notas: e.target.value }))} style={inputBase} />
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <input 
+                              type="checkbox" 
+                              id="receta-opcional"
+                              checked={formReceta.opcional} 
+                              onChange={e => setFormReceta(p => ({ ...p, opcional: e.target.checked }))} 
+                            />
+                            <label htmlFor="receta-opcional" style={{ fontSize: '13px', color: colors.espresso, cursor: 'pointer' }}>
+                              Este material es opcional / alternativo
+                            </label>
                           </div>
                         </div>
                         <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
@@ -769,10 +792,37 @@ const ProduccionView = ({ isAdmin }) => {
                             <tbody>
                               {materialesOrden.map((m, idx) => {
                                 const insuficiente = m.cantidad_total > m.stock_disponible;
+                                const esOpcionalDormido = m.es_opcional && m.cantidad_total === 0;
                                 return (
-                                  <tr key={idx} style={{ borderBottom: `1px solid ${colors.sand}`, background: insuficiente ? '#fff3e0' : 'transparent' }}>
-                                    <td style={{ padding: '8px 6px', fontWeight: '600' }}>{m.nombre}</td>
-                                    <td style={{ padding: '8px 6px' }}>{m.unidad}</td>
+                                  <tr key={idx} style={{ 
+                                    borderBottom: `1px solid ${colors.sand}`, 
+                                    background: insuficiente ? '#fff3e0' : 'transparent',
+                                    opacity: esOpcionalDormido ? 0.5 : 1,
+                                    transition: 'opacity 0.3s'
+                                  }}>
+                                    <td style={{ padding: '8px 6px' }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span style={{ fontWeight: '600', color: esOpcionalDormido ? colors.camel : colors.espresso }}>
+                                          {m.nombre}
+                                        </span>
+                                        {m.es_opcional && (
+                                          <span style={{ fontSize: '9px', background: colors.sand, padding: '2px 4px', borderRadius: '4px', textTransform: 'uppercase' }}>Opcional</span>
+                                        )}
+                                      </div>
+                                      {esOpcionalDormido && (
+                                        <button 
+                                          onClick={() => {
+                                            const nuevo = [...materialesOrden];
+                                            nuevo[idx] = { ...nuevo[idx], cantidad_total: m.cantidad_por_pieza * (parseInt(formOrden.cantidad) || 0) };
+                                            setMaterialesOrden(nuevo);
+                                          }}
+                                          style={{ fontSize: '11px', background: 'none', border: 'none', color: colors.olive, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                                        >
+                                          + Activar cantidad receta
+                                        </button>
+                                      )}
+                                    </td>
+                                    <td style={{ padding: '8px 6px', color: esOpcionalDormido ? colors.camel : colors.espresso }}>{m.unidad}</td>
                                     <td style={{ padding: '8px 6px' }}>
                                       <input type="number" step="0.01" value={m.cantidad_total}
                                         onChange={e => {
@@ -780,7 +830,15 @@ const ProduccionView = ({ isAdmin }) => {
                                           nuevo[idx] = { ...nuevo[idx], cantidad_total: parseFloat(e.target.value) || 0 };
                                           setMaterialesOrden(nuevo);
                                         }}
-                                        style={{ width: '80px', padding: '4px 6px', border: `1px solid ${colors.sand}`, borderRadius: '6px', fontSize: '13px', fontFamily: 'inherit' }}
+                                        style={{ 
+                                          width: '80px', 
+                                          padding: '4px 6px', 
+                                          border: `1px solid ${colors.sand}`, 
+                                          borderRadius: '6px', 
+                                          fontSize: '13px', 
+                                          fontFamily: 'inherit',
+                                          background: esOpcionalDormido ? colors.cream : 'white'
+                                        }}
                                       />
                                     </td>
                                     <td style={{ padding: '8px 6px', color: insuficiente ? '#c62828' : colors.camel }}>

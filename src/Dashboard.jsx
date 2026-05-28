@@ -1976,6 +1976,7 @@ const ProductosView = ({ isAdmin }) => {
 
   // Estado para clientes (usado en formulario de compra/reventa)
   const [clientes, setClientes] = useState([]);
+  const [materiales, setMateriales] = useState([]);
 
   // Estados para variantes de producto
   const [productoVariantes, setProductoVariantes] = useState(null); // Producto seleccionado para ver variantes
@@ -2009,6 +2010,8 @@ const ProductosView = ({ isAdmin }) => {
     incluye_fundas: true,
     porcentaje_desperdicio: 10,
     precio_tela_metro: 0,
+    material_id: null,
+    material_nombre: '',
     costo_confeccion: 0,
     costo_empaque: 0
   });
@@ -2084,6 +2087,12 @@ const ProductosView = ({ isAdmin }) => {
       const { data: clientesData } = await getClientes();
       if (clientesData) {
         setClientes(clientesData);
+      }
+
+      // Cargar materiales (para configuración de corte)
+      const { data: materialesData } = await getMateriales();
+      if (materialesData) {
+        setMateriales(materialesData);
       }
     };
 
@@ -2411,6 +2420,7 @@ const ProductosView = ({ isAdmin }) => {
         incluye_fundas: config.incluye_fundas ?? true,
         porcentaje_desperdicio: config.porcentaje_desperdicio || 10,
         precio_tela_metro: config.precio_tela_metro || 0,
+        material_id: config.material_id || null,
         costo_confeccion: config.costo_confeccion || 0,
         costo_empaque: config.costo_empaque || 0
       });
@@ -2422,7 +2432,10 @@ const ProductosView = ({ isAdmin }) => {
         metros_sabana_cajon: 0, incluye_sabana_cajon: true,
         metros_fundas: 0, cantidad_fundas: 2, incluye_fundas: true,
         porcentaje_desperdicio: 10,
-        precio_tela_metro: 0, costo_confeccion: 0, costo_empaque: 0
+        precio_tela_metro: 0, 
+        material_id: null,
+        costo_confeccion: 0, 
+        costo_empaque: 0
       });
     }
 
@@ -2453,7 +2466,11 @@ const ProductosView = ({ isAdmin }) => {
     const metrosConDesperdicio = subtotalMetros * (1 + (parseFloat(f.porcentaje_desperdicio) || 0) / 100);
 
     // Costos
-    const costoMaterial = metrosConDesperdicio * (parseFloat(f.precio_tela_metro) || 0);
+    // Buscar precio real del material si hay material_id
+    const materialReal = f.material_id ? materiales.find(m => m.id === f.material_id) : null;
+    const precioMaterial = materialReal ? parseFloat(materialReal.costo_unitario) : (parseFloat(f.precio_tela_metro) || 0);
+
+    const costoMaterial = metrosConDesperdicio * precioMaterial;
     const costoTotal = costoMaterial + parseFloat(f.costo_confeccion || 0) + parseFloat(f.costo_empaque || 0);
 
     return {
@@ -2463,7 +2480,9 @@ const ProductosView = ({ isAdmin }) => {
       subtotalMetros: subtotalMetros.toFixed(2),
       metrosConDesperdicio: metrosConDesperdicio.toFixed(2),
       costoMaterial: costoMaterial.toFixed(2),
-      costoTotal: costoTotal.toFixed(2)
+      costoTotal: costoTotal.toFixed(2),
+      precioUsado: precioMaterial.toFixed(2),
+      usandoMaterialCatalogo: !!materialReal
     };
   };
 
@@ -2489,6 +2508,7 @@ const ProductosView = ({ isAdmin }) => {
         incluye_fundas: formConfigCorte.incluye_fundas,
         porcentaje_desperdicio: parseFloat(formConfigCorte.porcentaje_desperdicio) || 0,
         precio_tela_metro: parseFloat(formConfigCorte.precio_tela_metro) || 0,
+        material_id: formConfigCorte.material_id,
         costo_confeccion: parseFloat(formConfigCorte.costo_confeccion) || 0,
         costo_empaque: parseFloat(formConfigCorte.costo_empaque) || 0,
         es_configuracion_actual: true
@@ -4557,11 +4577,21 @@ const ProductosView = ({ isAdmin }) => {
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div>
-                        <h4 style={{ margin: 0, color: colors.espresso, fontSize: '16px' }}>
+                        <h4 style={{ margin: 0, color: colors.espresso, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                           {prod.linea_nombre}
+                          <span title={prod.es_manufacturado ? 'Manufactura propia' : 'Reventa / Compra directa'} style={{
+                            background: prod.es_manufacturado ? 'rgba(107,126,82,0.1)' : 'rgba(196,120,74,0.1)',
+                            color: prod.es_manufacturado ? colors.olive : colors.terracotta,
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            fontSize: '10px',
+                            fontWeight: '700',
+                            border: `1px solid ${prod.es_manufacturado ? colors.olive : colors.terracotta}`
+                          }}>
+                            {prod.es_manufacturado ? '🧵 MFG' : '🏷️ REV'}
+                          </span>
                           {prod.categoria && (
                             <span style={{
-                              marginLeft: '10px',
                               background: colors.sand,
                               padding: '2px 8px',
                               borderRadius: '10px',
@@ -4569,19 +4599,6 @@ const ProductosView = ({ isAdmin }) => {
                               fontWeight: '400'
                             }}>
                               {prod.categoria.icono} {prod.categoria.nombre}
-                            </span>
-                          )}
-                          {prod.subcategoria && (
-                            <span style={{
-                              marginLeft: '5px',
-                              background: colors.olive,
-                              color: 'white',
-                              padding: '2px 8px',
-                              borderRadius: '10px',
-                              fontSize: '11px',
-                              fontWeight: '400'
-                            }}>
-                              {prod.subcategoria.nombre}
                             </span>
                           )}
                         </h4>
@@ -4610,9 +4627,23 @@ const ProductosView = ({ isAdmin }) => {
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <div style={{ fontSize: '11px', color: colors.camel }}>
-                          {prod.categoria?.slug === 'totebags' ? 'Costo Total (1 tinta)' : 'Costo Total'}
+                          {prod.es_manufacturado ? 'Costo (Desde)' : 'Costo Unitario'}
                         </div>
-                        <div style={{ fontSize: '20px', fontWeight: '600', color: colors.sidebarBg }}>${prod.costo_total_1_tinta?.toFixed(2)}</div>
+                        <div style={{ 
+                          fontSize: '20px', 
+                          fontWeight: '700', 
+                          color: prod.es_manufacturado ? colors.olive : colors.sidebarBg 
+                        }}>
+                          {prod.es_manufacturado && prod.costo_desde > 0 
+                            ? `$${prod.costo_desde.toFixed(2)}` 
+                            : `$${(prod.costo_total_1_tinta || 0).toFixed(2)}`
+                          }
+                          {prod.es_manufacturado && prod.costo_hasta > prod.costo_desde && (
+                            <span style={{ fontSize: '12px', fontWeight: '400', marginLeft: '4px' }}>
+                              - ${prod.costo_hasta.toFixed(2)}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -5425,10 +5456,26 @@ const ProductosView = ({ isAdmin }) => {
                       type="number"
                       min="0"
                       step="0.01"
-                      value={formVariante.costo_unitario}
+                      disabled={productoVariantes?.es_manufacturado}
+                      value={productoVariantes?.es_manufacturado && varianteEditando
+                        ? (productoVariantes.costo_calculado_por_variante?.[varianteEditando.id]?.costo_total || 0).toFixed(2)
+                        : formVariante.costo_unitario}
                       onChange={(e) => setFormVariante({ ...formVariante, costo_unitario: e.target.value })}
-                      style={{ width: '100%', padding: '10px', border: `2px solid ${colors.sand}`, borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                      style={{ 
+                        width: '100%', 
+                        padding: '10px', 
+                        border: `2px solid ${colors.sand}`, 
+                        borderRadius: '6px', 
+                        fontSize: '14px', 
+                        boxSizing: 'border-box',
+                        background: productoVariantes?.es_manufacturado ? colors.cream : 'white'
+                      }}
                     />
+                    {productoVariantes?.es_manufacturado && (
+                      <div style={{ fontSize: '10px', color: colors.olive, marginTop: '4px', fontStyle: 'italic' }}>
+                        Calculado desde Config. de Corte
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '12px', color: colors.espresso, marginBottom: '5px' }}>Precio Venta</label>
@@ -5594,7 +5641,19 @@ const ProductosView = ({ isAdmin }) => {
                       </div>
                       <div style={{ textAlign: 'center' }}>
                         <div style={{ fontSize: '10px', color: colors.camel }}>COSTO</div>
-                        <div style={{ fontSize: '14px', fontWeight: '600', color: colors.espresso }}>${parseFloat(v.costo_unitario || 0).toFixed(2)}</div>
+                        <div style={{ 
+                          fontSize: '14px', 
+                          fontWeight: '600', 
+                          color: productoVariantes?.es_manufacturado ? colors.olive : colors.espresso 
+                        }}>
+                          ${productoVariantes?.es_manufacturado
+                            ? (productoVariantes.costo_calculado_por_variante?.[v.id]?.costo_total || 0).toFixed(2)
+                            : parseFloat(v.costo_unitario || 0).toFixed(2)
+                          }
+                          {productoVariantes?.es_manufacturado && (
+                            <span title="Calculado desde Receta" style={{ cursor: 'help', marginLeft: '3px' }}>✨</span>
+                          )}
+                        </div>
                       </div>
                       <div style={{ textAlign: 'center' }}>
                         <div style={{ fontSize: '10px', color: colors.camel }}>PRECIO</div>
@@ -5806,6 +5865,81 @@ const ProductosView = ({ isAdmin }) => {
 
               {/* Columna derecha: Cálculos y Costos */}
               <div>
+                {/* Selección de Material del Catálogo */}
+                <div style={{ background: colors.cream, padding: '15px', borderRadius: '8px', marginBottom: '15px', border: `1px solid ${colors.sand}` }}>
+                  <h4 style={{ margin: '0 0 10px 0', color: colors.olivo }}>Costo de Tela</h4>
+                  
+                  <div style={{ marginBottom: '15px' }}>
+                    <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '5px' }}>Seleccionar Material del Catálogo</label>
+                    <select
+                      value={formConfigCorte.material_id || ''}
+                      onChange={(e) => {
+                        const mId = e.target.value || null;
+                        const mat = materiales.find(m => m.id === mId);
+                        setFormConfigCorte({ 
+                          ...formConfigCorte, 
+                          material_id: mId,
+                          precio_tela_metro: mat ? mat.costo_unitario : formConfigCorte.precio_tela_metro
+                        });
+                      }}
+                      style={{ width: '100%', padding: '10px', border: `1px solid ${colors.sand}`, borderRadius: '6px', fontSize: '14px' }}
+                    >
+                      <option value="">-- Usar precio manual --</option>
+                      {materiales.filter(m => m.activo !== false).map(m => (
+                        <option key={m.id} value={m.id}>
+                          {m.nombre} (${parseFloat(m.costo_unitario).toFixed(2)} / {m.unidad})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {!formConfigCorte.material_id && (
+                    <div>
+                      <label style={{ fontSize: '12px', color: '#666' }}>Precio manual por metro ($)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formConfigCorte.precio_tela_metro}
+                        onChange={(e) => setFormConfigCorte({ ...formConfigCorte, precio_tela_metro: e.target.value })}
+                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px' }}
+                      />
+                    </div>
+                  )}
+
+                  {formConfigCorte.material_id && (
+                    <div style={{ fontSize: '12px', color: colors.olive, fontStyle: 'italic', marginTop: '5px' }}>
+                      ✓ Usando precio de catálogo: ${parseFloat(materiales.find(m => m.id === formConfigCorte.material_id)?.costo_unitario || 0).toFixed(2)}
+                    </div>
+                  )}
+                </div>
+
+                {/* Otros Costos */}
+                <div style={{ background: '#f8f8f8', padding: '15px', borderRadius: '8px', marginBottom: '15px' }}>
+                  <h4 style={{ margin: '0 0 10px 0', color: colors.olivo }}>Mano de Obra y Empaque</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div>
+                      <label style={{ fontSize: '12px', color: '#666' }}>Confección ($)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formConfigCorte.costo_confeccion}
+                        onChange={(e) => setFormConfigCorte({ ...formConfigCorte, costo_confeccion: e.target.value })}
+                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', color: '#666' }}>Empaque ($)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formConfigCorte.costo_empaque}
+                        onChange={(e) => setFormConfigCorte({ ...formConfigCorte, costo_empaque: e.target.value })}
+                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 {/* Cálculos en tiempo real */}
                 <div style={{ background: colors.sidebarBg, padding: '15px', borderRadius: '8px', marginBottom: '15px', color: 'white' }}>
                   <h4 style={{ margin: '0 0 15px 0' }}>Resumen de Tela</h4>
