@@ -555,17 +555,17 @@ export const getProductos = async (categoriaId = null, subcategoriaId = null) =>
           const config = configsVigentes.find(c => c.variante_id === varianteId)
             || configsVigentes.find(c => c.variante_id === null);
 
-          // Merma del patrón de corte. Aplica SOLO a materiales tipo 'tela'
-          // (otros materiales como hilo/etiquetas no se desperdician al cortar).
+          // Merma del patrón de corte aplica a TODOS los materiales de la receta
+          // (decisión Rigo + Gemini en Fase 6). Si en el futuro se necesita
+          // excluir algún material de la merma, agregar flag `aplica_merma` en
+          // `recetas` o en `materiales`.
           const merma = parseFloat(config?.porcentaje_desperdicio) || 0;
           const factorMerma = 1 + (merma / 100);
 
           const costoMateriales = recetasAplicables.reduce((sum, r) => {
             const cantidadBase = parseFloat(r.cantidad) || 0;
             const precio = parseFloat(r.material?.costo_unitario) || 0;
-            const esTela = r.material?.categoria === 'tela';
-            const cantidadConMerma = esTela ? cantidadBase * factorMerma : cantidadBase;
-            return sum + cantidadConMerma * precio;
+            return sum + cantidadBase * factorMerma * precio;
           }, 0);
 
           const costoServicios = config
