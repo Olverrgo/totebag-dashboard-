@@ -1944,6 +1944,7 @@ const ProductosView = ({ isAdmin }) => {
   const isMobile = window.innerWidth <= 768;
   const [hoverAgregar, setHoverAgregar] = useState(false);
   const [mostrarPopup, setMostrarPopup] = useState(false);
+  const [pasoWizardProducto, setPasoWizardProducto] = useState(1);
   const [lineasProducto, setLineasProducto] = useState([
     { id: 'publicitaria-sencilla', nombre: 'Publicitaria Sencilla', medidas: '35 x 40', modelos: [] },
     { id: 'publicitaria-bolsa-lateral', nombre: 'Publicitaria Bolsa Lateral', medidas: '35 x 40', modelos: [] }
@@ -2687,7 +2688,8 @@ const ProductosView = ({ isAdmin }) => {
 
   const seleccionarLinea = (linea) => {
     setLineaSeleccionada(linea);
-    setMostrarPopup(false);
+    setMostrarPopup(true);
+    setPasoWizardProducto(1);
     setMensaje({ tipo: '', texto: '' });
 
     // Buscar si ya existe un producto para esta línea
@@ -3822,1275 +3824,426 @@ const ProductosView = ({ isAdmin }) => {
 
       {/* Formulario de producto */}
       {lineaSeleccionada ? (
-        <div style={{ background: colors.cotton, border: `1px solid ${colors.sand}`, padding: isMobile ? '16px' : '30px', borderRadius: '8px' }}>
+        <div style={{ background: colors.cotton, border: `2px solid ${colors.sand}`, padding: isMobile ? '16px' : '30px', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
           {/* Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
             <div>
-              <h3 style={{ margin: 0, color: colors.espresso, fontSize: '20px' }}>{lineaSeleccionada.nombre}</h3>
-              <p style={{ margin: '5px 0 0', color: colors.camel, fontSize: '14px' }}>
+              <h3 style={{ margin: 0, color: colors.espresso, fontSize: '22px', fontWeight: '600' }}>{lineaSeleccionada.nombre}</h3>
+              <p style={{ margin: '5px 0 0', color: colors.camel, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                 {lineaSeleccionada.medidas}
                 {categoriaActiva && (
-                  <span style={{ marginLeft: '10px', background: colors.sand, padding: '2px 8px', borderRadius: '10px', fontSize: '11px' }}>
+                  <span style={{ background: colors.sand, padding: '2px 8px', borderRadius: '10px', fontSize: '11px', color: colors.espresso }}>
                     {categoriaActiva.icono} {categoriaActiva.nombre}
-                  </span>
-                )}
-                {subcategoriaActiva && (
-                  <span style={{ marginLeft: '5px', background: colors.olive, color: 'white', padding: '2px 8px', borderRadius: '10px', fontSize: '11px' }}>
-                    {subcategoriaActiva.nombre}
                   </span>
                 )}
               </p>
             </div>
             <button onClick={() => { setLineaSeleccionada(null); setCamposDinamicos({}); }}
-              style={{ padding: '8px 16px', background: colors.sand, color: colors.espresso,
-                border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}>
+              style={{ padding: '8px 16px', background: 'none', border: `1px solid ${colors.sand}`, borderRadius: '6px', cursor: 'pointer', fontSize: '13px', color: colors.camel }}>
               Cancelar
             </button>
           </div>
 
-          {/* Selector de tipo de producto (Manufactura vs Reventa) */}
-          <div style={{ ...sectionStyle, background: 'rgba(218,159,23,0.05)', padding: '20px', border: `1px solid ${colors.sand}`, borderRadius: '8px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <label style={{ ...labelStyle, marginBottom: '5px' }}>Modelo de Negocio</label>
-                <p style={{ margin: 0, fontSize: '12px', color: colors.camel }}>
-                  {formProducto.es_manufacturado 
-                    ? 'Este producto se fabrica internamente (requiere receta y producción).' 
-                    : 'Este producto se compra terminado para su reventa directa.'}
-                </p>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ fontSize: '12px', fontWeight: '600', color: !formProducto.es_manufacturado ? colors.espresso : colors.camel }}>REVENTA</span>
-                <div 
-                  onClick={() => setFormProducto({ ...formProducto, es_manufacturado: !formProducto.es_manufacturado })}
-                  style={{
-                    width: '50px',
-                    height: '24px',
-                    background: formProducto.es_manufacturado ? colors.olive : colors.sand,
-                    borderRadius: '12px',
-                    position: 'relative',
-                    cursor: 'pointer',
-                    transition: 'background 0.3s'
-                  }}
-                >
-                  <div style={{
-                    width: '18px',
-                    height: '18px',
-                    background: 'white',
-                    borderRadius: '50%',
-                    position: 'absolute',
-                    top: '3px',
-                    left: formProducto.es_manufacturado ? '29px' : '3px',
-                    transition: 'left 0.3s',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
-                  }} />
+          {/* Indicador de Pasos del Wizard */}
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '35px', gap: isMobile ? '20px' : '60px', position: 'relative' }}>
+            <div style={{ position: 'absolute', top: '16px', left: isMobile ? '10%' : '20%', right: isMobile ? '10%' : '20%', height: '2px', background: colors.sand, zIndex: 0 }} />
+            {[1, 2, 3].map((num) => (
+              <div key={num} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', zIndex: 1, minWidth: '70px' }}>
+                <div style={{
+                  width: '32px', height: '32px', borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: pasoWizardProducto >= num ? colors.olive : 'white',
+                  color: pasoWizardProducto >= num ? 'white' : colors.camel,
+                  fontWeight: '700', fontSize: '14px', transition: 'all 0.3s',
+                  border: `2px solid ${pasoWizardProducto >= num ? colors.olive : colors.sand}`,
+                  boxShadow: pasoWizardProducto === num ? `0 0 0 4px ${colors.cream}` : 'none'
+                }}>
+                  {num}
                 </div>
-                <span style={{ fontSize: '12px', fontWeight: '600', color: formProducto.es_manufacturado ? colors.olive : colors.camel }}>MANUFACTURA</span>
+                <div style={{ 
+                  fontSize: '10px', fontWeight: '700', 
+                  color: pasoWizardProducto === num ? colors.espresso : colors.camel,
+                  textTransform: 'uppercase', letterSpacing: '1px'
+                }}>
+                  {num === 1 && 'Identidad'}
+                  {num === 2 && (formProducto.es_manufacturado ? 'Patrón' : 'Origen')}
+                  {num === 3 && 'Finalizar'}
+                </div>
               </div>
-            </div>
-            {/* Advertencia si hay historial (simulada por ahora) */}
-            {productoEditandoId && (
-              <div style={{ marginTop: '10px', fontSize: '11px', color: colors.terracotta, fontStyle: 'italic' }}>
-                * Cambiar el modelo de un producto existente puede afectar el historial de costos.
-              </div>
+            ))}
+          </div>
+
+          <div style={{ minHeight: '300px' }}>
+            {/* PASO 1: Identidad y Modelo */}
+            {pasoWizardProducto === 1 && (
+              <>
+                <div style={{ marginBottom: '25px', background: 'rgba(218,159,23,0.03)', padding: '20px', border: `1px solid ${colors.sand}`, borderRadius: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <label style={{ ...labelStyle, fontSize: '14px' }}>Modelo de Negocio</label>
+                      <p style={{ margin: '4px 0 0', fontSize: '12px', color: colors.camel }}>
+                        ¿Cómo se obtiene este producto?
+                      </p>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'white', padding: '6px', borderRadius: '30px', border: `1px solid ${colors.sand}` }}>
+                      <button onClick={() => setFormProducto({ ...formProducto, es_manufacturado: false })}
+                        style={{ padding: '8px 16px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: '700', background: !formProducto.es_manufacturado ? colors.terracotta : 'transparent', color: !formProducto.es_manufacturado ? 'white' : colors.camel, transition: 'all 0.3s' }}>REVENTA</button>
+                      <button onClick={() => setFormProducto({ ...formProducto, es_manufacturado: true })}
+                        style={{ padding: '8px 16px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: '700', background: formProducto.es_manufacturado ? colors.olive : 'transparent', color: formProducto.es_manufacturado ? 'white' : colors.camel, transition: 'all 0.3s' }}>MANUFACTURA</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={sectionStyle}>
+                  <label style={labelStyle}>Descripción del Producto</label>
+                  <textarea value={formProducto.descripcion}
+                    onChange={(e) => setFormProducto({ ...formProducto, descripcion: e.target.value })}
+                    placeholder="Ej: Sábana de algodón 100% con acabado suave..."
+                    style={{ ...inputStyle, minHeight: '120px', fontSize: '14px' }} />
+                </div>
+              </>
             )}
-          </div>
 
-          {/* 1. Descripción */}
-          <div style={sectionStyle}>
-            <label style={labelStyle}>1. Descripción del Producto</label>
-            <textarea value={formProducto.descripcion}
-              onChange={(e) => setFormProducto({ ...formProducto, descripcion: e.target.value })}
-              placeholder="Describe las características del producto..."
-              style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }} />
-          </div>
+            {/* PASO 2: Parámetros Técnicos */}
+            {pasoWizardProducto === 2 && (
+              <>
+                {formProducto.es_manufacturado ? (
+                  <>
+                    {/* Manufactura Dinámica */}
+                    {!esCategoriaLegacy() && camposCategoria.length > 0 && (
+                      <>
+                        {Object.entries(camposPorSeccion).filter(([s]) => s !== 'costos').map(([seccion, campos]) => (
+                          <div key={seccion} style={sectionStyle}>
+                            <label style={{ ...labelStyle, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                              {seccion === 'medidas' ? '📐 Medidas' : seccion === 'produccion' ? '⚙️ Producción' : seccion}
+                            </label>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '15px' }}>
+                              {campos.map((campo) => (
+                                <div key={campo.id}>
+                                  <label style={{ fontSize: '12px', color: colors.camel, marginBottom: '5px', display: 'block' }}>{campo.nombre_display}</label>
+                                  <CampoDinamico campo={campo} valor={camposDinamicos[campo.nombre_campo]} onChange={actualizarCampoDinamico} colors={colors} />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                    {/* Manufactura Legacy */}
+                    {esCategoriaLegacy() && (
+                      <div style={sectionStyle}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                          <label style={{ ...labelStyle, margin: 0, fontSize: '14px' }}>📐 Patrón de Corte (Totebag)</label>
+                          {isAdmin && (
+                            <button onClick={() => setEditandoAnchos(!editandoAnchos)}
+                              style={{ padding: '6px 12px', background: editandoAnchos ? colors.sidebarBg : colors.sand, color: editandoAnchos ? colors.sidebarText : colors.espresso, border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>
+                              {editandoAnchos ? 'Cerrar Editor' : 'Editar Telas (Admin)'}
+                            </button>
+                          )}
+                        </div>
 
-          {/* Campos dinámicos para categorías nuevas (Manufactura no Totebags) */}
-          {formProducto.es_manufacturado && !esCategoriaLegacy() && camposCategoria.length > 0 && (
-            <>
-              {/* Agrupar campos por sección */}
-              {Object.entries(camposPorSeccion).map(([seccion, campos]) => (
-                <div key={seccion} style={sectionStyle}>
-                  <label style={{ ...labelStyle, fontSize: '15px', marginBottom: '15px', textTransform: 'capitalize' }}>
-                    {seccion === 'medidas' && '📏 '}
-                    {seccion === 'caracteristicas' && '✨ '}
-                    {seccion === 'costos' && '💰 '}
-                    {seccion === 'produccion' && '🏭 '}
-                    {seccion === 'general' && '📝 '}
-                    {seccion.replace(/_/g, ' ')}
-                  </label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
-                    {campos.map((campo) => (
-                      <div key={campo.id}>
-                        {campo.tipo_campo !== 'boolean' && (
-                          <label style={labelStyle}>
-                            {campo.nombre_display}
-                            {campo.es_requerido && <span style={{ color: colors.terracotta }}> *</span>}
-                          </label>
+                        {editandoAnchos && isAdmin && (
+                          <div style={{ background: colors.cotton, border: `2px solid ${colors.terracotta}`, borderRadius: '6px', padding: '15px', marginBottom: '15px' }}>
+                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                <div style={{ fontSize: '13px', fontWeight: '600', color: colors.terracotta }}>Anchos de Tela Disponibles</div>
+                                <button onClick={guardarTiposTela} style={{ padding: '6px 12px', background: colors.terracotta, color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>Guardar</button>
+                             </div>
+                             {anchosTela.map((tela, idx) => (
+                               <div key={tela.id} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px 32px', gap: '8px', marginBottom: '8px' }}>
+                                 <input type="text" value={tela.nombre} onChange={e => { const n = [...anchosTela]; n[idx].nombre = e.target.value; setAnchosTela(n); }} style={inputStyle} />
+                                 <input type="number" value={tela.ancho} onChange={e => { const n = [...anchosTela]; n[idx].ancho = parseFloat(e.target.value); setAnchosTela(n); }} style={inputStyle} />
+                                 <input type="number" value={tela.precio} onChange={e => { const n = [...anchosTela]; n[idx].precio = parseFloat(e.target.value); setAnchosTela(n); }} style={inputStyle} />
+                                 <button onClick={() => eliminarTipoTela(idx)} style={{ background: colors.terracotta, color: 'white', border: 'none', borderRadius: '4px' }}>X</button>
+                               </div>
+                             ))}
+                             <button onClick={agregarTipoTela} style={{ padding: '6px 12px', background: colors.olive, color: 'white', border: 'none', borderRadius: '4px', fontSize: '11px', marginTop: '10px' }}>+ Nueva Tela</button>
+                          </div>
                         )}
-                        <CampoDinamico
-                          campo={campo}
-                          valor={camposDinamicos[campo.nombre_campo]}
-                          onChange={actualizarCampoDinamico}
-                          colors={colors}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
 
-              {/* Resumen de costos para categorías nuevas */}
-              {camposPorSeccion.costos && (
-                <div style={{ background: colors.sidebarBg, borderRadius: '8px', padding: '25px', color: colors.sidebarText }}>
-                  <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '20px', letterSpacing: '1px' }}>
-                    RESUMEN DE COSTOS
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', marginBottom: '20px' }}>
-                    {camposPorSeccion.costos.map((campo) => (
-                      <div key={campo.id} style={{ background: 'rgba(255,255,255,0.1)', padding: '10px', borderRadius: '6px' }}>
-                        <div style={{ fontSize: '10px', opacity: 0.8 }}>{campo.nombre_display}</div>
-                        <div style={{ fontSize: '16px', fontWeight: '600' }}>
-                          ${(parseFloat(camposDinamicos[campo.nombre_campo]) || 0).toFixed(2)}
+                        <div style={{ marginBottom: '20px' }}>
+                          <label style={{ fontSize: '12px', color: colors.camel }}>Tela Base</label>
+                          <select value={formProducto.telaSeleccionada || ''} onChange={e => setFormProducto({ ...formProducto, telaSeleccionada: parseInt(e.target.value) })} style={inputStyle}>
+                            <option value="">Seleccionar tela...</option>
+                            {anchosTela.map(t => <option key={t.id} value={t.id}>{t.nombre} ({t.ancho}m) - ${t.precio}/m</option>)}
+                          </select>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '15px' }}>
+                          <div><label style={{ fontSize: '11px' }}>Metros por corte</label><input type="number" step="0.1" value={formProducto.cantidadTela} onChange={e => setFormProducto({...formProducto, cantidadTela: e.target.value})} style={inputStyle} /></div>
+                          <div><label style={{ fontSize: '11px' }}>Piezas por corte</label><input type="number" value={formProducto.piezasPorCorte} onChange={e => setFormProducto({...formProducto, piezasPorCorte: e.target.value})} style={inputStyle} /></div>
+                          <div><label style={{ fontSize: '11px' }}>Merma (%)</label><input type="number" value={formProducto.merma} onChange={e => setFormProducto({...formProducto, merma: e.target.value})} style={inputStyle} /></div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                  <div style={{ background: 'rgba(255,255,255,0.15)', padding: '15px', borderRadius: '6px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '12px', opacity: 0.9, marginBottom: '5px' }}>COSTO TOTAL</div>
-                    <div style={{ fontSize: '28px', fontWeight: '700' }}>
-                      ${(
-                        (parseFloat(camposDinamicos.costo_material) || 0) +
-                        (parseFloat(camposDinamicos.costo_confeccion) || 0) +
-                        (parseFloat(camposDinamicos.costo_empaque) || 0)
-                      ).toFixed(2)}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Formulario de costos para categorías de compra/reventa (NO Manufacturado) */}
-          {!formProducto.es_manufacturado && (() => {
-            const costoUnitario = parseFloat(formProducto.costoUnitario) || 0;
-            const cantidadAdquirida = parseInt(formProducto.cantidadAdquirida) || 0;
-            const totalInversion = costoUnitario * cantidadAdquirida;
-            const precioVenta = parseFloat(formProducto.precioVenta) || 0;
-            const utilidad = precioVenta - costoUnitario;
-            const margen = precioVenta > 0 ? ((utilidad / precioVenta) * 100) : 0;
-            const stockActual = productoEditandoId
-              ? (productosGuardados.find(p => p.id === Number(productoEditandoId))?.stock || 0)
-              : null;
-            const inputStyle = {
-              width: '100%',
-              padding: '10px',
-              fontSize: '15px',
-              fontWeight: '600',
-              border: '2px solid rgba(255,255,255,0.3)',
-              borderRadius: '6px',
-              background: 'rgba(255,255,255,0.1)',
-              color: colors.sidebarText,
-              textAlign: 'center'
-            };
-            const selectStyle = {
-              ...inputStyle,
-              textAlign: 'left',
-              cursor: 'pointer',
-              appearance: 'auto'
-            };
-            return (
-            <div style={{ background: colors.sidebarBg, borderRadius: '8px', padding: '25px', color: colors.sidebarText }}>
-              <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '20px', letterSpacing: '1px' }}>
-                DATOS DE ADQUISICIÓN
-              </div>
-
-              {/* Grid de inputs */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
-                {/* SKU */}
-                <div>
-                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>SKU</div>
-                  <input type="text" value={formProducto.skuProducto}
-                    onChange={(e) => setFormProducto({ ...formProducto, skuProducto: e.target.value })}
-                    disabled={!isAdmin} style={{ ...inputStyle, textAlign: 'left' }} placeholder="Ej: DG-001" />
-                </div>
-
-                {/* Marca */}
-                <div>
-                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>MARCA</div>
-                  <input type="text" value={formProducto.marcaProducto}
-                    onChange={(e) => setFormProducto({ ...formProducto, marcaProducto: e.target.value })}
-                    disabled={!isAdmin} style={{ ...inputStyle, textAlign: 'left' }} placeholder="Ej: De la Rosa" />
-                </div>
-
-                {/* Cantidad adquirida (solo al crear, al editar se usa Resurtir) */}
-                {!productoEditandoId && (
-                <div>
-                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>CANTIDAD ADQUIRIDA</div>
-                  <input type="number" min="0" step="1" value={formProducto.cantidadAdquirida}
-                    onChange={(e) => setFormProducto({ ...formProducto, cantidadAdquirida: parseInt(e.target.value) || 0 })}
-                    disabled={!isAdmin} style={inputStyle} placeholder="0" />
-                </div>
-                )}
-
-                {/* Costo unitario */}
-                <div>
-                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>COSTO POR UNIDAD</div>
-                  <input type="number" min="0" step="0.01" value={formProducto.costoUnitario}
-                    onChange={(e) => setFormProducto({ ...formProducto, costoUnitario: parseFloat(e.target.value) || 0 })}
-                    disabled={!isAdmin} style={inputStyle} placeholder="0.00" />
-                </div>
-
-                {/* Total inversión (calculado) */}
-                <div>
-                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>TOTAL INVERSIÓN</div>
-                  <div style={{ ...inputStyle, background: 'rgba(255,255,255,0.05)', border: '2px solid rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    ${totalInversion.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-
-                {/* Precio de venta */}
-                <div>
-                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>PRECIO DE VENTA</div>
-                  <input type="number" min="0" step="0.01" value={formProducto.precioVenta}
-                    onChange={(e) => setFormProducto({ ...formProducto, precioVenta: parseFloat(e.target.value) || 0 })}
-                    disabled={!isAdmin} style={inputStyle} placeholder="0.00" />
-                </div>
-
-                {/* Cliente */}
-                <div>
-                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>CLIENTE / PROVEEDOR</div>
-                  <select value={formProducto.clienteId || ''}
-                    onChange={(e) => setFormProducto({ ...formProducto, clienteId: e.target.value || null })}
-                    disabled={!isAdmin} style={selectStyle}>
-                    <option value="">Sin asignar</option>
-                    {clientes.filter(c => c.activo !== false).map(c => (
-                      <option key={c.id} value={c.id}>{c.nombre}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Origen financiero (solo al crear producto nuevo con stock) */}
-              {!productoEditandoId && cantidadAdquirida > 0 && costoUnitario > 0 && (
-                <div style={{ marginBottom: '20px' }}>
-                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px', letterSpacing: '0.5px' }}>ORIGEN DEL DINERO</div>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
-                    {[
-                      { value: 'caja', label: 'Dinero de Caja', desc: 'Se descuenta de caja', color: '#e65100' },
-                      { value: 'inversion_externa', label: 'Inversión Externa', desc: 'Capital nuevo entrante', color: '#1565c0' },
-                      { value: 'ajuste', label: 'Ya registré el egreso', desc: 'No crear mov. de caja', color: '#6a6a6a' }
-                    ].map(opt => (
-                      <button key={opt.value}
-                        onClick={() => setFormProducto({ ...formProducto, origenFinanciero: opt.value })}
-                        style={{
-                          flex: 1, minWidth: '120px', padding: '10px 8px', borderRadius: '8px', cursor: 'pointer',
-                          border: formProducto.origenFinanciero === opt.value ? `2px solid ${opt.color}` : '2px solid rgba(255,255,255,0.2)',
-                          background: formProducto.origenFinanciero === opt.value ? `${opt.color}33` : 'rgba(255,255,255,0.05)',
-                          color: colors.sidebarText, textAlign: 'center', transition: 'all 0.2s ease'
-                        }}>
-                        <div style={{ fontSize: '12px', fontWeight: '600' }}>{opt.label}</div>
-                        <div style={{ fontSize: '10px', opacity: 0.7, marginTop: '2px' }}>{opt.desc}</div>
-                      </button>
-                    ))}
-                  </div>
-                  {formProducto.origenFinanciero !== 'ajuste' && (
-                    <div>
-                      <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '6px' }}>MÉTODO DE PAGO</div>
-                      <select value={formProducto.metodoPago || 'efectivo'}
-                        onChange={(e) => setFormProducto({ ...formProducto, metodoPago: e.target.value })}
-                        disabled={!isAdmin} style={selectStyle}>
-                        <option value="efectivo">Efectivo</option>
-                        <option value="transferencia">Transferencia</option>
-                        <option value="tarjeta">Tarjeta</option>
-                      </select>
-                    </div>
-                  )}
-                  <div style={{
-                    padding: '10px', borderRadius: '6px', marginTop: '10px',
-                    background: formProducto.origenFinanciero === 'ajuste' ? 'rgba(106,106,106,0.2)' : formProducto.origenFinanciero === 'inversion_externa' ? 'rgba(21,101,192,0.2)' : 'rgba(230,81,0,0.2)',
-                    fontSize: '12px'
-                  }}>
-                    {formProducto.origenFinanciero === 'caja' && `Caja: -$${totalInversion.toLocaleString('es-MX', { minimumFractionDigits: 2 })} | Inventario: +${cantidadAdquirida} pzas | Capital: igual`}
-                    {formProducto.origenFinanciero === 'inversion_externa' && `Capital externo: +$${totalInversion.toLocaleString('es-MX', { minimumFractionDigits: 2 })} | Inventario: +${cantidadAdquirida} pzas | Capital: sube`}
-                    {formProducto.origenFinanciero === 'ajuste' && 'Sin movimiento de caja. Asegúrate de haber registrado el egreso manualmente.'}
-                  </div>
-                </div>
-              )}
-
-              {/* Resumen visual */}
-              <div style={{ display: 'grid', gridTemplateColumns: productoEditandoId ? '1fr 1fr 1fr' : '1fr 1fr', gap: '10px' }}>
-                {/* Utilidad por pieza */}
-                <div style={{
-                  background: utilidad >= 0 ? 'rgba(76,175,80,0.2)' : 'rgba(244,67,54,0.2)',
-                  padding: '12px', borderRadius: '6px', textAlign: 'center'
-                }}>
-                  <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '4px' }}>UTILIDAD / PIEZA</div>
-                  <div style={{ fontSize: '20px', fontWeight: '700', color: utilidad >= 0 ? '#81c784' : '#e57373' }}>
-                    ${utilidad.toFixed(2)}
-                  </div>
-                </div>
-
-                {/* Margen */}
-                <div style={{
-                  background: margen >= 20 ? 'rgba(76,175,80,0.2)' : margen >= 0 ? 'rgba(255,193,7,0.2)' : 'rgba(244,67,54,0.2)',
-                  padding: '12px', borderRadius: '6px', textAlign: 'center'
-                }}>
-                  <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '4px' }}>MARGEN</div>
-                  <div style={{ fontSize: '20px', fontWeight: '700',
-                    color: margen >= 20 ? '#81c784' : margen >= 0 ? '#ffd54f' : '#e57373'
-                  }}>
-                    {margen.toFixed(1)}%
-                  </div>
-                </div>
-
-                {/* Stock restante (solo al editar) */}
-                {productoEditandoId && (
-                  <div style={{
-                    background: 'rgba(33,150,243,0.2)',
-                    padding: '12px', borderRadius: '6px', textAlign: 'center'
-                  }}>
-                    <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '4px' }}>STOCK RESTANTE</div>
-                    <div style={{ fontSize: '20px', fontWeight: '700', color: '#64b5f6' }}>
-                      {stockActual}
+                    )}
+                  </>
+                ) : (
+                  <div style={sectionStyle}>
+                    <label style={labelStyle}>🏷️ Datos de Adquisición</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
+                      <div><label style={{ fontSize: '12px' }}>SKU / Código</label><input type="text" value={formProducto.skuProducto} onChange={e => setFormProducto({...formProducto, skuProducto: e.target.value})} style={inputStyle} /></div>
+                      <div><label style={{ fontSize: '12px' }}>Marca / Proveedor</label><input type="text" value={formProducto.marcaProducto} onChange={e => setFormProducto({...formProducto, marcaProducto: e.target.value})} style={inputStyle} /></div>
                     </div>
                   </div>
                 )}
-              </div>
-            </div>
-            );
-          })()}
+              </>
+            )}
 
-          {/* Formulario legacy para Totebags (Manufactura Legacy) */}
-          {formProducto.es_manufacturado && esCategoriaLegacy() && (
-          <>
-          {/* 2. Parámetros de Producción */}
-          <div style={sectionStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-              <label style={{ ...labelStyle, margin: 0, fontSize: '15px' }}>2. Parámetros de Producción</label>
-              {isAdmin && (
-                <button onClick={() => setEditandoAnchos(!editandoAnchos)}
-                  style={{ padding: '6px 12px', background: editandoAnchos ? colors.sidebarBg : colors.sand,
-                    color: editandoAnchos ? colors.sidebarText : colors.espresso,
-                    border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>
-                  {editandoAnchos ? 'Cerrar Editor' : 'Editar Telas (Admin)'}
-                </button>
-              )}
-            </div>
-
-            {/* Editor de anchos de tela - SOLO ADMIN */}
-            {editandoAnchos && isAdmin && (
-              <div style={{ background: colors.cotton, border: `2px solid ${colors.terracotta}`, borderRadius: '6px', padding: '15px', marginBottom: '15px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                  <div style={{ fontSize: '13px', fontWeight: '600', color: colors.terracotta }}>
-                    Anchos de Tela Disponibles (Solo Admin)
-                  </div>
-                  <button onClick={guardarTiposTela}
-                    style={{ padding: '6px 12px', background: colors.terracotta, color: 'white',
-                      border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: '500' }}>
-                    Guardar Cambios
-                  </button>
-                </div>
-                {anchosTela.map((tela, idx) => (
-                  <div key={tela.id} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px 32px', gap: '8px', marginBottom: '8px', alignItems: 'center' }}>
-                    <input type="text" value={tela.nombre}
-                      onChange={(e) => {
-                        const nuevo = [...anchosTela];
-                        nuevo[idx].nombre = e.target.value;
-                        setAnchosTela(nuevo);
-                      }}
-                      style={{ ...inputStyle, padding: '8px' }} />
-                    <input type="number" value={tela.ancho} step="0.1"
-                      onChange={(e) => {
-                        const nuevo = [...anchosTela];
-                        nuevo[idx].ancho = parseFloat(e.target.value) || 0;
-                        setAnchosTela(nuevo);
-                      }}
-                      style={{ ...inputStyle, padding: '8px', textAlign: 'center' }} />
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <span style={{ color: colors.camel }}>$</span>
-                      <input type="number" value={tela.precio} step="0.5"
-                        onChange={(e) => {
-                          const nuevo = [...anchosTela];
-                          nuevo[idx].precio = parseFloat(e.target.value) || 0;
-                          setAnchosTela(nuevo);
-                        }}
-                        style={{ ...inputStyle, padding: '8px', flex: 1 }} />
+            {/* PASO 3: Finalizar */}
+            {pasoWizardProducto === 3 && (
+              <>
+                {formProducto.es_manufacturado ? (
+                  <div style={{ display: 'grid', gap: '20px' }}>
+                    <div style={sectionStyle}>
+                      <label style={labelStyle}>💰 Costos Extra y Entrega</label>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+                        <div><label style={{ fontSize: '11px' }}>Costo Confección ($)</label><input type="number" value={esCategoriaLegacy() ? formProducto.costoMaquila : (camposDinamicos.costo_confeccion || 0)} onChange={e => esCategoriaLegacy() ? setFormProducto({...formProducto, costoMaquila: parseFloat(e.target.value) || 0}) : actualizarCampoDinamico('costo_confeccion', e.target.value)} style={inputStyle} /></div>
+                        <div><label style={{ fontSize: '11px' }}>Empaque ($)</label><input type="number" value={formProducto.empaque} onChange={e => setFormProducto({...formProducto, empaque: parseFloat(e.target.value) || 0})} style={inputStyle} /></div>
+                      </div>
+                      
+                      {/* Config de Envío */}
+                      <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                         <button onClick={() => setFormProducto({...formProducto, tipoEntrega: 'recolecta'})} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: formProducto.tipoEntrega === 'recolecta' ? colors.sidebarBg : colors.sand, color: formProducto.tipoEntrega === 'recolecta' ? 'white' : colors.espresso }}>Recolecta</button>
+                         <button onClick={() => setFormProducto({...formProducto, tipoEntrega: 'envio'})} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: formProducto.tipoEntrega === 'envio' ? colors.sidebarBg : colors.sand, color: formProducto.tipoEntrega === 'envio' ? 'white' : colors.espresso }}>Envío</button>
+                      </div>
+                      {formProducto.tipoEntrega === 'envio' && (
+                        <div style={{ padding: '15px', background: colors.cream, borderRadius: '8px', border: `1px solid ${colors.terracotta}` }}>
+                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                             <span style={{ fontSize: '12px' }}>Costo Envío: ${formProducto.envio}</span>
+                             {isAdmin && <button onClick={guardarConfigEnvio} style={{ fontSize: '10px', background: colors.terracotta, color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px' }}>Guardar</button>}
+                           </div>
+                           <input type="number" value={formProducto.envio} onChange={e => setFormProducto({...formProducto, envio: parseFloat(e.target.value)})} style={inputStyle} />
+                        </div>
+                      )}
                     </div>
-                    <button onClick={() => eliminarTipoTela(idx)} title="Eliminar tela"
-                      style={{ padding: '4px 8px', background: colors.terracotta, color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}>
-                      X
-                    </button>
-                  </div>
-                ))}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
-                  <div style={{ fontSize: '11px', color: colors.camel }}>
-                    Nombre | Ancho (m) | Precio/m
-                  </div>
-                  <button onClick={agregarTipoTela} disabled={guardando}
-                    style={{ padding: '6px 14px', background: colors.olive, color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}>
-                    + Nueva Tela
-                  </button>
-                </div>
-              </div>
-            )}
+                    
+                    <div style={{ background: colors.sidebarBg, padding: '25px', borderRadius: '12px', color: 'white', textAlign: 'center' }}>
+                      <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>COSTO ESTIMADO POR PIEZA</div>
+                      <div style={{ fontSize: '36px', fontWeight: '800' }}>${esCategoriaLegacy() ? costos.subtotal : ((parseFloat(camposDinamicos.costo_material) || 0) + (parseFloat(camposDinamicos.costo_confeccion) || 0) + (parseFloat(formProducto.empaque) || 0)).toFixed(2)}</div>
+                    </div>
 
-            {/* Selector de tela */}
-            <div style={{ marginBottom: '15px' }}>
-              <label style={labelStyle}>Tipo de Tela (base de precio)</label>
-              <select value={formProducto.telaSeleccionada || ''}
-                onChange={(e) => setFormProducto({ ...formProducto, telaSeleccionada: parseInt(e.target.value) })}
-                style={{ ...inputStyle, cursor: 'pointer' }}>
-                <option value="">Seleccionar tela...</option>
-                {anchosTela.map(tela => (
-                  <option key={tela.id} value={tela.id}>
-                    {tela.nombre} — {tela.ancho}m — ${tela.precio.toFixed(2)}/m
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Grid de campos */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
-              <div>
-                <label style={labelStyle}>Cantidad de Tela (m)</label>
-                <input type="number" value={formProducto.cantidadTela} step="0.1"
-                  onChange={(e) => setFormProducto({ ...formProducto, cantidadTela: parseFloat(e.target.value) || 0 })}
-                  style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>Piezas por Corte</label>
-                <input type="number" value={formProducto.piezasPorCorte} min="1"
-                  onChange={(e) => setFormProducto({ ...formProducto, piezasPorCorte: parseInt(e.target.value) || 1 })}
-                  style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>Costo Maquila (Corte + Confección)</label>
-                <input type="number" value={formProducto.costoMaquila} step="0.5"
-                  onChange={(e) => setFormProducto({ ...formProducto, costoMaquila: parseFloat(e.target.value) || 0 })}
-                  style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>Insumos (Hilo + Etiqueta)</label>
-                <input type="number" value={formProducto.insumos} step="0.1"
-                  onChange={(e) => setFormProducto({ ...formProducto, insumos: parseFloat(e.target.value) || 0 })}
-                  style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>Merma (%)</label>
-                <input type="number" value={formProducto.merma} min="0" max="100"
-                  onChange={(e) => setFormProducto({ ...formProducto, merma: parseFloat(e.target.value) || 0 })}
-                  style={inputStyle} />
-              </div>
-            </div>
-          </div>
-
-          {/* 3. Serigrafía */}
-          <div style={sectionStyle}>
-            <label style={{ ...labelStyle, fontSize: '15px', marginBottom: '15px' }}>3. Serigrafía (costo por pieza)</label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '15px' }}>
-              <div>
-                <label style={labelStyle}>1 Tinta ($)</label>
-                <input type="number" value={formProducto.serigrafia1} step="0.5"
-                  onChange={(e) => setFormProducto({ ...formProducto, serigrafia1: parseFloat(e.target.value) || 0 })}
-                  style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>2 Tintas ($)</label>
-                <input type="number" value={formProducto.serigrafia2} step="0.5"
-                  onChange={(e) => setFormProducto({ ...formProducto, serigrafia2: parseFloat(e.target.value) || 0 })}
-                  style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>3 Tintas ($)</label>
-                <input type="number" value={formProducto.serigrafia3} step="0.5"
-                  onChange={(e) => setFormProducto({ ...formProducto, serigrafia3: parseFloat(e.target.value) || 0 })}
-                  style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>4 Tintas ($)</label>
-                <input type="number" value={formProducto.serigrafia4} step="0.5"
-                  onChange={(e) => setFormProducto({ ...formProducto, serigrafia4: parseFloat(e.target.value) || 0 })}
-                  style={inputStyle} />
-              </div>
-            </div>
-          </div>
-
-          {/* 4. Empaque */}
-          <div style={sectionStyle}>
-            <label style={{ ...labelStyle, fontSize: '15px', marginBottom: '15px' }}>4. Empaque</label>
-            <div style={{ maxWidth: '250px' }}>
-              <label style={labelStyle}>Costo por pieza ($)</label>
-              <input type="number" value={formProducto.empaque} step="0.5"
-                onChange={(e) => setFormProducto({ ...formProducto, empaque: parseFloat(e.target.value) || 0 })}
-                style={inputStyle} />
-            </div>
-          </div>
-
-          {/* 5. Tipo de Entrega */}
-          <div style={sectionStyle}>
-            <label style={{ ...labelStyle, fontSize: '15px', marginBottom: '15px' }}>5. Tipo de Entrega</label>
-            <div style={{ display: 'flex', gap: '15px', marginBottom: '15px' }}>
-              <label style={{
-                flex: 1,
-                padding: '15px',
-                background: formProducto.tipoEntrega === 'recolecta' ? colors.sidebarBg : colors.cream,
-                color: formProducto.tipoEntrega === 'recolecta' ? colors.sidebarText : colors.espresso,
-                border: `2px solid ${formProducto.tipoEntrega === 'recolecta' ? colors.sidebarBg : colors.sand}`,
-                borderRadius: '8px',
-                cursor: 'pointer',
-                textAlign: 'center',
-                transition: 'all 0.3s ease'
-              }}>
-                <input type="radio" name="tipoEntrega" value="recolecta"
-                  checked={formProducto.tipoEntrega === 'recolecta'}
-                  onChange={() => setFormProducto({ ...formProducto, tipoEntrega: 'recolecta' })}
-                  style={{ display: 'none' }} />
-                <div style={{ fontWeight: '600', fontSize: '14px' }}>Recolecta Local</div>
-                <div style={{ fontSize: '12px', marginTop: '5px', opacity: 0.8 }}>Blacksheep (Sin costo de envío)</div>
-              </label>
-              <label style={{
-                flex: 1,
-                padding: '15px',
-                background: formProducto.tipoEntrega === 'envio' ? colors.sidebarBg : colors.cream,
-                color: formProducto.tipoEntrega === 'envio' ? colors.sidebarText : colors.espresso,
-                border: `2px solid ${formProducto.tipoEntrega === 'envio' ? colors.sidebarBg : colors.sand}`,
-                borderRadius: '8px',
-                cursor: 'pointer',
-                textAlign: 'center',
-                transition: 'all 0.3s ease'
-              }}>
-                <input type="radio" name="tipoEntrega" value="envio"
-                  checked={formProducto.tipoEntrega === 'envio'}
-                  onChange={() => setFormProducto({ ...formProducto, tipoEntrega: 'envio' })}
-                  style={{ display: 'none' }} />
-                <div style={{ fontWeight: '600', fontSize: '14px' }}>Envío</div>
-                <div style={{ fontSize: '12px', marginTop: '5px', opacity: 0.8 }}>Zona Conurbada Puebla</div>
-              </label>
-            </div>
-
-            {/* Configuración de envío (solo visible si es envío) */}
-            {formProducto.tipoEntrega === 'envio' && (
-              <div style={{
-                background: isAdmin ? 'rgba(196, 120, 74, 0.1)' : colors.cotton,
-                border: `1px solid ${isAdmin ? colors.terracotta : colors.sand}`,
-                borderRadius: '8px',
-                padding: '15px'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                  <div style={{ fontSize: '13px', color: colors.espresso }}>
-                    <strong>Condición:</strong> Mínimo de piezas por envío para garantizar rentabilidad.
+                    <div style={sectionStyle}><label style={labelStyle}>Precio de Venta Sugerido ($)</label><input type="number" value={formProducto.precioVenta} onChange={e => setFormProducto({...formProducto, precioVenta: parseFloat(e.target.value) || 0})} style={{ ...inputStyle, fontSize: '20px', fontWeight: '700', textAlign: 'center', color: colors.olive }} /></div>
                   </div>
-                  {isAdmin && (
-                    <button onClick={guardarConfigEnvio}
-                      style={{ padding: '6px 12px', background: colors.terracotta, color: 'white',
-                        border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: '500' }}>
-                      Guardar Config
-                    </button>
-                  )}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' }}>
-                  <div>
-                    <label style={labelStyle}>Costo Total Envío ($) {isAdmin && <span style={{ color: colors.terracotta, fontSize: '10px' }}>(Admin)</span>}</label>
-                    <input type="number" value={formProducto.envio} step="1"
-                      onChange={(e) => setFormProducto({ ...formProducto, envio: parseFloat(e.target.value) || 0 })}
-                      disabled={!isAdmin}
-                      style={{ ...inputStyle, background: isAdmin ? colors.cream : colors.sand, cursor: isAdmin ? 'text' : 'not-allowed' }} />
+                ) : (
+                  <div style={{ display: 'grid', gap: '20px' }}>
+                    <div style={{ background: colors.sidebarBg, padding: '20px', borderRadius: '10px', color: 'white' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                        <div><label style={{ fontSize: '11px', opacity: 0.8 }}>Costo Compra</label><input type="number" value={formProducto.costoUnitario} onChange={e => setFormProducto({...formProducto, costoUnitario: parseFloat(e.target.value)})} style={inputStyle} /></div>
+                        <div><label style={{ fontSize: '11px', opacity: 0.8 }}>Precio Venta</label><input type="number" value={formProducto.precioVenta} onChange={e => setFormProducto({...formProducto, precioVenta: parseFloat(e.target.value)})} style={inputStyle} /></div>
+                      </div>
+                    </div>
+                    {!productoEditandoId && (
+                      <div style={sectionStyle}>
+                        <label style={labelStyle}>📦 Stock Inicial</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                           <input type="number" value={formProducto.cantidadAdquirida} onChange={e => setFormProducto({...formProducto, cantidadAdquirida: parseInt(e.target.value)})} style={inputStyle} />
+                           <select value={formProducto.origenFinanciero} onChange={e => setFormProducto({...formProducto, origenFinanciero: e.target.value})} style={inputStyle}>
+                             <option value="caja">Caja</option><option value="inversion_externa">Capital Externo</option><option value="ajuste">Ajuste Manual</option>
+                           </select>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <label style={labelStyle}>Mínimo Piezas {isAdmin && <span style={{ color: colors.terracotta, fontSize: '10px' }}>(Admin)</span>}</label>
-                    <input type="number" value={formProducto.minPiezasEnvio} min="1"
-                      onChange={(e) => setFormProducto({ ...formProducto, minPiezasEnvio: parseInt(e.target.value) || 1 })}
-                      disabled={!isAdmin}
-                      style={{ ...inputStyle, background: isAdmin ? colors.cream : colors.sand, cursor: isAdmin ? 'text' : 'not-allowed' }} />
-                  </div>
-                  <div style={{
-                    background: colors.sidebarBg,
-                    padding: '12px',
-                    borderRadius: '6px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'center'
-                  }}>
-                    <div style={{ fontSize: '11px', color: colors.sidebarText, opacity: 0.8 }}>Envío por Pieza</div>
-                    <div style={{ fontSize: '20px', fontWeight: '600', color: colors.sidebarText }}>${costos.envioPorPieza}</div>
-                  </div>
-                </div>
-              </div>
+                )}
+              </>
             )}
           </div>
 
-          {/* Resumen de Costos */}
-          <div style={{ background: colors.sidebarBg, borderRadius: '8px', padding: '25px', color: colors.sidebarText }}>
-            <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '20px', letterSpacing: '1px' }}>
-              RESUMEN DE COSTOS {formProducto.tipoEntrega === 'recolecta' ? '(Recolecta Local)' : '(Con Envío)'}
-            </div>
-
-            {/* Desglose de costos */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', marginBottom: '20px' }}>
-              <div style={{ background: 'rgba(255,255,255,0.1)', padding: '10px', borderRadius: '6px' }}>
-                <div style={{ fontSize: '10px', opacity: 0.8 }}>Costo Tela</div>
-                <div style={{ fontSize: '16px', fontWeight: '600' }}>${costos.costoTela}</div>
-              </div>
-              <div style={{ background: 'rgba(255,255,255,0.1)', padding: '10px', borderRadius: '6px' }}>
-                <div style={{ fontSize: '10px', opacity: 0.8 }}>Subtotal</div>
-                <div style={{ fontSize: '16px', fontWeight: '600' }}>${costos.subtotal}</div>
-              </div>
-              <div style={{ background: 'rgba(255,255,255,0.1)', padding: '10px', borderRadius: '6px' }}>
-                <div style={{ fontSize: '10px', opacity: 0.8 }}>Con Merma ({formProducto.merma}%)</div>
-                <div style={{ fontSize: '16px', fontWeight: '600' }}>${costos.conMerma}</div>
-              </div>
-              <div style={{ background: 'rgba(255,255,255,0.1)', padding: '10px', borderRadius: '6px' }}>
-                <div style={{ fontSize: '10px', opacity: 0.8 }}>Empaque</div>
-                <div style={{ fontSize: '16px', fontWeight: '600' }}>${costos.empaque}</div>
-              </div>
-              {formProducto.tipoEntrega === 'envio' && (
-                <div style={{ background: 'rgba(255,255,255,0.1)', padding: '10px', borderRadius: '6px' }}>
-                  <div style={{ fontSize: '10px', opacity: 0.8 }}>Envío/pza (mín {formProducto.minPiezasEnvio})</div>
-                  <div style={{ fontSize: '16px', fontWeight: '600' }}>${costos.envioPorPieza}</div>
-                </div>
-              )}
-            </div>
-
-            {/* Costo Base (SIN serigrafía) */}
-            <div style={{ background: 'rgba(255,255,255,0.15)', padding: '15px', borderRadius: '6px', marginBottom: '20px', textAlign: 'center' }}>
-              <div style={{ fontSize: '12px', opacity: 0.9, marginBottom: '5px' }}>
-                COSTO BASE (Sin Serigrafía, {formProducto.tipoEntrega === 'recolecta' ? 'Sin Envío' : 'Con Envío'})
-              </div>
-              <div style={{ fontSize: '28px', fontWeight: '700' }}>
-                ${formProducto.tipoEntrega === 'recolecta' ? costos.costoBase : costos.baseConEnvio}
-              </div>
-            </div>
-
-            {/* Totales con Serigrafía */}
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '20px' }}>
-              <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '15px', textAlign: 'center' }}>
-                COSTOS TOTALES CON SERIGRAFÍA
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '10px' }}>
-                <div style={{ background: 'rgba(171,213,94,0.2)', padding: '12px', borderRadius: '6px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '11px', opacity: 0.9 }}>1 TINTA</div>
-                  <div style={{ fontSize: '20px', fontWeight: '700', marginTop: '5px' }}>${costos.total1Tinta}</div>
-                </div>
-                <div style={{ background: 'rgba(171,213,94,0.3)', padding: '12px', borderRadius: '6px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '11px', opacity: 0.9 }}>2 TINTAS</div>
-                  <div style={{ fontSize: '20px', fontWeight: '700', marginTop: '5px' }}>${costos.total2Tintas}</div>
-                </div>
-                <div style={{ background: 'rgba(171,213,94,0.4)', padding: '12px', borderRadius: '6px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '11px', opacity: 0.9 }}>3 TINTAS</div>
-                  <div style={{ fontSize: '20px', fontWeight: '700', marginTop: '5px' }}>${costos.total3Tintas}</div>
-                </div>
-                <div style={{ background: 'rgba(171,213,94,0.5)', padding: '12px', borderRadius: '6px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '11px', opacity: 0.9 }}>4 TINTAS</div>
-                  <div style={{ fontSize: '20px', fontWeight: '700', marginTop: '5px' }}>${costos.total4Tintas}</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Precio de Venta */}
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '20px', marginTop: '20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
-                <div style={{ flex: 1, minWidth: '150px' }}>
-                  <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '8px' }}>PRECIO DE VENTA SUGERIDO</div>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formProducto.precioVenta}
-                    onChange={(e) => setFormProducto({ ...formProducto, precioVenta: parseFloat(e.target.value) || 0 })}
-                    disabled={!isAdmin}
-                    style={{
-                      width: '100%',
-                      padding: '12px',
-                      fontSize: '18px',
-                      fontWeight: '600',
-                      border: '2px solid rgba(255,255,255,0.3)',
-                      borderRadius: '6px',
-                      background: 'rgba(255,255,255,0.1)',
-                      color: colors.sidebarText,
-                      textAlign: 'center'
-                    }}
-                    placeholder="0.00"
-                  />
-                </div>
-                <div style={{ textAlign: 'center', padding: '10px' }}>
-                  <div style={{ fontSize: '11px', opacity: 0.7 }}>Margen estimado</div>
-                  <div style={{ fontSize: '18px', fontWeight: '600', color: colors.olive }}>
-                    {formProducto.precioVenta > 0 && parseFloat(costos.total1Tinta) > 0
-                      ? `${(((formProducto.precioVenta - parseFloat(costos.total1Tinta)) / parseFloat(costos.total1Tinta)) * 100).toFixed(0)}%`
-                      : '--'}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          </>
-          )}
-          {/* Fin formulario legacy Totebags */}
-
-          {/* Mensaje de estado */}
           {mensaje.texto && (
-            <div style={{
-              marginTop: '20px',
-              padding: '15px',
-              borderRadius: '6px',
-              background: mensaje.tipo === 'exito' ? 'rgba(171,213,94,0.2)' : 'rgba(196,120,74,0.2)',
-              border: `1px solid ${mensaje.tipo === 'exito' ? colors.sidebarText : colors.terracotta}`,
-              color: mensaje.tipo === 'exito' ? colors.olive : colors.terracotta,
-              textAlign: 'center',
-              fontWeight: '500'
-            }}>
+            <div style={{ margin: '20px 0', padding: '12px', borderRadius: '8px', background: mensaje.tipo === 'exito' ? '#E8F5E9' : '#FFEBEE', color: mensaje.tipo === 'exito' ? '#2E7D32' : '#C62828', fontSize: '13px', textAlign: 'center', fontWeight: '600', border: `1px solid ${mensaje.tipo === 'exito' ? '#2E7D32' : '#C62828'}` }}>
               {mensaje.texto}
             </div>
           )}
 
-          {/* Botón Guardar */}
-          <div style={{ marginTop: '25px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-            <button onClick={() => { setLineaSeleccionada(null); setCamposDinamicos({}); }}
-              disabled={guardando}
-              style={{ padding: '12px 25px', background: colors.sand, color: colors.espresso,
-                border: 'none', borderRadius: '6px', cursor: guardando ? 'not-allowed' : 'pointer', fontSize: '14px',
-                opacity: guardando ? 0.6 : 1 }}>
-              Cancelar
-            </button>
-            <button onClick={guardarProducto}
-              disabled={guardando}
-              style={{ padding: '12px 25px', background: guardando ? colors.camel : colors.sidebarBg, color: colors.sidebarText,
-                border: 'none', borderRadius: '6px', cursor: guardando ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: '500',
-                opacity: guardando ? 0.8 : 1 }}>
-              {guardando ? 'Guardando...' : (productoEditandoId ? 'Actualizar Producto' : 'Guardar Producto')}
-            </button>
+          <div style={{ marginTop: '30px', paddingTop: '20px', borderTop: `1px solid ${colors.sand}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {pasoWizardProducto > 1 ? (<button onClick={() => setPasoWizardProducto(pasoWizardProducto - 1)} style={{ padding: '12px 24px', background: 'none', color: colors.camel, border: `1px solid ${colors.sand}`, borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>← Anterior</button>) : <div />}
+            <div style={{ display: 'flex', gap: '15px' }}>
+              {pasoWizardProducto < 3 ? (
+                <button onClick={() => setPasoWizardProducto(pasoWizardProducto + 1)} style={{ padding: '12px 32px', background: colors.sidebarBg, color: colors.sidebarText, border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>Siguiente →</button>
+              ) : (
+                <button onClick={guardarProducto} disabled={guardando} style={{ padding: '12px 40px', background: colors.olive, color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', opacity: guardando ? 0.7 : 1, boxShadow: '0 4px 15px rgba(107,126,82,0.3)' }}>{guardando ? 'Guardando...' : (productoEditandoId ? 'Actualizar' : 'Confirmar y Guardar')}</button>
+              )}
+            </div>
           </div>
         </div>
       ) : (
         <div>
           {/* Lista de productos guardados */}
           {productosGuardados.length > 0 ? (
-            <div>
-              <div style={{ display: 'grid', gap: '15px' }}>
-                {productosGuardados.map((prod) => (
-                  <div key={prod.id} style={{
-                    background: colors.cotton,
-                    border: '2px solid #DA9F17',
-                    padding: '20px',
-                    borderRadius: '8px'
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div>
-                        <h4 style={{ margin: 0, color: colors.espresso, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          {prod.linea_nombre}
-                          <span title={prod.es_manufacturado ? 'Manufactura propia' : 'Reventa / Compra directa'} style={{
-                            background: prod.es_manufacturado ? 'rgba(107,126,82,0.1)' : 'rgba(196,120,74,0.1)',
-                            color: prod.es_manufacturado ? colors.olive : colors.terracotta,
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            fontSize: '10px',
-                            fontWeight: '700',
-                            border: `1px solid ${prod.es_manufacturado ? colors.olive : colors.terracotta}`
-                          }}>
-                            {prod.es_manufacturado ? '🧵 MFG' : '🏷️ REV'}
-                          </span>
-                          {prod.categoria && (
-                            <span style={{
-                              background: colors.sand,
-                              padding: '2px 8px',
-                              borderRadius: '10px',
-                              fontSize: '11px',
-                              fontWeight: '400'
-                            }}>
-                              {prod.categoria.icono} {prod.categoria.nombre}
-                            </span>
-                          )}
-                        </h4>
-                        <p style={{ margin: '5px 0', color: colors.camel, fontSize: '13px' }}>{prod.linea_medidas}</p>
-                        {prod.descripcion && <p style={{ margin: '5px 0', color: colors.espresso, fontSize: '13px' }}>{prod.descripcion}</p>}
-
-                        {/* Banner de Producto Incompleto */}
-                        {prod.es_manufacturado && (prod.costo_desde === 0 || !prod.costo_desde || prod.variantes?.length === 0) && (
-                          <div style={{
-                            marginTop: '10px',
-                            background: '#FFF9C4',
-                            border: '1px solid #FBC02D',
-                            padding: '6px 12px',
-                            borderRadius: '6px',
-                            fontSize: '11px',
-                            color: '#926F00',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px'
-                          }}>
-                            <span>⚠️</span>
-                            <span>
-                              <strong>Producto Incompleto:</strong> Falta asignar material, patrón de corte o variantes activas.
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Mostrar campos dinámicos si existen */}
-                        {prod.campos_dinamicos && Object.keys(prod.campos_dinamicos).length > 0 && (
-                          <div style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                            {prod.campos_dinamicos.talla_cama && (
-                              <span style={{ fontSize: '11px', background: colors.cream, padding: '3px 8px', borderRadius: '4px', color: colors.espresso }}>
-                                Talla: {prod.campos_dinamicos.talla_cama}
-                              </span>
-                            )}
-                            {prod.campos_dinamicos.hilos && (
-                              <span style={{ fontSize: '11px', background: colors.cream, padding: '3px 8px', borderRadius: '4px', color: colors.espresso }}>
-                                {prod.campos_dinamicos.hilos} hilos
-                              </span>
-                            )}
-                            {prod.campos_dinamicos.composicion && (
-                              <span style={{ fontSize: '11px', background: colors.cream, padding: '3px 8px', borderRadius: '4px', color: colors.espresso }}>
-                                {prod.campos_dinamicos.composicion}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '11px', color: colors.camel }}>
-                          {prod.es_manufacturado ? 'Costo (Desde)' : 'Costo Unitario'}
-                        </div>
-                        <div style={{ 
-                          fontSize: '20px', 
-                          fontWeight: '700', 
-                          color: prod.es_manufacturado ? colors.olive : colors.sidebarBg 
+            <div style={{ display: 'grid', gap: '15px' }}>
+              {productosGuardados.map((prod) => (
+                <div key={prod.id} style={{
+                  background: colors.cotton,
+                  border: '2px solid #DA9F17',
+                  padding: '20px',
+                  borderRadius: '8px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <h4 style={{ margin: 0, color: colors.espresso, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {prod.linea_nombre}
+                        <span title={prod.es_manufacturado ? 'Manufactura propia' : 'Reventa / Compra directa'} style={{
+                          background: prod.es_manufacturado ? 'rgba(107,126,82,0.1)' : 'rgba(196,120,74,0.1)',
+                          color: prod.es_manufacturado ? colors.olive : colors.terracotta,
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          fontSize: '10px',
+                          fontWeight: '700',
+                          border: `1px solid ${prod.es_manufacturado ? colors.olive : colors.terracotta}`
                         }}>
-                          {prod.es_manufacturado && prod.costo_desde > 0 
-                            ? `$${prod.costo_desde.toFixed(2)}` 
-                            : `$${(prod.costo_total_1_tinta || 0).toFixed(2)}`
-                          }
-                          {prod.es_manufacturado && prod.costo_hasta > prod.costo_desde && (
-                            <span style={{ fontSize: '12px', fontWeight: '400', marginLeft: '4px' }}>
-                               hasta ${prod.costo_hasta.toFixed(2)}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Indicadores de Stock */}
-                    <div style={{
-                      display: 'flex',
-                      gap: '12px',
-                      marginTop: '15px',
-                      padding: '12px',
-                      background: colors.cream,
-                      borderRadius: '6px',
-                      border: `1px solid ${colors.sand}`
-                    }}>
-                      {(() => {
-                        // Usar stock de variantes si el producto tiene variantes
-                        const stockTaller = prod.tiene_variantes ? (prod.stock_variantes || 0) : (prod.stock || 0);
-                        const stockConsig = prod.tiene_variantes ? (prod.stock_consignacion_variantes || 0) : (prod.stock_consignacion || 0);
-                        const stockTotal = stockTaller + stockConsig;
-                        return (
-                          <>
-                            <div style={{
-                              flex: 1,
-                              textAlign: 'center',
-                              padding: '8px',
-                              background: colors.cotton,
-                              borderRadius: '4px',
-                              border: `1px solid ${stockTaller > 0 ? colors.olive : colors.sand}`
-                            }}>
-                              <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '4px' }}>
-                                Stock Taller {prod.tiene_variantes && <span style={{ fontSize: '9px' }}>(var)</span>}
-                              </div>
-                              <div style={{
-                                fontSize: '22px',
-                                fontWeight: '700',
-                                color: stockTaller > 0 ? colors.olive : colors.camel
-                              }}>
-                                {stockTaller}
-                              </div>
-                              <div style={{ fontSize: '10px', color: colors.camel }}>unidades</div>
-                            </div>
-                            <div style={{
-                              flex: 1,
-                              textAlign: 'center',
-                              padding: '8px',
-                              background: colors.cotton,
-                              borderRadius: '4px',
-                              border: `1px solid ${stockConsig > 0 ? colors.terracotta : colors.sand}`
-                            }}>
-                              <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '4px' }}>
-                                Consignacion {prod.tiene_variantes && <span style={{ fontSize: '9px' }}>(var)</span>}
-                              </div>
-                              <div style={{
-                                fontSize: '22px',
-                                fontWeight: '700',
-                                color: stockConsig > 0 ? colors.terracotta : colors.camel
-                              }}>
-                                {stockConsig}
-                              </div>
-                              <div style={{ fontSize: '10px', color: colors.camel }}>unidades</div>
-                            </div>
-                            <div style={{
-                              flex: 1,
-                              textAlign: 'center',
-                              padding: '8px',
-                              background: stockTotal > 0 ? 'rgba(171,213,94,0.15)' : colors.cotton,
-                              borderRadius: '4px',
-                              border: `1px solid ${colors.sidebarBg}`
-                            }}>
-                              <div style={{ fontSize: '11px', color: colors.sidebarBg, marginBottom: '4px' }}>Total</div>
-                              <div style={{
-                                fontSize: '22px',
-                                fontWeight: '700',
-                                color: colors.sidebarBg
-                              }}>
-                                {stockTotal}
-                              </div>
-                              <div style={{ fontSize: '10px', color: colors.sidebarBg }}>disponible</div>
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </div>
-
-                    {/* Seccion de Archivos (Imagen y PDFs) */}
-                    <div style={{
-                      marginTop: '15px',
-                      padding: '12px',
-                      background: colors.cream,
-                      borderRadius: '6px',
-                      border: `1px solid ${colors.sand}`
-                    }}>
-                      <div
-                        onClick={() => setExpandirArchivos({ ...expandirArchivos, [prod.id]: !expandirArchivos[prod.id] })}
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        <span style={{ fontSize: '12px', fontWeight: '600', color: colors.espresso }}>
-                          Archivos del Producto
+                          {prod.es_manufacturado ? '🧵 MFG' : '🏷️ REV'}
                         </span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          {prod.imagen_url && <span style={{ fontSize: '14px' }}>🖼️</span>}
-                          {prod.pdf_patron_url && <span style={{ fontSize: '14px' }}>📐</span>}
-                          {prod.pdf_instrucciones_url && <span style={{ fontSize: '14px' }}>📋</span>}
-                          <span style={{ fontSize: '16px', color: colors.camel }}>
-                            {expandirArchivos[prod.id] ? '▲' : '▼'}
+                        {prod.categoria && (
+                          <span style={{
+                            background: colors.sand,
+                            padding: '2px 8px',
+                            borderRadius: '10px',
+                            fontSize: '11px',
+                            fontWeight: '400'
+                          }}>
+                            {prod.categoria.icono} {prod.categoria.nombre}
+                          </span>
+                        )}
+                      </h4>
+                      <p style={{ margin: '5px 0', color: colors.camel, fontSize: '13px' }}>{prod.linea_medidas}</p>
+                      {prod.descripcion && <p style={{ margin: '5px 0', color: colors.espresso, fontSize: '13px' }}>{prod.descripcion}</p>}
+
+                      {/* Banner de Producto Incompleto */}
+                      {prod.es_manufacturado && (prod.costo_desde === 0 || !prod.costo_desde || prod.variantes?.length === 0) && (
+                        <div style={{
+                          marginTop: '10px',
+                          background: '#FFF9C4',
+                          border: '1px solid #FBC02D',
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          fontSize: '11px',
+                          color: '#926F00',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}>
+                          <span>⚠️</span>
+                          <span>
+                            <strong>Producto Incompleto:</strong> Falta asignar material, patrón de corte o variantes activas.
                           </span>
                         </div>
-                      </div>
+                      )}
 
-                      {expandirArchivos[prod.id] && (
-                        <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                          {/* Imagen del producto */}
-                          <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            padding: '10px',
-                            background: colors.cotton,
-                            borderRadius: '4px',
-                            border: `1px solid ${prod.imagen_url ? colors.olive : colors.sand}`
-                          }}>
-                            {prod.imagen_url ? (
-                              <img
-                                src={prod.imagen_url}
-                                alt={prod.linea_nombre}
-                                style={{
-                                  width: '60px',
-                                  height: '60px',
-                                  objectFit: 'cover',
-                                  borderRadius: '4px',
-                                  border: `1px solid ${colors.sand}`
-                                }}
-                              />
-                            ) : (
-                              <div style={{
-                                width: '60px',
-                                height: '60px',
-                                background: colors.sand,
-                                borderRadius: '4px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '24px'
-                              }}>
-                                🖼️
-                              </div>
-                            )}
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: '12px', fontWeight: '500', color: colors.espresso }}>
-                                Imagen del Producto
-                              </div>
-                              <div style={{ fontSize: '11px', color: colors.camel }}>
-                                {prod.imagen_nombre || 'Sin imagen'}
-                              </div>
-                            </div>
-                            <div style={{ display: 'flex', gap: '6px' }}>
-                              {prod.imagen_url && (
-                                <button
-                                  onClick={() => setImagenPopup({ url: prod.imagen_url, nombre: prod.linea_nombre })}
-                                  onMouseEnter={() => setHoverVerBtn({ ...hoverVerBtn, [`img-${prod.id}`]: true })}
-                                  onMouseLeave={() => setHoverVerBtn({ ...hoverVerBtn, [`img-${prod.id}`]: false })}
-                                  style={{
-                                    padding: '6px 10px',
-                                    background: hoverVerBtn[`img-${prod.id}`] ? colors.sidebarBg : '#DA9F17',
-                                    color: hoverVerBtn[`img-${prod.id}`] ? '#DA9F17' : colors.sidebarBg,
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    fontSize: '11px',
-                                    cursor: 'pointer',
-                                    fontWeight: '500',
-                                    transition: 'all 0.3s ease'
-                                  }}
-                                >
-                                  Ver
-                                </button>
-                              )}
-                              {isAdmin && (
-                                <label style={{
-                                  padding: '6px 12px',
-                                  background: subiendoArchivo[`img-${prod.id}`] ? colors.sand : colors.sidebarBg,
-                                  color: colors.sidebarText,
-                                  borderRadius: '4px',
-                                  fontSize: '11px',
-                                  cursor: subiendoArchivo[`img-${prod.id}`] ? 'wait' : 'pointer',
-                                  fontWeight: '500'
-                                }}>
-                                  {subiendoArchivo[`img-${prod.id}`] ? 'Subiendo...' : (prod.imagen_url ? 'Cambiar' : 'Subir')}
-                                  <input
-                                    type="file"
-                                    accept="image/jpeg,image/png,image/webp"
-                                    onChange={(e) => handleImagenUpload(prod.id, e)}
-                                    style={{ display: 'none' }}
-                                    disabled={subiendoArchivo[`img-${prod.id}`]}
-                                  />
-                                </label>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* PDF Patron de corte */}
-                          <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            padding: '10px',
-                            background: colors.cotton,
-                            borderRadius: '4px',
-                            border: `1px solid ${prod.pdf_patron_url ? colors.terracotta : colors.sand}`
-                          }}>
-                            <div style={{
-                              width: '40px',
-                              height: '40px',
-                              background: prod.pdf_patron_url ? 'rgba(196,120,74,0.15)' : colors.sand,
-                              borderRadius: '4px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: '20px'
-                            }}>
-                              📐
-                            </div>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: '12px', fontWeight: '500', color: colors.espresso }}>
-                                Patron de Corte
-                              </div>
-                              <div style={{ fontSize: '11px', color: colors.camel }}>
-                                {prod.pdf_patron_nombre || 'Sin archivo'}
-                              </div>
-                            </div>
-                            <div style={{ display: 'flex', gap: '6px' }}>
-                              {prod.pdf_patron_url && (
-                                <button
-                                  onClick={() => abrirPdf(prod.pdf_patron_url)}
-                                  onMouseEnter={() => setHoverVerBtn({ ...hoverVerBtn, [`patron-${prod.id}`]: true })}
-                                  onMouseLeave={() => setHoverVerBtn({ ...hoverVerBtn, [`patron-${prod.id}`]: false })}
-                                  style={{
-                                    padding: '6px 10px',
-                                    background: hoverVerBtn[`patron-${prod.id}`] ? colors.sidebarBg : '#DA9F17',
-                                    color: hoverVerBtn[`patron-${prod.id}`] ? '#DA9F17' : colors.sidebarBg,
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    fontSize: '11px',
-                                    cursor: 'pointer',
-                                    fontWeight: '500',
-                                    transition: 'all 0.3s ease'
-                                  }}
-                                >
-                                  Ver
-                                </button>
-                              )}
-                              {isAdmin && (
-                                <label style={{
-                                  padding: '6px 10px',
-                                  background: subiendoArchivo[`patron-${prod.id}`] ? colors.sand : colors.sidebarBg,
-                                  color: colors.sidebarText,
-                                  borderRadius: '4px',
-                                  fontSize: '11px',
-                                  cursor: subiendoArchivo[`patron-${prod.id}`] ? 'wait' : 'pointer',
-                                  fontWeight: '500'
-                                }}>
-                                  {subiendoArchivo[`patron-${prod.id}`] ? '...' : (prod.pdf_patron_url ? 'Cambiar' : 'Subir')}
-                                  <input
-                                    type="file"
-                                    accept="application/pdf"
-                                    onChange={(e) => handlePdfUpload(prod.id, 'patron', e)}
-                                    style={{ display: 'none' }}
-                                    disabled={subiendoArchivo[`patron-${prod.id}`]}
-                                  />
-                                </label>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* PDF Instrucciones de confeccion */}
-                          <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            padding: '10px',
-                            background: colors.cotton,
-                            borderRadius: '4px',
-                            border: `1px solid ${prod.pdf_instrucciones_url ? colors.sidebarBg : colors.sand}`
-                          }}>
-                            <div style={{
-                              width: '40px',
-                              height: '40px',
-                              background: prod.pdf_instrucciones_url ? 'rgba(0,95,132,0.15)' : colors.sand,
-                              borderRadius: '4px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: '20px'
-                            }}>
-                              📋
-                            </div>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: '12px', fontWeight: '500', color: colors.espresso }}>
-                                Instrucciones de Confeccion
-                              </div>
-                              <div style={{ fontSize: '11px', color: colors.camel }}>
-                                {prod.pdf_instrucciones_nombre || 'Sin archivo'}
-                              </div>
-                            </div>
-                            <div style={{ display: 'flex', gap: '6px' }}>
-                              {prod.pdf_instrucciones_url && (
-                                <button
-                                  onClick={() => abrirPdf(prod.pdf_instrucciones_url)}
-                                  onMouseEnter={() => setHoverVerBtn({ ...hoverVerBtn, [`instr-${prod.id}`]: true })}
-                                  onMouseLeave={() => setHoverVerBtn({ ...hoverVerBtn, [`instr-${prod.id}`]: false })}
-                                  style={{
-                                    padding: '6px 10px',
-                                    background: hoverVerBtn[`instr-${prod.id}`] ? colors.sidebarBg : '#DA9F17',
-                                    color: hoverVerBtn[`instr-${prod.id}`] ? '#DA9F17' : colors.sidebarBg,
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    fontSize: '11px',
-                                    cursor: 'pointer',
-                                    fontWeight: '500',
-                                    transition: 'all 0.3s ease'
-                                  }}
-                                >
-                                  Ver
-                                </button>
-                              )}
-                              {isAdmin && (
-                                <label style={{
-                                  padding: '6px 10px',
-                                  background: subiendoArchivo[`instrucciones-${prod.id}`] ? colors.sand : colors.olive,
-                                  color: 'white',
-                                  borderRadius: '4px',
-                                  fontSize: '11px',
-                                  cursor: subiendoArchivo[`instrucciones-${prod.id}`] ? 'wait' : 'pointer',
-                                  fontWeight: '500'
-                                }}>
-                                  {subiendoArchivo[`instrucciones-${prod.id}`] ? '...' : (prod.pdf_instrucciones_url ? 'Cambiar' : 'Subir')}
-                                  <input
-                                    type="file"
-                                    accept="application/pdf"
-                                    onChange={(e) => handlePdfUpload(prod.id, 'instrucciones', e)}
-                                    style={{ display: 'none' }}
-                                    disabled={subiendoArchivo[`instrucciones-${prod.id}`]}
-                                  />
-                                </label>
-                              )}
-                            </div>
-                          </div>
+                      {/* Mostrar campos dinámicos si existen */}
+                      {prod.campos_dinamicos && Object.keys(prod.campos_dinamicos).length > 0 && (
+                        <div style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          {prod.campos_dinamicos.talla_cama && (
+                            <span style={{ fontSize: '11px', background: colors.cream, padding: '3px 8px', borderRadius: '4px', color: colors.espresso }}>
+                              Talla: {prod.campos_dinamicos.talla_cama}
+                            </span>
+                          )}
+                          {prod.campos_dinamicos.hilos && (
+                            <span style={{ fontSize: '11px', background: colors.cream, padding: '3px 8px', borderRadius: '4px', color: colors.espresso }}>
+                              {prod.campos_dinamicos.hilos} hilos
+                            </span>
+                          )}
+                          {prod.campos_dinamicos.composicion && (
+                            <span style={{ fontSize: '11px', background: colors.cream, padding: '3px 8px', borderRadius: '4px', color: colors.espresso }}>
+                              {prod.campos_dinamicos.composicion}
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
-                      <div style={{ display: 'flex', gap: '15px', fontSize: '12px', color: colors.camel }}>
-                        <span>2 tintas: ${prod.costo_total_2_tintas?.toFixed(2)}</span>
-                        <span>3 tintas: ${prod.costo_total_3_tintas?.toFixed(2)}</span>
-                        {prod.costo_total_4_tintas > 0 && <span>4 tintas: ${prod.costo_total_4_tintas?.toFixed(2)}</span>}
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '11px', color: colors.camel }}>
+                        {prod.es_manufacturado ? 'Costo (Desde)' : 'Costo Unitario'}
                       </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        {/* Botón Resurtir (solo para compra/reventa: tiene costo_unitario en campos_dinamicos) */}
-                        {prod.campos_dinamicos?.costo_unitario !== undefined && isAdmin && (
-                          <button
-                            onClick={() => abrirResurtir(prod)}
-                            onMouseEnter={() => setHoverEditar({ ...hoverEditar, [`res-${prod.id}`]: true })}
-                            onMouseLeave={() => setHoverEditar({ ...hoverEditar, [`res-${prod.id}`]: false })}
-                            style={{
-                              padding: '8px 14px',
-                              background: hoverEditar[`res-${prod.id}`] ? '#43a047' : '#388e3c',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '13px',
-                              fontWeight: '500',
-                              transition: 'all 0.3s ease'
-                            }}>
-                            Resurtir
-                          </button>
+                      <div style={{ 
+                        fontSize: '20px', 
+                        fontWeight: '700', 
+                        color: prod.es_manufacturado ? colors.olive : colors.sidebarBg 
+                      }}>
+                        {prod.es_manufacturado && prod.costo_desde > 0 
+                          ? `$${prod.costo_desde.toFixed(2)}` 
+                          : `$${(prod.costo_total_1_tinta || 0).toFixed(2)}`
+                        }
+                        {prod.es_manufacturado && prod.costo_hasta > prod.costo_desde && (
+                          <span style={{ fontSize: '12px', fontWeight: '400', marginLeft: '4px' }}>
+                             hasta ${prod.costo_hasta.toFixed(2)}
+                          </span>
                         )}
-                        {/* Botón Variantes */}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{
+                    marginTop: '15px',
+                    paddingTop: '15px',
+                    borderTop: `1px solid ${colors.sand}`,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={() => abrirVariantes(prod)}
+                        style={{
+                          padding: '8px 14px',
+                          background: colors.sand,
+                          color: colors.espresso,
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '13px',
+                          fontWeight: '500'
+                        }}>
+                        Variantes ({prod.variantes?.length || 0})
+                      </button>
+                      <button
+                        onClick={() => {
+                          setProductoEditandoId(prod.id);
+                          setLineaSeleccionada({ id: prod.linea_id, nombre: prod.linea_nombre, medidas: prod.linea_medidas });
+                          setFormProducto({
+                            descripcion: prod.descripcion || '',
+                            telaSeleccionada: prod.tipo_tela_id || null,
+                            cantidadTela: prod.cantidad_tela || 0,
+                            piezasPorCorte: prod.piezas_por_corte || 1,
+                            costoMaquila: prod.costo_maquila || 0,
+                            insumos: prod.insumos || 0,
+                            merma: prod.merma || 5,
+                            serigrafia1: prod.serigrafia_1_tinta || 0,
+                            serigrafia2: prod.serigrafia_2_tintas || 0,
+                            serigrafia3: prod.serigrafia_3_tintas || 0,
+                            serigrafia4: prod.serigrafia_4_tintas || 0,
+                            empaque: prod.empaque || 0,
+                            tipoEntrega: prod.tipo_entrega || 'envio',
+                            skuProducto: prod.campos_dinamicos?.sku || '',
+                            marcaProducto: prod.campos_dinamicos?.marca || '',
+                            costoUnitario: prod.campos_dinamicos?.costo_unitario || 0,
+                            precioVenta: prod.precio_venta || 0,
+                            envio: prod.envio_costo || 0,
+                            es_manufacturado: prod.es_manufacturado
+                          });
+                          setCamposDinamicos(prod.campos_dinamicos || {});
+                          setPasoWizardProducto(1);
+                        }}
+                        style={{
+                          padding: '8px 14px',
+                          background: colors.olive,
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '13px',
+                          fontWeight: '500'
+                        }}>
+                        Editar
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {isAdmin && (
                         <button
-                          onClick={() => abrirVariantes(prod)}
-                          onMouseEnter={() => setHoverEditar({ ...hoverEditar, [`var-${prod.id}`]: true })}
-                          onMouseLeave={() => setHoverEditar({ ...hoverEditar, [`var-${prod.id}`]: false })}
+                          onMouseEnter={() => setHoverEditar({ ...hoverEditar, [`del-${prod.id}`]: true })}
+                          onMouseLeave={() => setHoverEditar({ ...hoverEditar, [`del-${prod.id}`]: false })}
+                          onClick={() => setConfirmEliminar(prod)}
                           style={{
                             padding: '8px 14px',
-                            background: hoverEditar[`var-${prod.id}`] ? '#9b59b6' : '#8e44ad',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '13px',
-                            fontWeight: '500',
-                            transition: 'all 0.3s ease'
-                          }}>
-                          Variantes
-                        </button>
-                        <button
-                          onClick={() => editarProductoDirecto(prod)}
-                          onMouseEnter={() => setHoverEditar({ ...hoverEditar, [prod.id]: true })}
-                          onMouseLeave={() => setHoverEditar({ ...hoverEditar, [prod.id]: false })}
-                          style={{
-                            padding: '8px 18px',
-                            background: hoverEditar[prod.id] ? colors.sidebarText : colors.sidebarBg,
-                            color: hoverEditar[prod.id] ? colors.sidebarBg : colors.sidebarText,
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '13px',
-                            fontWeight: '500',
-                            transition: 'all 0.3s ease'
-                          }}>
-                          Editar
-                        </button>
-                        {/* Botón eliminar producto (solo admin) */}
-                        {isAdmin && (
-                          <button
-                            onClick={() => eliminarProductoHandler(prod.id, prod.linea_nombre)}
-                            onMouseEnter={() => setHoverEditar({ ...hoverEditar, [`del-${prod.id}`]: true })}
-                            onMouseLeave={() => setHoverEditar({ ...hoverEditar, [`del-${prod.id}`]: false })}
-                            style={{
-                              padding: '8px 14px',
-                              background: hoverEditar[`del-${prod.id}`] ? '#c0392b' : colors.terracotta,
+                            background: hoverEditar[`del-${prod.id}`] ? '#c0392b' : colors.terracotta,
                               color: 'white',
                               border: 'none',
                               borderRadius: '4px',
@@ -5107,16 +4260,15 @@ const ProductosView = ({ isAdmin }) => {
                   </div>
                 ))}
               </div>
-            </div>
-          ) : (
-            <div style={{ background: colors.cotton, border: '2px solid #DA9F17', padding: '40px', textAlign: 'center', borderRadius: '8px' }}>
-              <span style={{ fontSize: '48px' }}>🛍️</span>
-              <h3 style={{ margin: '20px 0 10px', color: colors.espresso }}>Sin productos registrados</h3>
-              <p style={{ color: colors.camel, fontSize: '14px' }}>Haz clic en "+ Agregar" para crear tu primer producto</p>
-            </div>
-          )}
-        </div>
-      )}
+            ) : (
+              <div style={{ background: colors.cotton, border: '2px solid #DA9F17', padding: '40px', textAlign: 'center', borderRadius: '8px' }}>
+                <span style={{ fontSize: '48px' }}>🛍️</span>
+                <h3 style={{ margin: '20px 0 10px', color: colors.espresso }}>Sin productos registrados</h3>
+                <p style={{ color: colors.camel, fontSize: '14px' }}>Haz clic en "+ Agregar" para crear tu primer producto</p>
+              </div>
+            )}
+          </div>
+        )}
 
       {/* Modal de Resurtir */}
       {mostrarResurtir && (
