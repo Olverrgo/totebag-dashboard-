@@ -2609,16 +2609,33 @@ export const getRecetasProducto = async (productoId) => {
 export const upsertRecetaLinea = async (linea) => {
   if (!supabase) return { data: null, error: 'Supabase no configurado' };
 
-  const { data, error } = await supabase
+  // Upsert manual: el UNIQUE de recetas ahora es (producto_id, variante_id, material_id)
+  // y PostgreSQL trata múltiples NULL como distintos en UNIQUE por default, así que
+  // un upsert con onConflict no matchearía filas con variante_id=NULL. Lo hacemos
+  // manualmente para que funcione tanto con variante específica como con NULL.
+  const variante_id = linea.variante_id ?? null;
+  let query = supabase
     .from('recetas')
-    .upsert([{ ...linea, activo: true }], { onConflict: 'producto_id,material_id' })
-    .select(`
-      *,
-      material:materiales(id, nombre, unidad, costo_unitario, stock, categoria)
-    `)
-    .single();
+    .select('id')
+    .eq('producto_id', linea.producto_id)
+    .eq('material_id', linea.material_id);
+  query = variante_id === null
+    ? query.is('variante_id', null)
+    : query.eq('variante_id', variante_id);
 
-  return { data, error: handleRLSError(error) };
+  const { data: existing } = await query.maybeSingle();
+
+  const selectStr = `
+    *,
+    material:materiales(id, nombre, unidad, costo_unitario, stock, categoria)
+  `;
+
+  const payload = { ...linea, variante_id, activo: true };
+  const result = existing
+    ? await supabase.from('recetas').update(payload).eq('id', existing.id).select(selectStr).single()
+    : await supabase.from('recetas').insert([payload]).select(selectStr).single();
+
+  return { data: result.data, error: handleRLSError(result.error) };
 };
 
 export const deleteRecetaLinea = async (id) => {
