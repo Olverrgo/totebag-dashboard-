@@ -478,6 +478,19 @@ export const updateCampoCategoria = async (id, updates) => {
 // =====================================================
 
 // Obtener todos los productos (con filtro opcional por categoría)
+//
+// Sub-Fase 5.C: agrega cálculo de costo on-the-fly para productos manufactura
+// desde la "Receta Viva" (recetas + materiales + configuraciones_corte).
+// Resultado en `prod.costo_calculado_por_variante` (objeto por variante.id) +
+// `prod.costo_desde` / `prod.costo_hasta` (rango para mostrar en card).
+//
+// Estos campos son ADITIVOS: no reemplazan `costo_total_1_tinta` ni
+// `variantes.costo_unitario` por ahora. Sub-Fase 5.D (UI) los usará.
+//
+// Fallback dual: si configuracion_corte tiene `material_id` set, el costo
+// de tela viene de la receta (que incluye ese material). Si NO tiene
+// material_id, se usa el legacy `precio_tela_metro × total_metros_lineales`
+// como fallback temporal hasta que Rigo migre cada config (Sub-Fase 5.B).
 export const getProductos = async (categoriaId = null, subcategoriaId = null) => {
   if (!supabase) return { data: null, error: 'Supabase no configurado' };
 
@@ -489,7 +502,11 @@ export const getProductos = async (categoriaId = null, subcategoriaId = null) =>
       config_envio:config_envio(*),
       categoria:categorias(*),
       subcategoria:subcategorias(*),
-      variantes:variantes_producto(id, sku, material, color, talla, stock, stock_consignacion, costo_unitario, precio_venta, imagen_url, activo)
+      variantes:variantes_producto(id, sku, material, color, talla, stock, stock_consignacion, costo_unitario, precio_venta, imagen_url, activo),
+      recetas:recetas(id, variante_id, material_id, cantidad, opcional, activo,
+        material:materiales(id, nombre, unidad, costo_unitario)),
+      configuraciones_corte:configuraciones_corte(id, variante_id, costo_confeccion, costo_empaque,
+        precio_tela_metro, total_metros_lineales, material_id, es_configuracion_actual, activo)
     `)
     .eq('activo', true)
     .order('created_at', { ascending: false });
@@ -504,12 +521,11 @@ export const getProductos = async (categoriaId = null, subcategoriaId = null) =>
 
   const { data, error } = await query;
 
-  // Calcular stock total de variantes para cada producto
   if (data) {
     data.forEach(prod => {
+      // Stock de variantes (lógica existente)
       const variantesActivas = (prod.variantes || []).filter(v => v.activo !== false);
       if (variantesActivas.length > 0) {
-        // Usar stock de variantes
         prod.stock_variantes = variantesActivas.reduce((sum, v) => sum + (v.stock || 0), 0);
         prod.stock_consignacion_variantes = variantesActivas.reduce((sum, v) => sum + (v.stock_consignacion || 0), 0);
         prod.tiene_variantes = true;
@@ -517,6 +533,65 @@ export const getProductos = async (categoriaId = null, subcategoriaId = null) =>
         prod.stock_variantes = 0;
         prod.stock_consignacion_variantes = 0;
         prod.tiene_variantes = false;
+      }
+
+      // Costo calculado on-the-fly (solo manufactura)
+      prod.costo_calculado_por_variante = {};
+      prod.costo_desde = null;
+      prod.costo_hasta = null;
+
+      if (prod.es_manufacturado) {
+        const recetasActivas = (prod.recetas || []).filter(r => r.activo);
+        const configsVigentes = (prod.configuraciones_corte || [])
+          .filter(c => c.es_configuracion_actual && c.activo);
+
+        const calcularVariante = (varianteId) => {
+          // Recetas: específicas de la variante O las del producto (variante_id=null)
+          const recetasAplicables = recetasActivas.filter(r =>
+            (r.variante_id === varianteId || r.variante_id === null) && !r.opcional
+          );
+          const costoMateriales = recetasAplicables.reduce((sum, r) =>
+            sum + (parseFloat(r.cantidad) || 0) * (parseFloat(r.material?.costo_unitario) || 0), 0
+          );
+
+          // Config: específica de la variante O del producto (variante_id=null)
+          const config = configsVigentes.find(c => c.variante_id === varianteId)
+            || configsVigentes.find(c => c.variante_id === null);
+
+          const costoServicios = config
+            ? (parseFloat(config.costo_confeccion) || 0) + (parseFloat(config.costo_empaque) || 0)
+            : 0;
+
+          // Fallback dual: tela legacy si config no tiene material_id pero sí precio_tela_metro
+          let costoTelaLegacy = 0;
+          if (config && !config.material_id) {
+            const metros = parseFloat(config.total_metros_lineales) || 0;
+            const precio = parseFloat(config.precio_tela_metro) || 0;
+            costoTelaLegacy = metros * precio;
+          }
+
+          return {
+            costo_materiales: costoMateriales,
+            costo_servicios: costoServicios,
+            costo_tela_legacy: costoTelaLegacy,
+            costo_total: costoMateriales + costoServicios + costoTelaLegacy,
+            usa_fallback_legacy: costoTelaLegacy > 0,
+          };
+        };
+
+        // Por cada variante activa, calcular
+        variantesActivas.forEach(v => {
+          prod.costo_calculado_por_variante[v.id] = calcularVariante(v.id);
+        });
+
+        // Rango para card del producto
+        const totales = Object.values(prod.costo_calculado_por_variante)
+          .map(c => c.costo_total)
+          .filter(t => t > 0);
+        if (totales.length > 0) {
+          prod.costo_desde = Math.min(...totales);
+          prod.costo_hasta = Math.max(...totales);
+        }
       }
     });
   }
