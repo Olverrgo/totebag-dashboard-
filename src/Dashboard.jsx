@@ -4604,6 +4604,28 @@ const ProductosView = ({ isAdmin }) => {
                         </h4>
                         <p style={{ margin: '5px 0', color: colors.camel, fontSize: '13px' }}>{prod.linea_medidas}</p>
                         {prod.descripcion && <p style={{ margin: '5px 0', color: colors.espresso, fontSize: '13px' }}>{prod.descripcion}</p>}
+
+                        {/* Banner de Producto Incompleto */}
+                        {prod.es_manufacturado && (prod.costo_desde === 0 || !prod.costo_desde || prod.variantes?.length === 0) && (
+                          <div style={{
+                            marginTop: '10px',
+                            background: '#FFF9C4',
+                            border: '1px solid #FBC02D',
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            fontSize: '11px',
+                            color: '#926F00',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                          }}>
+                            <span>⚠️</span>
+                            <span>
+                              <strong>Producto Incompleto:</strong> Falta asignar material, patrón de corte o variantes activas.
+                            </span>
+                          </div>
+                        )}
+
                         {/* Mostrar campos dinámicos si existen */}
                         {prod.campos_dinamicos && Object.keys(prod.campos_dinamicos).length > 0 && (
                           <div style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -4640,7 +4662,7 @@ const ProductosView = ({ isAdmin }) => {
                           }
                           {prod.es_manufacturado && prod.costo_hasta > prod.costo_desde && (
                             <span style={{ fontSize: '12px', fontWeight: '400', marginLeft: '4px' }}>
-                              - ${prod.costo_hasta.toFixed(2)}
+                               hasta ${prod.costo_hasta.toFixed(2)}
                             </span>
                           )}
                         </div>
