@@ -2016,7 +2016,8 @@ const ProductosView = ({ isAdmin }) => {
     material_id: null,
     material_nombre: '',
     costo_confeccion: 0,
-    costo_empaque: 0
+    costo_empaque: 0,
+    medidas_json: []
   });
 
   // Estado para resurtidos
@@ -2425,7 +2426,8 @@ const ProductosView = ({ isAdmin }) => {
         precio_tela_metro: config.precio_tela_metro || 0,
         material_id: config.material_id || null,
         costo_confeccion: config.costo_confeccion || 0,
-        costo_empaque: config.costo_empaque || 0
+        costo_empaque: config.costo_empaque || 0,
+        medidas_json: config.medidas_json || []
       });
     } else {
       setConfigCorteActual(null);
@@ -2438,7 +2440,8 @@ const ProductosView = ({ isAdmin }) => {
         precio_tela_metro: 0, 
         material_id: null,
         costo_confeccion: 0, 
-        costo_empaque: 0
+        costo_empaque: 0,
+        medidas_json: []
       });
     }
 
@@ -2459,13 +2462,32 @@ const ProductosView = ({ isAdmin }) => {
   const calcularCorteTemporal = () => {
     const f = formConfigCorte;
 
-    // Metros lineales por pieza
-    const mSabanaPlana = f.incluye_sabana_plana ? parseFloat(f.metros_sabana_plana) || 0 : 0;
-    const mSabanaCajon = f.incluye_sabana_cajon ? parseFloat(f.metros_sabana_cajon) || 0 : 0;
-    const mFundas = f.incluye_fundas ? (parseFloat(f.metros_fundas) || 0) * (parseInt(f.cantidad_fundas) || 1) : 0;
+    let subtotalMetros = 0;
+    const itemsDetalle = [];
+
+    // (1) SI HAY MEDIDAS_JSON (Nuevo modelo dinámico)
+    if (f.medidas_json && f.medidas_json.length > 0) {
+      f.medidas_json.forEach(p => {
+        if (p.incluir !== false) {
+          const metrosPieza = (parseFloat(p.metros) || 0) * (parseInt(p.cantidad) || 1);
+          subtotalMetros += metrosPieza;
+          itemsDetalle.push({ nombre: p.pieza, metros: metrosPieza.toFixed(2), cantidad: p.cantidad });
+        }
+      });
+    } else {
+      // (2) FALLBACK MODELO LEGACY
+      const mSabanaPlana = f.incluye_sabana_plana ? parseFloat(f.metros_sabana_plana) || 0 : 0;
+      const mSabanaCajon = f.incluye_sabana_cajon ? parseFloat(f.metros_sabana_cajon) || 0 : 0;
+      const mFundas = f.incluye_fundas ? (parseFloat(f.metros_fundas) || 0) * (parseInt(f.cantidad_fundas) || 1) : 0;
+      
+      subtotalMetros = mSabanaPlana + mSabanaCajon + mFundas;
+      
+      if (f.incluye_sabana_plana) itemsDetalle.push({ nombre: 'Sábana Plana', metros: mSabanaPlana.toFixed(2), cantidad: 1 });
+      if (f.incluye_sabana_cajon) itemsDetalle.push({ nombre: 'Sábana Cajón', metros: mSabanaCajon.toFixed(2), cantidad: 1 });
+      if (f.incluye_fundas) itemsDetalle.push({ nombre: 'Fundas', metros: mFundas.toFixed(2), cantidad: f.cantidad_fundas });
+    }
 
     // Total metros lineales (con desperdicio)
-    const subtotalMetros = mSabanaPlana + mSabanaCajon + mFundas;
     const metrosConDesperdicio = subtotalMetros * (1 + (parseFloat(f.porcentaje_desperdicio) || 0) / 100);
 
     // Costos
@@ -2477,9 +2499,7 @@ const ProductosView = ({ isAdmin }) => {
     const costoTotal = costoMaterial + parseFloat(f.costo_confeccion || 0) + parseFloat(f.costo_empaque || 0);
 
     return {
-      mSabanaPlana: mSabanaPlana.toFixed(2),
-      mSabanaCajon: mSabanaCajon.toFixed(2),
-      mFundas: mFundas.toFixed(2),
+      itemsDetalle,
       subtotalMetros: subtotalMetros.toFixed(2),
       metrosConDesperdicio: metrosConDesperdicio.toFixed(2),
       costoMaterial: costoMaterial.toFixed(2),
@@ -2514,6 +2534,7 @@ const ProductosView = ({ isAdmin }) => {
         material_id: formConfigCorte.material_id,
         costo_confeccion: parseFloat(formConfigCorte.costo_confeccion) || 0,
         costo_empaque: parseFloat(formConfigCorte.costo_empaque) || 0,
+        medidas_json: formConfigCorte.medidas_json || [],
         es_configuracion_actual: true
       };
 
@@ -4927,101 +4948,101 @@ const ProductosView = ({ isAdmin }) => {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-              {/* Columna izquierda: Metros Lineales */}
+              {/* Columna izquierda: Piezas (Modelo Dinámico) */}
               <div>
-                {/* Sábana Plana */}
-                <div style={{ background: '#f8f8f8', padding: '15px', borderRadius: '8px', marginBottom: '15px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <h4 style={{ margin: 0, color: colors.olivo }}>Sábana Plana</h4>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={formConfigCorte.incluye_sabana_plana}
-                        onChange={(e) => setFormConfigCorte({ ...formConfigCorte, incluye_sabana_plana: e.target.checked })}
-                      />
-                      Incluir
-                    </label>
+                <div style={{ background: '#f8f8f8', padding: '15px', borderRadius: '12px', marginBottom: '15px', border: `1px solid ${colors.sand}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                    <h4 style={{ margin: 0, color: colors.olivo }}>Piezas de Corte</h4>
+                    <button
+                      onClick={() => {
+                        const nuevasPiezas = [...(formConfigCorte.medidas_json || [])];
+                        nuevasPiezas.push({ pieza: '', metros: 0, cantidad: 1, incluir: true });
+                        setFormConfigCorte({ ...formConfigCorte, medidas_json: nuevasPiezas });
+                      }}
+                      style={{ padding: '4px 10px', background: colors.sidebarBg, color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}
+                    >
+                      + Añadir Pieza
+                    </button>
                   </div>
-                  {formConfigCorte.incluye_sabana_plana && (
-                    <div>
-                      <label style={{ fontSize: '12px', color: '#666' }}>Metros de tela</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={formConfigCorte.metros_sabana_plana}
-                        onChange={(e) => setFormConfigCorte({ ...formConfigCorte, metros_sabana_plana: e.target.value })}
-                        placeholder="Ej: 2.5"
-                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '16px' }}
-                      />
-                    </div>
-                  )}
-                </div>
 
-                {/* Sábana de Cajón */}
-                <div style={{ background: '#f8f8f8', padding: '15px', borderRadius: '8px', marginBottom: '15px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <h4 style={{ margin: 0, color: colors.olivo }}>Sábana de Cajón (Ajustable)</h4>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={formConfigCorte.incluye_sabana_cajon}
-                        onChange={(e) => setFormConfigCorte({ ...formConfigCorte, incluye_sabana_cajon: e.target.checked })}
-                      />
-                      Incluir
-                    </label>
-                  </div>
-                  {formConfigCorte.incluye_sabana_cajon && (
-                    <div>
-                      <label style={{ fontSize: '12px', color: '#666' }}>Metros de tela</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={formConfigCorte.metros_sabana_cajon}
-                        onChange={(e) => setFormConfigCorte({ ...formConfigCorte, metros_sabana_cajon: e.target.value })}
-                        placeholder="Ej: 2.0"
-                        style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '16px' }}
-                      />
-                    </div>
-                  )}
-                </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {(!formConfigCorte.medidas_json || formConfigCorte.medidas_json.length === 0) && (
+                      <div style={{ padding: '20px', textAlign: 'center', color: colors.camel, fontSize: '13px', background: 'white', borderRadius: '8px', border: `1px dashed ${colors.sand}` }}>
+                        No hay piezas definidas. Usa el botón superior para añadir una.
+                      </div>
+                    )}
 
-                {/* Fundas */}
-                <div style={{ background: '#f8f8f8', padding: '15px', borderRadius: '8px', marginBottom: '15px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <h4 style={{ margin: 0, color: colors.olivo }}>Fundas</h4>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={formConfigCorte.incluye_fundas}
-                        onChange={(e) => setFormConfigCorte({ ...formConfigCorte, incluye_fundas: e.target.checked })}
-                      />
-                      Incluir
-                    </label>
+                    {(formConfigCorte.medidas_json || []).map((p, idx) => (
+                      <div key={idx} style={{ background: p.incluir !== false ? 'white' : '#eee', padding: '12px', borderRadius: '8px', border: `1px solid ${colors.sand}`, opacity: p.incluir !== false ? 1 : 0.6 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.8fr 0.2fr', gap: '10px', alignItems: 'center', marginBottom: '8px' }}>
+                          <input
+                            type="text"
+                            value={p.pieza}
+                            placeholder="Nombre (ej: Sábana)"
+                            onChange={(e) => {
+                              const nuevas = [...formConfigCorte.medidas_json];
+                              nuevas[idx].pieza = e.target.value;
+                              setFormConfigCorte({ ...formConfigCorte, medidas_json: nuevas });
+                            }}
+                            style={{ padding: '6px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }}
+                          />
+                          <div style={{ position: 'relative' }}>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={p.metros}
+                              placeholder="Metros"
+                              onChange={(e) => {
+                                const nuevas = [...formConfigCorte.medidas_json];
+                                nuevas[idx].metros = e.target.value;
+                                setFormConfigCorte({ ...formConfigCorte, medidas_json: nuevas });
+                              }}
+                              style={{ width: '100%', padding: '6px 20px 6px 6px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }}
+                            />
+                            <span style={{ position: 'absolute', right: '5px', top: '50%', transform: 'translateY(-50%)', fontSize: '11px', color: '#999' }}>m</span>
+                          </div>
+                          <div style={{ position: 'relative' }}>
+                            <input
+                              type="number"
+                              value={p.cantidad}
+                              placeholder="Cant"
+                              onChange={(e) => {
+                                const nuevas = [...formConfigCorte.medidas_json];
+                                nuevas[idx].cantidad = e.target.value;
+                                setFormConfigCorte({ ...formConfigCorte, medidas_json: nuevas });
+                              }}
+                              style={{ width: '100%', padding: '6px 20px 6px 6px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '13px' }}
+                            />
+                            <span style={{ position: 'absolute', right: '5px', top: '50%', transform: 'translateY(-50%)', fontSize: '11px', color: '#999' }}>x</span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              const nuevas = formConfigCorte.medidas_json.filter((_, i) => i !== idx);
+                              setFormConfigCorte({ ...formConfigCorte, medidas_json: nuevas });
+                            }}
+                            style={{ background: 'none', border: 'none', color: '#E74C3C', cursor: 'pointer', fontSize: '16px' }}
+                            title="Eliminar pieza"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontSize: '11px', color: colors.olive }}>
+                            <input
+                              type="checkbox"
+                              checked={p.incluir !== false}
+                              onChange={(e) => {
+                                const nuevas = [...formConfigCorte.medidas_json];
+                                nuevas[idx].incluir = e.target.checked;
+                                setFormConfigCorte({ ...formConfigCorte, medidas_json: nuevas });
+                              }}
+                            />
+                            Incluir en este corte
+                          </label>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  {formConfigCorte.incluye_fundas && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '10px' }}>
-                      <div>
-                        <label style={{ fontSize: '12px', color: '#666' }}>Metros por funda</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={formConfigCorte.metros_fundas}
-                          onChange={(e) => setFormConfigCorte({ ...formConfigCorte, metros_fundas: e.target.value })}
-                          placeholder="Ej: 0.5"
-                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '16px' }}
-                        />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: '12px', color: '#666' }}>Cantidad</label>
-                        <input
-                          type="number"
-                          value={formConfigCorte.cantidad_fundas}
-                          onChange={(e) => setFormConfigCorte({ ...formConfigCorte, cantidad_fundas: e.target.value })}
-                          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '16px' }}
-                        />
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* % Desperdicio */}
@@ -5117,35 +5138,36 @@ const ProductosView = ({ isAdmin }) => {
                 </div>
 
                 {/* Cálculos en tiempo real */}
-                <div style={{ background: colors.sidebarBg, padding: '15px', borderRadius: '8px', marginBottom: '15px', color: 'white' }}>
-                  <h4 style={{ margin: '0 0 15px 0' }}>Resumen de Tela</h4>
+                <div style={{ background: colors.sidebarBg, padding: '15px', borderRadius: '12px', marginBottom: '15px', color: 'white', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }}>
+                  <h4 style={{ margin: '0 0 15px 0', borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: '10px' }}>Resumen de Consumo</h4>
                   {(() => {
                     const calc = calcularCorteTemporal();
                     return (
                       <div style={{ fontSize: '14px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', opacity: 0.9 }}>
-                          <span>Sábana Plana:</span>
-                          <span>{calc.mSabanaPlana} m</span>
+                        <div style={{ maxHeight: '150px', overflowY: 'auto', marginBottom: '10px', paddingRight: '5px' }}>
+                          {calc.itemsDetalle && calc.itemsDetalle.map((item, i) => (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', opacity: 0.9 }}>
+                              <span>{item.nombre || 'Sin nombre'} {item.cantidad > 1 ? `(${item.cantidad}x)` : ''}:</span>
+                              <span>{item.metros} m</span>
+                            </div>
+                          ))}
+                          {(!calc.itemsDetalle || calc.itemsDetalle.length === 0) && (
+                            <div style={{ textAlign: 'center', opacity: 0.6, fontSize: '12px', padding: '10px 0' }}>Sin piezas seleccionadas</div>
+                          )}
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', opacity: 0.9 }}>
-                          <span>Sábana Cajón:</span>
-                          <span>{calc.mSabanaCajon} m</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', opacity: 0.9 }}>
-                          <span>Fundas ({formConfigCorte.cantidad_fundas}x):</span>
-                          <span>{calc.mFundas} m</span>
-                        </div>
+
                         <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.3)', margin: '10px 0' }} />
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                          <span>Subtotal:</span>
+                          <span style={{ opacity: 0.8 }}>Subtotal piezas:</span>
                           <span>{calc.subtotalMetros} m</span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', opacity: 0.8, fontSize: '12px' }}>
-                          <span>+ {formConfigCorte.porcentaje_desperdicio}% desperdicio</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', opacity: 0.8, fontSize: '12px' }}>
+                          <span>Merma ({formConfigCorte.porcentaje_desperdicio}%):</span>
+                          <span>{((parseFloat(calc.metrosConDesperdicio) - parseFloat(calc.subtotalMetros))).toFixed(2)} m</span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '700', fontSize: '18px', background: 'rgba(255,255,255,0.1)', padding: '8px', borderRadius: '4px' }}>
-                          <span>TOTAL:</span>
-                          <span>{calc.metrosConDesperdicio} m</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '700', fontSize: '20px', background: 'rgba(255,255,255,0.15)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                          <span>TOTAL TELA:</span>
+                          <span style={{ color: colors.sidebarText }}>{calc.metrosConDesperdicio} m</span>
                         </div>
                       </div>
                     );

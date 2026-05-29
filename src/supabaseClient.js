@@ -506,7 +506,8 @@ export const getProductos = async (categoriaId = null, subcategoriaId = null) =>
       recetas:recetas(id, variante_id, material_id, cantidad, opcional, activo,
         material:materiales(id, nombre, unidad, costo_unitario)),
       configuraciones_corte:configuraciones_corte(id, variante_id, costo_confeccion, costo_empaque,
-        precio_tela_metro, total_metros_lineales, material_id, es_configuracion_actual, activo)
+        precio_tela_metro, total_metros_lineales, material_id, es_configuracion_actual, activo,
+        material:materiales(id, costo_unitario))
     `)
     .eq('activo', true)
     .order('created_at', { ascending: false });
@@ -562,30 +563,37 @@ export const getProductos = async (categoriaId = null, subcategoriaId = null) =>
           const merma = parseFloat(config?.porcentaje_desperdicio) || 0;
           const factorMerma = 1 + (merma / 100);
 
-          const costoMateriales = recetasAplicables.reduce((sum, r) => {
-            const cantidadBase = parseFloat(r.cantidad) || 0;
-            const precio = parseFloat(r.material?.costo_unitario) || 0;
-            return sum + cantidadBase * factorMerma * precio;
-          }, 0);
+          // 1. Costo de materiales de la receta (insumos extra)
+          // Excluimos el material que ya está en la configuración de corte para no duplicar
+          const costoMaterialesReceta = recetasAplicables
+            .filter(r => r.material_id !== config?.material_id)
+            .reduce((sum, r) => {
+              const cantidadBase = parseFloat(r.cantidad) || 0;
+              const precio = parseFloat(r.material?.costo_unitario) || 0;
+              return sum + cantidadBase * factorMerma * precio;
+            }, 0);
+
+          // 2. Costo de la tela principal (desde configuración de corte)
+          // Nota: total_metros_lineales ya incluye la merma (calculado por trigger SQL)
+          let costoTelaConfig = 0;
+          if (config) {
+            const metros = parseFloat(config.total_metros_lineales) || 0;
+            const precio = config.material?.costo_unitario 
+              ? parseFloat(config.material.costo_unitario) 
+              : (parseFloat(config.precio_tela_metro) || 0);
+            costoTelaConfig = metros * precio;
+          }
 
           const costoServicios = config
             ? (parseFloat(config.costo_confeccion) || 0) + (parseFloat(config.costo_empaque) || 0)
             : 0;
 
-          // Fallback dual: tela legacy si config no tiene material_id pero sí precio_tela_metro
-          let costoTelaLegacy = 0;
-          if (config && !config.material_id) {
-            const metros = parseFloat(config.total_metros_lineales) || 0;
-            const precio = parseFloat(config.precio_tela_metro) || 0;
-            costoTelaLegacy = metros * precio;
-          }
-
           return {
-            costo_materiales: costoMateriales,
+            costo_materiales: costoMaterialesReceta,
             costo_servicios: costoServicios,
-            costo_tela_legacy: costoTelaLegacy,
-            costo_total: costoMateriales + costoServicios + costoTelaLegacy,
-            usa_fallback_legacy: costoTelaLegacy > 0,
+            costo_tela_principal: costoTelaConfig,
+            costo_total: costoMaterialesReceta + costoServicios + costoTelaConfig,
+            usa_fallback_legacy: config && !config.material_id,
           };
         };
 

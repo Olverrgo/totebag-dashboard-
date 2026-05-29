@@ -204,10 +204,20 @@ const ProduccionView = ({ isAdmin }) => {
 
   const cargarRecetaParaOrden = async () => {
     if (!formOrden.producto_id) return;
-    const res = await getRecetasProducto(formOrden.producto_id);
     
+    const pId = parseInt(formOrden.producto_id);
     const vId = parseInt(formOrden.variante_id);
-    const lineas = (res.data || [])
+    const producto = productos.find(p => p.id === pId);
+    
+    // 1. Obtener receta base
+    const res = await getRecetasProducto(pId);
+    
+    // 2. Buscar configuración de corte (tela principal)
+    const config = (producto?.configuraciones_corte || []).find(c => 
+      c.es_configuracion_actual && (c.variante_id === vId || c.variante_id === null)
+    );
+
+    let lineas = (res.data || [])
       .filter(r => r.variante_id === null || r.variante_id === vId)
       .map(r => {
         const opcional = r.opcional === true;
@@ -222,6 +232,43 @@ const ProduccionView = ({ isAdmin }) => {
           es_opcional: opcional
         };
       });
+
+    // 3. Integrar tela de la configuración si existe
+    if (config && config.material_id) {
+      const materialPrincipalId = config.material_id;
+      const existeEnReceta = lineas.some(l => l.material_id === materialPrincipalId);
+      
+      const materialData = materiales.find(m => m.id === materialPrincipalId);
+      const metrosTotales = parseFloat(config.total_metros_lineales) || 0;
+
+      if (!existeEnReceta) {
+        lineas.unshift({
+          material_id: materialPrincipalId,
+          nombre: materialData?.nombre || 'Tela principal',
+          unidad: materialData?.unidad || 'metros',
+          cantidad_por_pieza: metrosTotales,
+          cantidad_total: metrosTotales * (parseInt(formOrden.cantidad) || 0),
+          costo_unitario: parseFloat(materialData?.costo_unitario) || 0,
+          stock_disponible: parseFloat(materialData?.stock) || 0,
+          es_opcional: false,
+          es_principal: true
+        });
+      } else {
+        // Si ya existe, actualizamos la cantidad con la del patrón de corte (más precisa)
+        lineas = lineas.map(l => {
+          if (l.material_id === materialPrincipalId) {
+            return {
+              ...l,
+              cantidad_por_pieza: metrosTotales,
+              cantidad_total: metrosTotales * (parseInt(formOrden.cantidad) || 0),
+              es_principal: true
+            };
+          }
+          return l;
+        });
+      }
+    }
+
     setMaterialesOrden(lineas);
     setPasoWizard(2);
   };
