@@ -8,7 +8,8 @@ import {
   getPagosProveedor, 
   registrarPagoProveedor,
   getMateriales,
-  eliminarPagoProveedor
+  eliminarPagoProveedor,
+  createMaterial
 } from '../supabaseClient';
 import { colors } from '../utils/colors';
 
@@ -278,12 +279,79 @@ const ComprasView = ({ isAdmin }) => {
 
 // --- Componentes Auxiliares ---
 
+const QuickMaterialForm = ({ onCancel, onCreated }) => {
+  const [loading, setLoading] = useState(false);
+  
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const nombre = formData.get('nombre');
+    
+    if (!nombre) return alert('El nombre es obligatorio');
+    
+    setLoading(true);
+    const nuevo = {
+      nombre,
+      unidad: formData.get('unidad'),
+      categoria: formData.get('categoria')
+    };
+    
+    const { data, error } = await createMaterial(nuevo);
+    setLoading(false);
+    
+    if (!error && data) {
+      onCreated(data);
+    } else {
+      alert('Error: ' + (error?.message || 'No se pudo crear el material'));
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={{ 
+      background: colors.cotton, padding: '10px', borderRadius: '8px', 
+      border: `1px solid ${colors.sand}`, display: 'flex', flexDirection: 'column', gap: '8px',
+      marginTop: '5px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)'
+    }}>
+      <div style={{ fontSize: '11px', fontWeight: '600', color: colors.camel, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Nuevo Material</div>
+      <input name="nombre" placeholder="Nombre (ej. Tela Bramante)" required style={{ padding: '6px', fontSize: '12px', borderRadius: '4px', border: `1px solid ${colors.sand}` }} autoFocus />
+      <div style={{ display: 'flex', gap: '5px' }}>
+        <select name="unidad" required style={{ flex: 1, padding: '6px', fontSize: '12px', borderRadius: '4px', border: `1px solid ${colors.sand}` }}>
+          <option value="metros">Metros</option>
+          <option value="piezas">Piezas</option>
+          <option value="kilos">Kilos</option>
+          <option value="rollos">Rollos</option>
+          <option value="litros">Litros</option>
+          <option value="conos">Conos</option>
+        </select>
+        <select name="categoria" required style={{ flex: 1, padding: '6px', fontSize: '12px', borderRadius: '4px', border: `1px solid ${colors.sand}` }}>
+          <option value="tela">Tela</option>
+          <option value="cierre">Cierre</option>
+          <option value="hilo">Hilo</option>
+          <option value="etiqueta">Etiqueta</option>
+          <option value="empaque">Empaque</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+      <div style={{ display: 'flex', gap: '5px' }}>
+        <button type="button" onClick={onCancel} style={{ flex: 1, padding: '5px', fontSize: '11px', borderRadius: '4px', border: `1px solid ${colors.sand}`, background: 'white', cursor: 'pointer' }}>Cancelar</button>
+        <button type="submit" disabled={loading} style={{ 
+          flex: 1, padding: '5px', fontSize: '11px', borderRadius: '4px', border: 'none', 
+          background: colors.sage, color: 'white', cursor: 'pointer', opacity: loading ? 0.7 : 1 
+        }}>
+          {loading ? 'Guardando...' : 'Crear Material'}
+        </button>
+      </div>
+    </form>
+  );
+};
+
 const NewCompraModal = ({ onClose, proveedores, materiales, onSuccess }) => {
   const [paso, setPaso] = useState(1);
   const [proveedorId, setProveedorId] = useState('');
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [showQuickMaterial, setShowQuickMaterial] = useState(null);
 
   const addItem = () => {
     setItems([...items, { material_id: '', cantidad: 0, costo_unitario: 0 }]);
@@ -364,32 +432,60 @@ const NewCompraModal = ({ onClose, proveedores, materiales, onSuccess }) => {
             </button>
           </div>
           
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
             {items.map((item, index) => (
-              <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 0.2fr', gap: '10px', alignItems: 'center' }}>
-                <select 
-                  value={item.material_id} 
-                  onChange={(e) => updateItem(index, 'material_id', e.target.value)}
-                  style={{ padding: '8px', borderRadius: '5px', border: `1px solid ${colors.sand}` }}
-                >
-                  <option value="">Material...</option>
-                  {materiales.map(m => <option key={m.id} value={m.id}>{m.nombre} ({m.unidad})</option>)}
-                </select>
-                <input 
-                  type="number" 
-                  placeholder="Cant" 
-                  value={item.cantidad} 
-                  onChange={(e) => updateItem(index, 'cantidad', parseFloat(e.target.value))}
-                  style={{ padding: '8px', borderRadius: '5px', border: `1px solid ${colors.sand}` }}
-                />
-                <input 
-                  type="number" 
-                  placeholder="Costo U." 
-                  value={item.costo_unitario} 
-                  onChange={(e) => updateItem(index, 'costo_unitario', parseFloat(e.target.value))}
-                  style={{ padding: '8px', borderRadius: '5px', border: `1px solid ${colors.sand}` }}
-                />
-                <button onClick={() => removeItem(index)} style={{ border: 'none', background: 'none', color: '#E74C3C', cursor: 'pointer' }}>✕</button>
+              <div key={index} style={{ borderBottom: index < items.length - 1 ? `1px solid ${colors.cream}` : 'none', paddingBottom: '10px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 0.2fr', gap: '10px', alignItems: 'start' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ display: 'flex', gap: '5px' }}>
+                      <select 
+                        value={item.material_id} 
+                        onChange={(e) => updateItem(index, 'material_id', e.target.value)}
+                        style={{ flex: 1, padding: '8px', borderRadius: '5px', border: `1px solid ${colors.sand}` }}
+                      >
+                        <option value="">Material...</option>
+                        {materiales.map(m => <option key={m.id} value={m.id}>{m.nombre} ({m.unidad})</option>)}
+                      </select>
+                      <button 
+                        type="button"
+                        onClick={() => setShowQuickMaterial(index === showQuickMaterial ? null : index)}
+                        style={{ 
+                          padding: '0 10px', borderRadius: '5px', background: colors.cream, 
+                          border: `1px solid ${colors.sand}`, cursor: 'pointer', fontSize: '14px',
+                          color: colors.espresso
+                        }}
+                        title="Nuevo material al vuelo"
+                      >
+                        +
+                      </button>
+                    </div>
+                    {showQuickMaterial === index && (
+                      <QuickMaterialForm 
+                        onCancel={() => setShowQuickMaterial(null)}
+                        onCreated={async (nuevoMat) => {
+                          await onSuccess(); // Recargar lista de materiales en el padre
+                          updateItem(index, 'material_id', nuevoMat.id);
+                          setShowQuickMaterial(null);
+                        }}
+                      />
+                    )}
+                  </div>
+                  <input 
+                    type="number" 
+                    placeholder="Cant" 
+                    value={item.cantidad} 
+                    onChange={(e) => updateItem(index, 'cantidad', parseFloat(e.target.value))}
+                    style={{ padding: '8px', borderRadius: '5px', border: `1px solid ${colors.sand}` }}
+                  />
+                  <input 
+                    type="number" 
+                    placeholder="Costo U." 
+                    value={item.costo_unitario} 
+                    onChange={(e) => updateItem(index, 'costo_unitario', parseFloat(e.target.value))}
+                    style={{ padding: '8px', borderRadius: '5px', border: `1px solid ${colors.sand}` }}
+                  />
+                  <button onClick={() => removeItem(index)} style={{ border: 'none', background: 'none', color: '#E74C3C', cursor: 'pointer', marginTop: '8px' }}>✕</button>
+                </div>
               </div>
             ))}
           </div>
