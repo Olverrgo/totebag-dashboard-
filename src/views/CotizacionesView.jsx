@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  getTiersPrecio, 
-  getCotizaciones, 
-  getProductos, 
-  getClientes, 
+  getTiersPrecio,
+  getCotizaciones,
+  getCotizacionDetalle,
+  getProductos,
+  getClientes,
   crearCotizacionCompleta,
   eliminarCotizacion,
   calcularPrecioSugerido
