@@ -3184,7 +3184,15 @@ export const crearCotizacionCompleta = async (cabecera, lineas) => {
   if (errCab) return { data: null, error: handleRLSError(errCab) };
 
   if (lineas && lineas.length > 0) {
-    const filas = lineas.map(l => ({ ...l, cotizacion_id: nuevaCot.id }));
+    // Sanitizar FKs enteros: la UI puede mandar '' (sin variante seleccionada)
+    // y Postgres rechaza '' en columnas INTEGER. '' → null, lo demás a número.
+    const aIntONull = (v) => (v === '' || v === null || v === undefined ? null : parseInt(v, 10));
+    const filas = lineas.map(l => ({
+      ...l,
+      cotizacion_id: nuevaCot.id,
+      producto_id: aIntONull(l.producto_id),
+      variante_id: aIntONull(l.variante_id)
+    }));
     const { error: errDet } = await supabase
       .from('detalle_cotizacion')
       .insert(filas);
