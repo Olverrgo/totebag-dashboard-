@@ -40,30 +40,6 @@ const CotizacionesView = ({ isAdmin }) => {
     else alert('Error: ' + error.message);
   };
 
-  const generarPDF = (cot) => {
-    const doc = jsPDF();
-    const logoBase64 = ''; // Aquí iría el logo si lo tuviéramos
-    
-    // Header
-    doc.setFontSize(22);
-    doc.setTextColor(44, 62, 80);
-    doc.text('COTIZACIÓN PROFESIONAL', 105, 20, { align: 'center' });
-    doc.setFontSize(10);
-    doc.text('Yolotl Gestora - Blancos Sinaí', 105, 28, { align: 'center' });
-    
-    // Info
-    doc.setFontSize(12);
-    doc.setTextColor(0);
-    doc.text(`Folio: ${cot.folio}`, 15, 45);
-    doc.text(`Fecha: ${new Date(cot.fecha).toLocaleDateString()}`, 15, 52);
-    doc.text(`Cliente: ${cot.clientes?.nombre || cot.cliente_nombre || 'Público General'}`, 15, 59);
-    doc.text(`Canal: ${cot.tiers_precio?.nombre}`, 15, 66);
-
-    // Tabla de productos (esto requiere cargar el detalle si no viene en el objeto)
-    // Por simplicidad en este MVP, asumiremos que se genera desde el detalle cargado
-    alert('Función de PDF en desarrollo. Se requiere cargar el detalle completo para el renderizado.');
-  };
-
   return (
     <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
@@ -120,7 +96,7 @@ const CotizacionesView = ({ isAdmin }) => {
                       </span>
                     </td>
                     <td style={{ padding: '15px', display: 'flex', gap: '10px' }}>
-                      <button onClick={() => alert('Próximamente: Detalle completo')} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>👁️</button>
+                      <button onClick={() => setSelectedCot(c)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>👁️</button>
                       <button onClick={() => handleEliminar(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>🗑️</button>
                     </td>
                   </tr>
@@ -137,6 +113,179 @@ const CotizacionesView = ({ isAdmin }) => {
           onSuccess={() => { setShowModal(false); fetchData(); }} 
         />
       )}
+
+      {selectedCot && (
+        <CotizacionDetailModal 
+          cotizacion={selectedCot} 
+          onClose={() => setSelectedCot(null)} 
+        />
+      )}
+    </div>
+  );
+};
+
+// --- DETAIL COMPONENT ---
+
+const CotizacionDetailModal = ({ cotizacion, onClose }) => {
+  const [detalle, setDetalle] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadDetalle = async () => {
+      setLoading(true);
+      const res = await getCotizacionDetalle(cotizacion.id);
+      if (res.data) setDetalle(res.data);
+      setLoading(false);
+    };
+    loadDetalle();
+  }, [cotizacion.id]);
+
+  const formatCurrency = (val) => {
+    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(val || 0);
+  };
+
+  const generarPDF = () => {
+    const doc = new jsPDF();
+    
+    // Memberte / Header
+    doc.setFillColor(colors.sidebarBg);
+    doc.rect(0, 0, 210, 40, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.text('BLANCOS SINAÍ', 15, 20);
+    doc.setFontSize(10);
+    doc.text('COTIZACIÓN PROFESIONAL - Yolotl Gestora', 15, 30);
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.text(`FOLIO: ${cotizacion.folio}`, 195, 25, { align: 'right' });
+    doc.text(`FECHA: ${new Date(cotizacion.fecha).toLocaleDateString()}`, 195, 32, { align: 'right' });
+
+    // Datos del Cliente
+    doc.setTextColor(0);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('DATOS DEL CLIENTE:', 15, 55);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Nombre: ${cotizacion.clientes?.nombre || cotizacion.cliente_nombre}`, 15, 62);
+    doc.text(`Vigencia: ${cotizacion.vigencia_dias} días naturales`, 15, 69);
+    doc.text(`Canal de Venta: ${cotizacion.tiers_precio?.nombre}`, 15, 76);
+
+    // Tabla de productos
+    const tableData = detalle.map(it => [
+      it.descripcion,
+      it.cantidad,
+      formatCurrency(it.precio_unitario),
+      formatCurrency(it.subtotal)
+    ]);
+
+    doc.autoTable({
+      startY: 85,
+      head: [['Producto / Servicio', 'Cant.', 'Precio Unit.', 'Subtotal']],
+      body: tableData,
+      headStyles: { fillColor: colors.sidebarBg },
+      foot: [[
+        { content: 'TOTAL:', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } },
+        { content: formatCurrency(cotizacion.total), styles: { fontStyle: 'bold' } }
+      ]],
+      theme: 'grid'
+    });
+
+    // Notas
+    const finalY = doc.lastAutoTable.finalY + 15;
+    if (cotizacion.notas) {
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text('OBSERVACIONES:', 15, finalY);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      const splitNotas = doc.splitTextToSize(cotizacion.notas, 180);
+      doc.text(splitNotas, 15, finalY + 7);
+    }
+
+    doc.save(`cotizacion-${cotizacion.folio}.pdf`);
+  };
+
+  const shareWhatsApp = () => {
+    const text = `Hola, te comparto la cotización ${cotizacion.folio} por un total de ${formatCurrency(cotizacion.total)}. En un momento te adjunto el PDF detallado.`;
+    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+  };
+
+  const shareEmail = () => {
+    const subject = `Cotización ${cotizacion.folio} - Blancos Sinaí`;
+    const body = `Estimado cliente, adjunto enviamos la propuesta solicitada por un total de ${formatCurrency(cotizacion.total)}. Quedamos a sus órdenes para cualquier duda.`;
+    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
+
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: 'white', borderRadius: '15px', width: '700px', maxHeight: '90vh', overflowY: 'auto', padding: '30px', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+          <h3 style={{ margin: 0 }}>Detalle de Cotización: {cotizacion.folio}</h3>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: '20px', cursor: 'pointer' }}>✕</button>
+        </div>
+
+        <div style={{ background: colors.cream, padding: '20px', borderRadius: '10px', marginBottom: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px' }}>
+            <div>
+              <div style={{ fontSize: '11px', color: colors.camel }}>Cliente</div>
+              <div style={{ fontWeight: '600' }}>{cotizacion.clientes?.nombre || cotizacion.cliente_nombre}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '11px', color: colors.camel }}>Fecha</div>
+              <div style={{ fontWeight: '600' }}>{new Date(cotizacion.fecha).toLocaleDateString()}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '11px', color: colors.camel }}>Estado</div>
+              <div style={{ fontWeight: '600', textTransform: 'uppercase' }}>{cotizacion.estado}</div>
+            </div>
+          </div>
+        </div>
+
+        {loading ? <p>Cargando detalle...</p> : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
+            <thead>
+              <tr style={{ textAlign: 'left', borderBottom: `1px solid ${colors.sand}` }}>
+                <th style={{ padding: '10px 0' }}>Producto</th>
+                <th>Cant</th>
+                <th>Precio</th>
+                <th style={{ textAlign: 'right' }}>Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              {detalle.map(it => (
+                <tr key={it.id} style={{ borderBottom: `1px solid ${colors.sand}` }}>
+                  <td style={{ padding: '10px 0' }}>{it.descripcion}</td>
+                  <td>{it.cantidad}</td>
+                  <td>{formatCurrency(it.precio_unitario)}</td>
+                  <td style={{ textAlign: 'right' }}>{formatCurrency(it.subtotal)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan="3" style={{ textAlign: 'right', padding: '15px 0', fontWeight: 'bold' }}>TOTAL:</td>
+                <td style={{ textAlign: 'right', padding: '15px 0', fontWeight: 'bold', fontSize: '18px' }}>{formatCurrency(cotizacion.total)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        )}
+
+        {cotizacion.notas && (
+          <div style={{ marginBottom: '25px', padding: '15px', background: '#f9f9f9', borderRadius: '8px', borderLeft: `4px solid ${colors.sand}` }}>
+            <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '5px' }}>Notas Comerciales</div>
+            <div style={{ fontSize: '13px', fontStyle: 'italic' }}>{cotizacion.notas}</div>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', borderTop: `1px solid ${colors.sand}`, paddingTop: '20px' }}>
+          <button onClick={generarPDF} style={{ padding: '10px 20px', borderRadius: '8px', background: colors.sidebarBg, color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>📄 Descargar PDF</button>
+          <button onClick={shareWhatsApp} style={{ padding: '10px 20px', borderRadius: '8px', background: '#25D366', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>💬 WhatsApp</button>
+          <button onClick={shareEmail} style={{ padding: '10px 20px', borderRadius: '8px', background: '#E67E22', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>✉️ Email</button>
+        </div>
+      </div>
     </div>
   );
 };
