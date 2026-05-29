@@ -9,7 +9,8 @@ import {
   registrarPagoProveedor,
   getMateriales,
   eliminarPagoProveedor,
-  createMaterial
+  createMaterial,
+  updateCompraVencimiento
 } from '../supabaseClient';
 import { colors } from '../utils/colors';
 
@@ -544,9 +545,11 @@ const CompraDetailModal = ({ compra, onClose, onUpdate }) => {
   const [pagos, setPagos] = useState([]);
   const [showPagoForm, setShowPagoForm] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [tempVencimiento, setTempVencimiento] = useState(compra.fecha_vencimiento || '');
 
   useEffect(() => {
     loadData();
+    setTempVencimiento(compra.fecha_vencimiento || '');
   }, [compra]);
 
   const loadData = async () => {
@@ -600,6 +603,16 @@ const CompraDetailModal = ({ compra, onClose, onUpdate }) => {
     }
   };
 
+  const handleUpdateVencimiento = async () => {
+    const { error } = await updateCompraVencimiento(compra.id, tempVencimiento);
+    if (!error) {
+      alert('Fecha de vencimiento actualizada');
+      onUpdate();
+    } else {
+      alert('Error al actualizar: ' + error.message);
+    }
+  };
+
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -611,7 +624,7 @@ const CompraDetailModal = ({ compra, onClose, onUpdate }) => {
           <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: '20px', cursor: 'pointer' }}>✕</button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px', marginBottom: '30px', background: colors.cream, padding: '15px', borderRadius: '10px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '15px', marginBottom: '30px', background: colors.cream, padding: '15px', borderRadius: '10px' }}>
           <div>
             <div style={{ fontSize: '11px', color: colors.camel }}>Proveedor</div>
             <div style={{ fontWeight: '600' }}>{compra.proveedores?.nombre}</div>
@@ -624,6 +637,24 @@ const CompraDetailModal = ({ compra, onClose, onUpdate }) => {
             <div style={{ fontSize: '11px', color: colors.camel }}>Saldo Pendiente</div>
             <div style={{ fontWeight: '600', color: compra.saldo_pendiente > 0 ? '#E74C3C' : '#27AE60' }}>
               {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(compra.saldo_pendiente)}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '11px', color: colors.camel }}>Vencimiento</div>
+            <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+              <input 
+                type="date" 
+                value={tempVencimiento} 
+                onChange={(e) => setTempVencimiento(e.target.value)}
+                style={{ fontSize: '11px', padding: '2px', width: '95px' }}
+              />
+              <button 
+                onClick={handleUpdateVencimiento}
+                style={{ padding: '2px 5px', fontSize: '10px', background: colors.sage, color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
+                title="Guardar fecha"
+              >
+                💾
+              </button>
             </div>
           </div>
           <div>
