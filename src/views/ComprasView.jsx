@@ -144,6 +144,7 @@ const ComprasView = ({ isAdmin }) => {
                   <th style={{ padding: '15px', color: colors.espresso, fontWeight: '600' }}>Proveedor</th>
                   <th style={{ padding: '15px', color: colors.espresso, fontWeight: '600' }}>Total</th>
                   <th style={{ padding: '15px', color: colors.espresso, fontWeight: '600' }}>Saldo</th>
+                  <th style={{ padding: '15px', color: colors.espresso, fontWeight: '600' }}>Vencimiento</th>
                   <th style={{ padding: '15px', color: colors.espresso, fontWeight: '600' }}>Estado</th>
                   <th style={{ padding: '15px', color: colors.espresso, fontWeight: '600' }}>Acciones</th>
                 </tr>
@@ -151,40 +152,47 @@ const ComprasView = ({ isAdmin }) => {
               <tbody>
                 {compras.length === 0 ? (
                   <tr>
-                    <td colSpan="6" style={{ padding: '40px', textAlign: 'center', color: colors.camel }}>
+                    <td colSpan="7" style={{ padding: '40px', textAlign: 'center', color: colors.camel }}>
                       No hay compras registradas
                     </td>
                   </tr>
                 ) : (
-                  compras.map(compra => (
-                    <tr key={compra.id} style={{ borderBottom: `1px solid ${colors.cream}`, transition: 'background 0.2s' }}>
-                      <td style={{ padding: '15px' }}>{new Date(compra.fecha_compra).toLocaleDateString()}</td>
-                      <td style={{ padding: '15px', fontWeight: '500' }}>{compra.proveedores?.nombre || 'N/A'}</td>
-                      <td style={{ padding: '15px' }}>{formatCurrency(compra.monto_total)}</td>
-                      <td style={{ padding: '15px', color: compra.saldo_pendiente > 0 ? '#E74C3C' : '#27AE60' }}>
-                        {formatCurrency(compra.saldo_pendiente)}
-                      </td>
-                      <td style={{ padding: '15px' }}>
-                        <span style={{ 
-                          padding: '4px 10px', 
-                          borderRadius: '20px', 
-                          fontSize: '12px',
-                          background: compra.estado_pago === 'pagado' ? '#D5F5E3' : compra.estado_pago === 'parcial' ? '#FCF3CF' : '#FADBD8',
-                          color: compra.estado_pago === 'pagado' ? '#27AE60' : compra.estado_pago === 'parcial' ? '#B7950B' : '#C0392B'
-                        }}>
-                          {compra.estado_pago.toUpperCase()}
-                        </span>
-                      </td>
-                      <td style={{ padding: '15px' }}>
-                        <button 
-                          onClick={() => setSelectedCompra(compra)}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: colors.sidebarBg }}
-                        >
-                          👁️ Ver detalles
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                  compras.map(compra => {
+                    const isExpired = compra.saldo_pendiente > 0 && compra.fecha_vencimiento && new Date(compra.fecha_vencimiento) < new Date().setHours(0,0,0,0);
+                    return (
+                      <tr key={compra.id} style={{ borderBottom: `1px solid ${colors.cream}`, transition: 'background 0.2s' }}>
+                        <td style={{ padding: '15px' }}>{new Date(compra.fecha_compra).toLocaleDateString()}</td>
+                        <td style={{ padding: '15px', fontWeight: '500' }}>{compra.proveedores?.nombre || 'N/A'}</td>
+                        <td style={{ padding: '15px' }}>{formatCurrency(compra.monto_total)}</td>
+                        <td style={{ padding: '15px', color: compra.saldo_pendiente > 0 ? '#E74C3C' : '#27AE60' }}>
+                          {formatCurrency(compra.saldo_pendiente)}
+                        </td>
+                        <td style={{ padding: '15px', color: isExpired ? '#E74C3C' : 'inherit', fontWeight: isExpired ? '600' : 'normal' }}>
+                          {compra.fecha_vencimiento ? new Date(compra.fecha_vencimiento).toLocaleDateString() : '-'}
+                          {isExpired && <div style={{ fontSize: '10px', color: '#E74C3C' }}>VENCIDA</div>}
+                        </td>
+                        <td style={{ padding: '15px' }}>
+                          <span style={{ 
+                            padding: '4px 10px', 
+                            borderRadius: '20px', 
+                            fontSize: '12px',
+                            background: compra.estado_pago === 'pagado' ? '#D5F5E3' : compra.estado_pago === 'parcial' ? '#FCF3CF' : '#FADBD8',
+                            color: compra.estado_pago === 'pagado' ? '#27AE60' : compra.estado_pago === 'parcial' ? '#B7950B' : '#C0392B'
+                          }}>
+                            {compra.estado_pago.toUpperCase()}
+                          </span>
+                        </td>
+                        <td style={{ padding: '15px' }}>
+                          <button 
+                            onClick={() => setSelectedCompra(compra)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: colors.sidebarBg }}
+                          >
+                            👁️ Ver detalles
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -349,6 +357,7 @@ const NewCompraModal = ({ onClose, proveedores, materiales, onSuccess }) => {
   const [paso, setPaso] = useState(1);
   const [proveedorId, setProveedorId] = useState('');
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
+  const [fechaVencimiento, setFechaVencimiento] = useState('');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showQuickMaterial, setShowQuickMaterial] = useState(null);
@@ -379,6 +388,7 @@ const NewCompraModal = ({ onClose, proveedores, materiales, onSuccess }) => {
     const compra = {
       proveedor_id: proveedorId,
       fecha_compra: fecha,
+      fecha_vencimiento: fechaVencimiento || null,
       monto_total: totalCompra
     };
     
@@ -401,7 +411,7 @@ const NewCompraModal = ({ onClose, proveedores, materiales, onSuccess }) => {
       <div style={{ background: 'white', padding: '30px', borderRadius: '15px', width: '700px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}>
         <h3 style={{ margin: '0 0 20px 0', color: colors.espresso }}>Registrar Compra de Material</h3>
         
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', marginBottom: '20px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '13px', color: colors.camel, marginBottom: '5px' }}>Proveedor</label>
             <select 
@@ -414,11 +424,20 @@ const NewCompraModal = ({ onClose, proveedores, materiales, onSuccess }) => {
             </select>
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: '13px', color: colors.camel, marginBottom: '5px' }}>Fecha</label>
+            <label style={{ display: 'block', fontSize: '13px', color: colors.camel, marginBottom: '5px' }}>Fecha Compra</label>
             <input 
               type="date" 
               value={fecha} 
               onChange={(e) => setFecha(e.target.value)}
+              style={{ width: '100%', padding: '10px', borderRadius: '8px', border: `1px solid ${colors.sand}` }} 
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '13px', color: colors.camel, marginBottom: '5px' }}>Vencimiento (Crédito)</label>
+            <input 
+              type="date" 
+              value={fechaVencimiento} 
+              onChange={(e) => setFechaVencimiento(e.target.value)}
               style={{ width: '100%', padding: '10px', borderRadius: '8px', border: `1px solid ${colors.sand}` }} 
             />
           </div>
@@ -555,6 +574,7 @@ const CompraDetailModal = ({ compra, onClose, onUpdate }) => {
       compra_id: compra.id,
       monto,
       metodo_pago: formData.get('metodo_pago'),
+      fecha_pago: formData.get('fecha_pago') || new Date().toISOString(),
       notas: formData.get('notas')
     };
 
@@ -656,11 +676,14 @@ const CompraDetailModal = ({ compra, onClose, onUpdate }) => {
               <form onSubmit={handleRegistrarPago} style={{ background: colors.cotton, padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <input name="monto" type="number" step="0.01" max={compra.saldo_pendiente} required placeholder="Monto a pagar" style={{ padding: '6px', fontSize: '13px' }} />
-                  <select name="metodo_pago" required style={{ padding: '6px', fontSize: '13px' }}>
-                    <option value="transferencia">Transferencia</option>
-                    <option value="efectivo">Efectivo</option>
-                    <option value="tarjeta">Tarjeta</option>
-                  </select>
+                  <div style={{ display: 'flex', gap: '5px' }}>
+                    <select name="metodo_pago" required style={{ flex: 1, padding: '6px', fontSize: '13px' }}>
+                      <option value="transferencia">Transferencia</option>
+                      <option value="efectivo">Efectivo</option>
+                      <option value="tarjeta">Tarjeta</option>
+                    </select>
+                    <input name="fecha_pago" type="date" defaultValue={new Date().toISOString().split('T')[0]} style={{ flex: 1, padding: '6px', fontSize: '13px' }} />
+                  </div>
                   <div style={{ display: 'flex', gap: '5px' }}>
                     <button type="button" onClick={() => setShowPagoForm(false)} style={{ flex: 1, padding: '5px', fontSize: '12px' }}>Cancelar</button>
                     <button type="submit" style={{ flex: 1, padding: '5px', fontSize: '12px', background: colors.sidebarBg, color: 'white', border: 'none' }}>Registrar</button>
