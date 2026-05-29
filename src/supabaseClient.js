@@ -3087,3 +3087,19 @@ export const registrarPagoProveedor = async (pago) => {
 
   return { data: nuevoPago, error: handleRLSError(errPago) };
 };
+
+export const eliminarPagoProveedor = async (id) => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+
+  // Borrar el abono dispara el trigger AFTER DELETE `fn_actualizar_pago_compra`,
+  // que hace las dos cosas: apaga el egreso de caja ligado (activo=false) y
+  // recalcula monto_pagado de la compra → la deuda (saldo_pendiente) vuelve a subir.
+  // Este es el ÚNICO camino correcto para revertir un abono: NO borrar el egreso
+  // desde la vista de Caja (eso deja el abono huérfano y la deuda descuadrada).
+  const { error } = await supabase
+    .from('pagos_proveedores')
+    .delete()
+    .eq('id', id);
+
+  return { error: handleRLSError(error) };
+};

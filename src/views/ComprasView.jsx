@@ -7,7 +7,8 @@ import {
   crearCompraCompleta, 
   getPagosProveedor, 
   registrarPagoProveedor,
-  getMateriales
+  getMateriales,
+  eliminarPagoProveedor
 } from '../supabaseClient';
 import { colors } from '../utils/colors';
 
@@ -461,18 +462,25 @@ const CompraDetailModal = ({ compra, onClose, onUpdate }) => {
       notas: formData.get('notas')
     };
 
-    const datosCaja = {
-      proveedorNombre: compra.proveedores?.nombre,
-      descripcion: `Abono a Compra ID: ${compra.id.substring(0,8)}...`
-    };
-
-    const { error } = await registrarPagoProveedor(pago, datosCaja);
+    const { error } = await registrarPagoProveedor(pago);
     if (!error) {
       setShowPagoForm(false);
       loadData();
       onUpdate();
     } else {
       alert('Error: ' + error.message);
+    }
+  };
+
+  const handleEliminarPago = async (pagoId) => {
+    if (!window.confirm('¿Estás seguro de eliminar este abono? La deuda volverá a subir y se cancelará el egreso de caja.')) return;
+    
+    const { error } = await eliminarPagoProveedor(pagoId);
+    if (!error) {
+      loadData();
+      onUpdate();
+    } else {
+      alert('Error al eliminar: ' + error.message);
     }
   };
 
@@ -568,11 +576,18 @@ const CompraDetailModal = ({ compra, onClose, onUpdate }) => {
             <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
               {pagos.length === 0 ? <p style={{ fontSize: '12px', color: colors.camel }}>Sin pagos registrados</p> : (
                 pagos.map(pago => (
-                  <div key={pago.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px dotted ${colors.sand}`, fontSize: '13px' }}>
+                  <div key={pago.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px dotted ${colors.sand}`, fontSize: '13px' }}>
                     <div>
                       <div style={{ fontWeight: '600' }}>{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(pago.monto)}</div>
                       <div style={{ fontSize: '11px', color: colors.camel }}>{new Date(pago.fecha_pago).toLocaleDateString()} - {pago.metodo_pago}</div>
                     </div>
+                    <button 
+                      onClick={() => handleEliminarPago(pago.id)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.6, fontSize: '14px' }}
+                      title="Eliminar abono"
+                    >
+                      🗑️
+                    </button>
                   </div>
                 ))
               )}
