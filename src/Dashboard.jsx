@@ -10,6 +10,7 @@ import ProduccionView from "./views/ProduccionView";
 import StocksView from "./views/StocksView";
 import AnalyticsView from './views/AnalyticsView';
 import ComprasView from './views/ComprasView';
+import CotizacionesView from './views/CotizacionesView';
 import {
   isSupabaseConfigured,
   cargarDatosDashboard,
@@ -546,6 +547,7 @@ const Sidebar = ({ seccionActiva, setSeccionActiva, menuAbierto, setMenuAbierto,
     { id: 'servicios', nombre: 'Servicios', icon: '🧵' },
     { id: 'produccion', nombre: 'Producción', icon: '🏭' },
     { id: 'compras', nombre: 'Compras', icon: '🧾' },
+    { id: 'cotizaciones', nombre: 'Cotizaciones', icon: '🖋️' },
     { id: 'mayoreo', nombre: 'Mayoreo', icon: '📦' },
     { id: 'ecommerce', nombre: 'E-commerce', icon: '🛒' },
     { id: 'promociones', nombre: 'Promociones', icon: '🎉' },
@@ -11426,6 +11428,7 @@ export default function DashboardToteBag() {
       case 'servicios': return <ServiciosView isAdmin={isAdmin} />;
       case 'produccion': return <ProduccionView isAdmin={isAdmin} />;
       case 'compras': return <ComprasView isAdmin={isAdmin} />;
+      case 'cotizaciones': return <CotizacionesView isAdmin={isAdmin} />;
       case 'mayoreo': return <MayoreoView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} />;
       case 'ecommerce': return <EcommerceView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} datosDB={datosDB} costosAmazon={costosAmazon} setCostosAmazon={setCostosAmazon} isAdmin={isAdmin} />;
       case 'promociones': return <PromocionesView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} />;

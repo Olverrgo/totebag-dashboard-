@@ -1,0 +1,361 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  getTiersPrecio, 
+  getCotizaciones, 
+  getProductos, 
+  getClientes, 
+  crearCotizacionCompleta,
+  eliminarCotizacion,
+  calcularPrecioSugerido
+} from '../supabaseClient';
+import { colors } from '../utils/colors';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+
+const CotizacionesView = ({ isAdmin }) => {
+  const [cotizaciones, setCotizaciones] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [selectedCot, setSelectedCot] = useState(null);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    const res = await getCotizaciones();
+    if (res.data) setCotizaciones(res.data);
+    setLoading(false);
+  };
+
+  const formatCurrency = (val) => {
+    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(val || 0);
+  };
+
+  const handleEliminar = async (id) => {
+    if (!window.confirm('¿Eliminar esta cotización permanentemente?')) return;
+    const { error } = await eliminarCotizacion(id);
+    if (!error) fetchData();
+    else alert('Error: ' + error.message);
+  };
+
+  const generarPDF = (cot) => {
+    const doc = jsPDF();
+    const logoBase64 = ''; // Aquí iría el logo si lo tuviéramos
+    
+    // Header
+    doc.setFontSize(22);
+    doc.setTextColor(44, 62, 80);
+    doc.text('COTIZACIÓN PROFESIONAL', 105, 20, { align: 'center' });
+    doc.setFontSize(10);
+    doc.text('Yolotl Gestora - Blancos Sinaí', 105, 28, { align: 'center' });
+    
+    // Info
+    doc.setFontSize(12);
+    doc.setTextColor(0);
+    doc.text(`Folio: ${cot.folio}`, 15, 45);
+    doc.text(`Fecha: ${new Date(cot.fecha).toLocaleDateString()}`, 15, 52);
+    doc.text(`Cliente: ${cot.clientes?.nombre || cot.cliente_nombre || 'Público General'}`, 15, 59);
+    doc.text(`Canal: ${cot.tiers_precio?.nombre}`, 15, 66);
+
+    // Tabla de productos (esto requiere cargar el detalle si no viene en el objeto)
+    // Por simplicidad en este MVP, asumiremos que se genera desde el detalle cargado
+    alert('Función de PDF en desarrollo. Se requiere cargar el detalle completo para el renderizado.');
+  };
+
+  return (
+    <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+        <div>
+          <h2 style={{ fontSize: '28px', color: colors.espresso, margin: '0 0 5px 0', fontWeight: '300' }}>
+            Cotizaciones Profesionales
+          </h2>
+          <p style={{ color: colors.camel, margin: 0, fontSize: '14px' }}>Gestión de propuestas para clientes</p>
+        </div>
+        <button 
+          onClick={() => setShowModal(true)}
+          style={{
+            background: colors.sidebarBg, color: 'white', border: 'none',
+            padding: '12px 24px', borderRadius: '8px', cursor: 'pointer',
+            fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px'
+          }}
+        >
+          <span>➕</span> Nueva Cotización
+        </button>
+      </div>
+
+      {loading ? <p>Cargando...</p> : (
+        <div style={{ background: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <thead>
+              <tr style={{ background: colors.cream, borderBottom: `1px solid ${colors.sand}` }}>
+                <th style={{ padding: '15px', color: colors.espresso }}>Folio</th>
+                <th style={{ padding: '15px', color: colors.espresso }}>Fecha</th>
+                <th style={{ padding: '15px', color: colors.espresso }}>Cliente</th>
+                <th style={{ padding: '15px', color: colors.espresso }}>Canal</th>
+                <th style={{ padding: '15px', color: colors.espresso }}>Total</th>
+                <th style={{ padding: '15px', color: colors.espresso }}>Estado</th>
+                <th style={{ padding: '15px', color: colors.espresso }}>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cotizaciones.length === 0 ? (
+                <tr><td colSpan="7" style={{ padding: '40px', textAlign: 'center', color: colors.camel }}>No hay cotizaciones</td></tr>
+              ) : (
+                cotizaciones.map(c => (
+                  <tr key={c.id} style={{ borderBottom: `1px solid ${colors.cream}` }}>
+                    <td style={{ padding: '15px', fontWeight: 'bold' }}>{c.folio}</td>
+                    <td style={{ padding: '15px' }}>{new Date(c.fecha).toLocaleDateString()}</td>
+                    <td style={{ padding: '15px' }}>{c.clientes?.nombre || c.cliente_nombre || 'N/A'}</td>
+                    <td style={{ padding: '15px' }}>{c.tiers_precio?.nombre}</td>
+                    <td style={{ padding: '15px', fontWeight: '600' }}>{formatCurrency(c.total)}</td>
+                    <td style={{ padding: '15px' }}>
+                      <span style={{ 
+                        padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600',
+                        background: c.estado === 'aceptada' ? '#D5F5E3' : c.estado === 'rechazada' ? '#FADBD8' : '#FCF3CF',
+                        color: c.estado === 'aceptada' ? '#27AE60' : c.estado === 'rechazada' ? '#C0392B' : '#B7950B'
+                      }}>
+                        {c.estado.toUpperCase()}
+                      </span>
+                    </td>
+                    <td style={{ padding: '15px', display: 'flex', gap: '10px' }}>
+                      <button onClick={() => alert('Próximamente: Detalle completo')} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>👁️</button>
+                      <button onClick={() => handleEliminar(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>🗑️</button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {showModal && (
+        <CotizacionWizard 
+          onClose={() => setShowModal(false)} 
+          onSuccess={() => { setShowModal(false); fetchData(); }} 
+        />
+      )}
+    </div>
+  );
+};
+
+// --- WIZARD COMPONENT ---
+
+const CotizacionWizard = ({ onClose, onSuccess }) => {
+  const [paso, setPaso] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [tiers, setTiers] = useState([]);
+  const [clientes, setClientes] = useState([]);
+  const [productos, setProductos] = useState([]);
+  
+  // Form State
+  const [clienteId, setClienteId] = useState('');
+  const [clienteNombre, setClienteNombre] = useState('');
+  const [tierId, setTierId] = useState('');
+  const [notas, setNotas] = useState('');
+  const [items, setItems] = useState([]);
+
+  useEffect(() => {
+    const loadWizardData = async () => {
+      const [tRes, cRes, pRes] = await Promise.all([
+        getTiersPrecio(),
+        getClientes(),
+        getProductos()
+      ]);
+      if (tRes.data) setTiers(tRes.data);
+      if (cRes.data) setClientes(cRes.data);
+      if (pRes.data) setProductos(pRes.data.filter(p => p.es_manufacturado));
+    };
+    loadWizardData();
+  }, []);
+
+  const selectedTier = tiers.find(t => t.id === tierId);
+
+  const addItem = () => {
+    setItems([...items, { producto_id: '', variante_id: '', cantidad: 1, costo_snapshot: 0, tier_multiplicador: selectedTier?.multiplicador || 1, precio_unitario: 0, descripcion: '' }]);
+  };
+
+  const updateItem = (index, field, value) => {
+    const newItems = [...items];
+    const item = newItems[index];
+    item[field] = value;
+
+    if (field === 'producto_id') {
+      const prod = productos.find(p => p.id === parseInt(value));
+      item.descripcion = prod?.linea_nombre || '';
+      item.variante_id = '';
+      item.costo_snapshot = prod?.costo_desde || 0;
+      item.precio_unitario = calcularPrecioSugerido(item.costo_snapshot, item.tier_multiplicador);
+    }
+
+    if (field === 'variante_id') {
+      const prod = productos.find(p => p.id === parseInt(item.producto_id));
+      const v = prod?.variantes?.find(v => v.id === parseInt(value));
+      if (v) {
+        const costoVar = prod.costo_calculado_por_variante?.[v.id]?.costo_total || v.costo_unitario || 0;
+        item.costo_snapshot = costoVar;
+        item.precio_unitario = calcularPrecioSugerido(costoVar, item.tier_multiplicador);
+        item.descripcion = `${prod.linea_nombre} (${[v.material, v.color, v.talla].filter(Boolean).join(' - ')})`;
+      }
+    }
+
+    setItems(newItems);
+  };
+
+  const total = items.reduce((acc, curr) => acc + (curr.cantidad * curr.precio_unitario), 0);
+
+  const handleGuardar = async () => {
+    if (!tierId || items.length === 0) return alert('Datos incompletos');
+    
+    setLoading(true);
+    const cabecera = {
+      cliente_id: clienteId || null,
+      cliente_nombre: clienteId ? clientes.find(c => c.id === parseInt(clienteId))?.nombre : clienteNombre,
+      tier_id: tierId,
+      notas,
+      total
+    };
+    
+    const { error } = await crearCotizacionCompleta(cabecera, items);
+    setLoading(false);
+    if (!error) onSuccess();
+    else alert('Error: ' + error.message);
+  };
+
+  const formatCurrency = (val) => {
+    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(val || 0);
+  };
+
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: 'white', borderRadius: '15px', width: '850px', maxHeight: '90vh', overflowY: 'auto', padding: '30px', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', borderBottom: `1px solid ${colors.sand}`, paddingBottom: '15px' }}>
+          <h3 style={{ margin: 0, color: colors.espresso }}>Nueva Cotización - Paso {paso}/3</h3>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: '20px', cursor: 'pointer' }}>✕</button>
+        </div>
+
+        {paso === 1 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div>
+                <label style={{ fontSize: '13px', color: colors.camel }}>Cliente Registrado</label>
+                <select value={clienteId} onChange={e => { setClienteId(e.target.value); setClienteNombre(''); }} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: `1px solid ${colors.sand}` }}>
+                  <option value="">Seleccionar cliente...</option>
+                  {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: '13px', color: colors.camel }}>O Cliente Nuevo (Nombre)</label>
+                <input value={clienteNombre} onChange={e => { setClienteNombre(e.target.value); setClienteId(''); }} placeholder="Nombre del cliente" style={{ width: '100%', padding: '10px', borderRadius: '8px', border: `1px solid ${colors.sand}` }} />
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: '13px', color: colors.camel }}>Canal de Venta (Tier)</label>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                {tiers.map(t => (
+                  <button key={t.id} onClick={() => setTierId(t.id)} style={{
+                    padding: '10px 20px', borderRadius: '25px', border: `1px solid ${tierId === t.id ? colors.sidebarBg : colors.sand}`,
+                    background: tierId === t.id ? colors.sidebarBg : 'white', color: tierId === t.id ? 'white' : colors.espresso,
+                    cursor: 'pointer', transition: '0.2s'
+                  }}>
+                    {t.nombre} ({t.multiplicador}x)
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+              <button onClick={() => setPaso(2)} disabled={!tierId || (!clienteId && !clienteNombre)} style={{ padding: '12px 30px', borderRadius: '8px', border: 'none', background: colors.sidebarBg, color: 'white', fontWeight: 'bold', cursor: 'pointer', opacity: (!tierId || (!clienteId && !clienteNombre)) ? 0.5 : 1 }}>Siguiente</button>
+            </div>
+          </div>
+        )}
+
+        {paso === 2 && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
+              <h4 style={{ margin: 0 }}>Productos a Cotizar ({selectedTier?.nombre})</h4>
+              <button onClick={addItem} style={{ padding: '5px 15px', borderRadius: '5px', background: colors.sage, color: 'white', border: 'none', cursor: 'pointer' }}>+ Agregar</button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              {items.map((item, idx) => {
+                const prod = productos.find(p => p.id === parseInt(item.producto_id));
+                const floor = item.costo_snapshot;
+                const isUnderFloor = item.precio_unitario < floor;
+                return (
+                  <div key={idx} style={{ background: colors.cotton, padding: '15px', borderRadius: '10px', border: `1px solid ${isUnderFloor ? '#E74C3C' : colors.sand}` }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr 0.2fr', gap: '10px' }}>
+                      <select value={item.producto_id} onChange={e => updateItem(idx, 'producto_id', e.target.value)} style={{ padding: '8px' }}>
+                        <option value="">Producto...</option>
+                        {productos.map(p => <option key={p.id} value={p.id}>{p.linea_nombre}</option>)}
+                      </select>
+                      <select value={item.variante_id} onChange={e => updateItem(idx, 'variante_id', e.target.value)} disabled={!item.producto_id} style={{ padding: '8px' }}>
+                        <option value="">Variante...</option>
+                        {prod?.variantes?.map(v => <option key={v.id} value={v.id}>{[v.material, v.color, v.talla].filter(Boolean).join(' - ') || v.sku}</option>)}
+                      </select>
+                      <input type="number" value={item.cantidad} onChange={e => updateItem(idx, 'cantidad', parseFloat(e.target.value))} placeholder="Cant" style={{ padding: '8px' }} />
+                      <div style={{ position: 'relative' }}>
+                        <input type="number" value={item.precio_unitario} onChange={e => updateItem(idx, 'precio_unitario', parseFloat(e.target.value))} style={{ padding: '8px', width: '100%', border: isUnderFloor ? '2px solid #E74C3C' : '1px solid #ccc' }} />
+                        <div style={{ fontSize: '10px', color: colors.camel }}>Sugerido: {formatCurrency(calcularPrecioSugerido(item.costo_snapshot, item.tier_multiplicador))}</div>
+                        {isUnderFloor && <div style={{ fontSize: '9px', color: '#E74C3C', fontWeight: 'bold' }}>BAJO COSTO (Min: {formatCurrency(floor)})</div>}
+                      </div>
+                      <button onClick={() => setItems(items.filter((_, i) => i !== idx))} style={{ border: 'none', background: 'none', color: '#E74C3C', cursor: 'pointer' }}>✕</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '30px', borderTop: `1px solid ${colors.sand}`, paddingTop: '20px' }}>
+              <button onClick={() => setPaso(1)} style={{ padding: '10px 20px', borderRadius: '8px', background: 'white', border: `1px solid ${colors.sand}` }}>Atrás</button>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '14px', color: colors.camel }}>Total Estimado</div>
+                <div style={{ fontSize: '24px', fontWeight: 'bold', color: colors.espresso }}>{formatCurrency(total)}</div>
+              </div>
+              <button onClick={() => setPaso(3)} disabled={items.length === 0} style={{ padding: '12px 30px', borderRadius: '8px', border: 'none', background: colors.sidebarBg, color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>Revisar Cotización</button>
+            </div>
+          </div>
+        )}
+
+        {paso === 3 && (
+          <div>
+            <div style={{ background: colors.cream, padding: '20px', borderRadius: '10px', marginBottom: '20px' }}>
+              <h4 style={{ marginTop: 0 }}>Resumen de Propuesta</h4>
+              <p><strong>Cliente:</strong> {clienteId ? clientes.find(c => c.id === parseInt(clienteId))?.nombre : clienteNombre}</p>
+              <p><strong>Canal:</strong> {selectedTier?.nombre}</p>
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
+                <thead>
+                  <tr style={{ textAlign: 'left', borderBottom: `1px solid ${colors.sand}` }}>
+                    <th>Producto</th>
+                    <th>Cant</th>
+                    <th>Precio</th>
+                    <th style={{ textAlign: 'right' }}>Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((it, i) => (
+                    <tr key={i} style={{ borderBottom: `1px solid ${colors.sand}` }}>
+                      <td style={{ padding: '8px 0' }}>{it.descripcion}</td>
+                      <td>{it.cantidad}</td>
+                      <td>{formatCurrency(it.precio_unitario)}</td>
+                      <td style={{ textAlign: 'right' }}>{formatCurrency(it.cantidad * it.precio_unitario)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ textAlign: 'right', marginTop: '15px', fontSize: '20px', fontWeight: 'bold' }}>Total: {formatCurrency(total)}</div>
+            </div>
+            <textarea value={notas} onChange={e => setNotas(e.target.value)} placeholder="Condiciones, tiempo de entrega, etc." style={{ width: '100%', padding: '10px', borderRadius: '8px', minHeight: '100px' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px' }}>
+              <button onClick={() => setPaso(2)} style={{ padding: '10px 20px', borderRadius: '8px', background: 'white', border: `1px solid ${colors.sand}` }}>Atrás</button>
+              <button onClick={handleGuardar} disabled={loading} style={{ padding: '12px 40px', borderRadius: '8px', border: 'none', background: colors.sidebarBg, color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>
+                {loading ? 'Guardando...' : 'Confirmar y Guardar'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default CotizacionesView;
