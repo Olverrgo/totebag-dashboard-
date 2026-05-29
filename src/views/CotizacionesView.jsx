@@ -10,7 +10,7 @@ import {
 } from '../supabaseClient';
 import { colors } from '../utils/colors';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 const CotizacionesView = ({ isAdmin }) => {
   const [cotizaciones, setCotizaciones] = useState([]);
@@ -180,7 +180,7 @@ const CotizacionDetailModal = ({ cotizacion, onClose }) => {
       formatCurrency(it.subtotal)
     ]);
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: 85,
       head: [['Producto / Servicio', 'Cant.', 'Precio Unit.', 'Subtotal']],
       body: tableData,
