@@ -3061,6 +3061,22 @@ export const crearCompraCompleta = async (compra, detalles) => {
   return { data: nuevaCompra, error: null };
 };
 
+// Editar solo la fecha de vencimiento de una compra (compras viejas sin fecha,
+// o corregir una mal puesta). UPDATE puro: no dispara triggers de stock ni caja,
+// no toca detalle ni pagos. fecha = 'YYYY-MM-DD' o null para limpiarla.
+export const updateCompraVencimiento = async (id, fecha) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data, error } = await supabase
+    .from('compras_material')
+    .update({ fecha_vencimiento: fecha || null })
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data, error: handleRLSError(error) };
+};
+
 // Pagos a Proveedores
 export const getPagosProveedor = async (compraId) => {
   if (!supabase) return { data: null, error: 'Supabase no configurado' };
