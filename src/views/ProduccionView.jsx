@@ -52,6 +52,7 @@ const ProduccionView = ({ isAdmin }) => {
   const [materialesOrden, setMaterialesOrden] = useState([]);
   const [variantesProducto, setVariantesProducto] = useState([]);
   const [mostrarCompletar, setMostrarCompletar] = useState(null);
+  const [filtroEstadoOrden, setFiltroEstadoOrden] = useState('pendientes');
 
   const categoriasM = ['todas', 'tela', 'cierre', 'hilo', 'etiqueta', 'empaque', 'otro'];
   const unidades = ['metros', 'piezas', 'kilos', 'rollos', 'litros', 'conos'];
@@ -84,6 +85,14 @@ const ProduccionView = ({ isAdmin }) => {
     setMensaje({ tipo, texto });
     setTimeout(() => setMensaje({ tipo: '', texto: '' }), 3000);
   };
+
+  // ---- FILTRADO ORDENES ----
+  const ordenesFiltradas = ordenes.filter(o => {
+    if (filtroEstadoOrden === 'todas') return true;
+    if (filtroEstadoOrden === 'pendientes') return o.estado === 'borrador' || o.estado === 'en_proceso';
+    if (filtroEstadoOrden === 'terminadas') return o.estado === 'completada' || o.estado === 'cancelada';
+    return true;
+  });
 
   // ---- MATERIALES handlers ----
   const resetFormMaterial = () => {
@@ -686,8 +695,34 @@ const ProduccionView = ({ isAdmin }) => {
           {/* ========== TAB PRODUCIR ========== */}
           {tabActivo === 'producir' && (
             <div>
-              {/* Botón nueva orden */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+              {/* Controles: Filtros y Botón Nueva Orden */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '15px' }}>
+                <div style={{ display: 'flex', background: colors.cream, borderRadius: '8px', padding: '4px', border: `1px solid ${colors.sand}` }}>
+                  {[
+                    { id: 'todas', label: 'Todas' },
+                    { id: 'pendientes', label: 'Pendientes' },
+                    { id: 'terminadas', label: 'Terminadas' }
+                  ].map(f => (
+                    <button
+                      key={f.id}
+                      onClick={() => setFiltroEstadoOrden(f.id)}
+                      style={{
+                        padding: '6px 16px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        background: filtroEstadoOrden === f.id ? colors.sidebarBg : 'transparent',
+                        color: filtroEstadoOrden === f.id ? '#fff' : colors.espresso,
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+
                 <button onClick={iniciarWizard} style={{
                   padding: '10px 24px', background: colors.sidebarBg, color: '#fff', border: 'none',
                   borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '14px', fontFamily: 'inherit'
@@ -698,65 +733,66 @@ const ProduccionView = ({ isAdmin }) => {
 
               {/* Lista órdenes */}
               <div style={{ display: 'grid', gap: '12px' }}>
-                {ordenes.map(o => (
-                  <div key={o.id} style={{ background: colors.cotton, borderRadius: '12px', padding: '16px', border: `1px solid ${colors.sand}` }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px' }}>
-                      <div>
-                        <div style={{ fontWeight: '700', color: colors.espresso, fontSize: '16px' }}>
-                          {o.producto?.linea_nombre || 'Producto'}
-                          {o.variante && <span style={{ fontWeight: '400', color: colors.camel, fontSize: '14px' }}> / {[o.variante.material, o.variante.color, o.variante.talla].filter(Boolean).join(' - ') || o.variante.sku}</span>}
+                {ordenesFiltradas.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '40px', color: colors.camel, background: colors.cotton, borderRadius: '12px', border: `1px dashed ${colors.sand}` }}>
+                    No hay órdenes en este estado
+                  </div>
+                ) : (
+                  ordenesFiltradas.map(o => (
+                    <div key={o.id} style={{ background: colors.cotton, borderRadius: '12px', padding: '16px', border: `1px solid ${colors.sand}` }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px' }}>
+                        <div>
+                          <div style={{ fontWeight: '700', color: colors.espresso, fontSize: '16px' }}>
+                            {o.producto?.linea_nombre || 'Producto'}
+                            {o.variante && <span style={{ fontWeight: '400', color: colors.camel, fontSize: '14px' }}> / {[o.variante.material, o.variante.color, o.variante.talla].filter(Boolean).join(' - ') || o.variante.sku}</span>}
+                          </div>
+                          <div style={{ fontSize: '13px', color: colors.camel, marginTop: '4px' }}>
+                            {o.cantidad} piezas | {badgeEstado(o.estado)}
+                            {o.estado === 'completada' && <span style={{ marginLeft: '10px', fontWeight: '600', color: colors.sidebarBg }}>Costo: {formatearMoneda(o.costo_unitario_calculado)}/pza</span>}
+                          </div>
+                          <div style={{ fontSize: '11px', color: colors.camel, marginTop: '4px' }}>
+                            Creada: {new Date(o.created_at).toLocaleDateString('es-MX')}
+                            {o.fecha_completada && ` | Completada: ${new Date(o.fecha_completada).toLocaleDateString('es-MX')}`}
+                          </div>
+                          {o.notas && <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px', fontStyle: 'italic' }}>{o.notas}</div>}
                         </div>
-                        <div style={{ fontSize: '13px', color: colors.camel, marginTop: '4px' }}>
-                          {o.cantidad} piezas | {badgeEstado(o.estado)}
-                          {o.estado === 'completada' && <span style={{ marginLeft: '10px', fontWeight: '600', color: colors.sidebarBg }}>Costo: {formatearMoneda(o.costo_unitario_calculado)}/pza</span>}
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          {(o.estado === 'borrador' || o.estado === 'en_proceso') && (
+                            <>
+                              <button onClick={() => handleCompletarOrden(o.id)} disabled={guardando} style={{
+                                padding: '6px 16px', background: colors.olive, color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: '600', fontFamily: 'inherit'
+                              }}>Completar</button>
+                              <button onClick={() => handleCancelarOrden(o.id)} style={{
+                                padding: '6px 16px', background: colors.terracotta, color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontFamily: 'inherit'
+                              }}>Cancelar</button>
+                            </>
+                          )}
                         </div>
-                        <div style={{ fontSize: '11px', color: colors.camel, marginTop: '4px' }}>
-                          Creada: {new Date(o.created_at).toLocaleDateString('es-MX')}
-                          {o.fecha_completada && ` | Completada: ${new Date(o.fecha_completada).toLocaleDateString('es-MX')}`}
-                        </div>
-                        {o.notas && <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px', fontStyle: 'italic' }}>{o.notas}</div>}
                       </div>
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        {(o.estado === 'borrador' || o.estado === 'en_proceso') && (
-                          <>
-                            <button onClick={() => handleCompletarOrden(o.id)} disabled={guardando} style={{
-                              padding: '6px 16px', background: colors.olive, color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: '600', fontFamily: 'inherit'
-                            }}>Completar</button>
-                            <button onClick={() => handleCancelarOrden(o.id)} style={{
-                              padding: '6px 16px', background: colors.terracotta, color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontFamily: 'inherit'
-                            }}>Cancelar</button>
-                          </>
-                        )}
-                      </div>
-                    </div>
 
-                    {/* Materiales usados */}
-                    {o.materiales_usados && o.materiales_usados.length > 0 && (
-                      <div style={{ marginTop: '12px', background: colors.cream, borderRadius: '8px', padding: '10px' }}>
-                        <div style={{ fontSize: '11px', color: colors.camel, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>Materiales</div>
-                        {o.materiales_usados.map(mu => (
-                          <div key={mu.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', padding: '3px 0', borderBottom: `1px solid ${colors.sand}` }}>
-                            <span>{mu.material?.nombre || '-'}</span>
-                            <span style={{ color: colors.camel }}>
-                              {mu.cantidad_real != null ? parseFloat(mu.cantidad_real).toLocaleString('es-MX', { maximumFractionDigits: 2 }) : parseFloat(mu.cantidad_planeada).toLocaleString('es-MX', { maximumFractionDigits: 2 })} {mu.material?.unidad || ''}
-                              {o.estado === 'completada' && <span style={{ marginLeft: '8px', fontWeight: '600' }}>{formatearMoneda(mu.costo_total)}</span>}
-                            </span>
-                          </div>
-                        ))}
-                        {o.estado === 'completada' && (
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: '700', marginTop: '6px', color: colors.sidebarBg }}>
-                            <span>Total</span>
-                            <span>{formatearMoneda(o.costo_total)}</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {ordenes.length === 0 && (
-                  <div style={{ textAlign: 'center', padding: '40px', color: colors.camel, background: colors.cotton, borderRadius: '12px' }}>
-                    No hay órdenes de producción
-                  </div>
+                      {/* Materiales usados */}
+                      {o.materiales_usados && o.materiales_usados.length > 0 && (
+                        <div style={{ marginTop: '12px', background: colors.cream, borderRadius: '8px', padding: '10px' }}>
+                          <div style={{ fontSize: '11px', color: colors.camel, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>Materiales</div>
+                          {o.materiales_usados.map(mu => (
+                            <div key={mu.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', padding: '3px 0', borderBottom: `1px solid ${colors.sand}` }}>
+                              <span>{mu.material?.nombre || '-'}</span>
+                              <span style={{ color: colors.camel }}>
+                                {mu.cantidad_real != null ? parseFloat(mu.cantidad_real).toLocaleString('es-MX', { maximumFractionDigits: 2 }) : parseFloat(mu.cantidad_planeada).toLocaleString('es-MX', { maximumFractionDigits: 2 })} {mu.material?.unidad || ''}
+                                {o.estado === 'completada' && <span style={{ marginLeft: '8px', fontWeight: '600' }}>{formatearMoneda(mu.costo_total)}</span>}
+                              </span>
+                            </div>
+                          ))}
+                          {o.estado === 'completada' && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: '700', marginTop: '6px', color: colors.sidebarBg }}>
+                              <span>Total</span>
+                              <span>{formatearMoneda(o.costo_total)}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))
                 )}
               </div>
 
