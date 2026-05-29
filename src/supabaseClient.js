@@ -3119,3 +3119,98 @@ export const eliminarPagoProveedor = async (id) => {
 
   return { error: handleRLSError(error) };
 };
+
+// =====================================================
+// FASE 10: COTIZACIONES + TIERS DE PRECIO
+// =====================================================
+
+// Catálogo de tiers (canales). slug alineado a ventas.tipo_venta.
+export const getTiersPrecio = async () => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  const { data, error } = await supabase
+    .from('tiers_precio')
+    .select('*')
+    .eq('activo', true)
+    .order('orden', { ascending: true });
+  return { data, error: handleRLSError(error) };
+};
+
+// Precio sugerido = costo de producción dinámico × multiplicador del tier.
+// La UI lo usa para prellenar el precio (editable, con Price Floor en >= costo).
+export const calcularPrecioSugerido = (costo, multiplicador) => {
+  const c = parseFloat(costo) || 0;
+  const m = parseFloat(multiplicador) || 1;
+  return Math.round(c * m * 100) / 100;
+};
+
+export const getCotizaciones = async () => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  const { data, error } = await supabase
+    .from('cotizaciones')
+    .select(`
+      *,
+      clientes (nombre),
+      tiers_precio (nombre, slug, multiplicador)
+    `)
+    .order('fecha', { ascending: false });
+  return { data, error: handleRLSError(error) };
+};
+
+export const getCotizacionDetalle = async (cotizacionId) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  const { data, error } = await supabase
+    .from('detalle_cotizacion')
+    .select(`
+      *,
+      productos (linea_nombre),
+      variantes_producto (sku, material, color, talla)
+    `)
+    .eq('cotizacion_id', cotizacionId);
+  return { data, error: handleRLSError(error) };
+};
+
+// Crea cabecera + líneas. El folio lo pone el trigger BEFORE INSERT;
+// el total lo recalcula el trigger desde las líneas. Cada línea guarda su
+// snapshot (costo_snapshot, tier_multiplicador) para análisis histórico.
+export const crearCotizacionCompleta = async (cabecera, lineas) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data: nuevaCot, error: errCab } = await supabase
+    .from('cotizaciones')
+    .insert([cabecera])
+    .select()
+    .single();
+
+  if (errCab) return { data: null, error: handleRLSError(errCab) };
+
+  if (lineas && lineas.length > 0) {
+    const filas = lineas.map(l => ({ ...l, cotizacion_id: nuevaCot.id }));
+    const { error: errDet } = await supabase
+      .from('detalle_cotizacion')
+      .insert(filas);
+    if (errDet) return { data: null, error: handleRLSError(errDet) };
+  }
+
+  return { data: nuevaCot, error: null };
+};
+
+export const updateCotizacion = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  const { data, error } = await supabase
+    .from('cotizaciones')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  return { data, error: handleRLSError(error) };
+};
+
+export const eliminarCotizacion = async (id) => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+  // ON DELETE CASCADE borra las líneas de detalle_cotizacion.
+  const { error } = await supabase
+    .from('cotizaciones')
+    .delete()
+    .eq('id', id);
+  return { error: handleRLSError(error) };
+};
