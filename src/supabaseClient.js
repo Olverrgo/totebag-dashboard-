@@ -3072,36 +3072,16 @@ export const getPagosProveedor = async (compraId) => {
   return { data, error: handleRLSError(error) };
 };
 
-export const registrarPagoProveedor = async (pago, datosCaja) => {
+export const registrarPagoProveedor = async (pago) => {
   if (!supabase) return { data: null, error: 'Supabase no configurado' };
 
-  // 1. Crear movimiento en caja si aplica
-  let movimientoCajaId = null;
-  if (datosCaja) {
-    const { data: movCaja, error: errCaja } = await supabase
-      .from('movimientos_caja')
-      .insert([{
-        tipo: 'egreso',
-        monto: pago.monto,
-        categoria: 'compra_material',
-        descripcion: datosCaja.descripcion || `Pago a proveedor: ${datosCaja.proveedorNombre}`,
-        metodo_pago: pago.metodo_pago,
-        activo: true
-      }])
-      .select()
-      .single();
-    
-    if (errCaja) return { data: null, error: handleRLSError(errCaja) };
-    movimientoCajaId = movCaja.id;
-  }
-
-  // 2. Registrar pago
+  // El egreso en movimientos_caja lo crea automáticamente el trigger
+  // BEFORE INSERT `fn_pago_proveedor_a_caja` (categoría 'compra_material')
+  // y liga el movimiento_caja_id. La BD es la única fuente de verdad:
+  // garantiza el egreso en cada abono y lo revierte si se borra el pago.
   const { data: nuevoPago, error: errPago } = await supabase
     .from('pagos_proveedores')
-    .insert([{
-      ...pago,
-      movimiento_caja_id: movimientoCajaId
-    }])
+    .insert([pago])
     .select()
     .single();
 
