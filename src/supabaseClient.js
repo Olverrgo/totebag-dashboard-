@@ -1767,6 +1767,150 @@ export const registrarDevolucionConsignacion = async (movimiento, datosDevolucio
   };
 };
 
+// =====================================================
+// FASE 11: VENTA MULTI-PRODUCTO (CARRITO)
+// =====================================================
+
+// Ajusta el stock de UNA línea leyendo el valor FRESCO de la BD (evita
+// descuadres si el mismo producto/variante aparece más de una vez en el carrito).
+// directa  → resta del stock de taller (consignación sin cambio).
+// consignación → resta de taller y suma a stock_consignacion.
+const ajustarStockLinea = async (productoId, varianteId, cantidad, esConsignacion) => {
+  if (varianteId) {
+    const { data: v } = await supabase
+      .from('variantes_producto')
+      .select('stock, stock_consignacion')
+      .eq('id', varianteId)
+      .single();
+    const nuevoStock = (v?.stock || 0) - cantidad;
+    const nuevaConsig = esConsignacion ? (v?.stock_consignacion || 0) + cantidad : null; // null = no tocar consig
+    return updateStockVariante(varianteId, nuevoStock, nuevaConsig);
+  }
+  const { data: p } = await supabase
+    .from('productos')
+    .select('stock, stock_consignacion')
+    .eq('id', productoId)
+    .single();
+  const updates = { stock: (p?.stock || 0) - cantidad };
+  if (esConsignacion) updates.stock_consignacion = (p?.stock_consignacion || 0) + cantidad;
+  return updateProducto(productoId, updates);
+};
+
+// Registra una venta de VARIOS productos para UN cliente en UNA sola operación
+// (el "carrito"). Un solo tipo por carrito: 'directa' o 'consignacion'.
+// Reusa los conectores existentes por línea: movimiento_stock (log) + venta
+// (deuda/pago) + caja (ingreso si directa pagada) + ajuste de stock manual.
+//
+// header = { cliente_id, cliente_nombre, tipo_operacion: 'directa'|'consignacion',
+//            metodo_pago, estado_pago ('pagado'|'pendiente'|'parcial' — solo directa), notas }
+// lineas = [{ producto_id, variante_id?, producto_nombre, producto_medidas,
+//             cantidad, precio_unitario, costo_unitario }]
+//
+// NO es atómico (loop en JS, decisión Rigo opción A): si una línea falla, las
+// anteriores ya quedaron. Devuelve resultado por línea para que la UI reporte
+// exactamente cuáles fallaron.
+export const registrarVentaMultiple = async (header, lineas) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  if (!lineas || lineas.length === 0) return { data: null, error: { message: 'El carrito está vacío' } };
+  if (!header.cliente_id) return { data: null, error: { message: 'Falta el cliente' } };
+
+  const esConsignacion = header.tipo_operacion === 'consignacion';
+  const resultados = [];
+
+  for (const l of lineas) {
+    const cantidad = parseInt(l.cantidad) || 0;
+    const precio = parseFloat(l.precio_unitario) || 0;
+    const total = cantidad * precio;
+    const productoId = (l.producto_id === '' || l.producto_id == null) ? null : parseInt(l.producto_id);
+    const varianteId = (l.variante_id === '' || l.variante_id == null) ? null : parseInt(l.variante_id);
+
+    if (!productoId || cantidad <= 0) {
+      resultados.push({ linea: l, ok: false, error: { message: 'Línea inválida (producto o cantidad)' } });
+      continue;
+    }
+
+    const movimiento = {
+      producto_id: productoId,
+      cliente_id: header.cliente_id,
+      tipo_movimiento: esConsignacion ? 'consignacion' : 'venta_directa',
+      cantidad,
+      notas: header.notas || (esConsignacion ? 'Consignación (carrito)' : 'Venta directa (carrito)'),
+      ...(varianteId ? { variante_id: varianteId } : {})
+    };
+
+    let lineaError = null;
+
+    if (esConsignacion) {
+      // movimiento + venta pendiente (reusa la función probada)
+      const datosVenta = {
+        producto_id: productoId,
+        cliente_id: header.cliente_id,
+        producto_nombre: l.producto_nombre,
+        producto_medidas: l.producto_medidas,
+        cliente_nombre: header.cliente_nombre,
+        cantidad,
+        precio_unitario: precio,
+        costo_unitario: parseFloat(l.costo_unitario) || 0,
+        notas: header.notas,
+        ...(varianteId ? { variante_id: varianteId } : {})
+      };
+      const res = await createConsignacionConVenta(movimiento, datosVenta);
+      lineaError = res.error;
+    } else {
+      // Venta directa: movimiento + venta + (caja si pagada)
+      const { data: movData, error: movErr } = await createMovimientoStock(movimiento);
+      if (movErr) { resultados.push({ linea: l, ok: false, error: movErr }); continue; }
+
+      const estado = header.estado_pago || 'pagado';
+      const venta = {
+        producto_id: productoId,
+        cliente_id: header.cliente_id,
+        movimiento_id: movData?.id || null,
+        producto_nombre: l.producto_nombre,
+        producto_medidas: l.producto_medidas,
+        cliente_nombre: header.cliente_nombre,
+        cantidad,
+        precio_unitario: precio,
+        total,
+        costo_unitario: parseFloat(l.costo_unitario) || 0,
+        metodo_pago: header.metodo_pago || 'efectivo',
+        estado_pago: estado,
+        monto_pagado: estado === 'pagado' ? total : 0,
+        tipo_venta: 'directa',
+        notas: header.notas,
+        ...(varianteId ? { variante_id: varianteId } : {})
+      };
+      const { data: ventaData, error: ventaErr } = await createVenta(venta);
+      if (ventaErr) { resultados.push({ linea: l, ok: false, error: ventaErr }); continue; }
+
+      if (estado === 'pagado' && total > 0) {
+        await createMovimientoCaja({
+          tipo: 'ingreso',
+          monto: total,
+          venta_id: ventaData?.id || null,
+          categoria: 'venta',
+          metodo_pago: header.metodo_pago || 'efectivo',
+          descripcion: `Venta - ${l.producto_nombre || 'Producto'} - ${cantidad} pzas`
+        });
+      }
+    }
+
+    if (lineaError) { resultados.push({ linea: l, ok: false, error: lineaError }); continue; }
+
+    // Ajuste de stock manual (no hay trigger) con valor fresco
+    await ajustarStockLinea(productoId, varianteId, cantidad, esConsignacion);
+    resultados.push({ linea: l, ok: true });
+  }
+
+  const errores = resultados.filter(r => !r.ok);
+  return {
+    data: resultados,
+    error: errores.length
+      ? { message: `${errores.length} de ${lineas.length} línea(s) no se registraron`, detalles: errores }
+      : null
+  };
+};
+
 // Obtener resumen de stock por producto
 // =====================================================
 // FUNCIONES DE AUTENTICACIÓN
