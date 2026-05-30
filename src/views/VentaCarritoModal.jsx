@@ -164,7 +164,7 @@ const VentaCarritoModal = ({ onClose, onSuccess, initialType = 'directa' }) => {
     if (!clienteId && !clienteNombre) return alert('Selecciona o escribe un cliente');
     if (items.length === 0) return alert('El carrito está vacío');
     
-    // Validar líneas incompletas o sin variante obligatoria
+    // Validar líneas incompletas, sin variante o stock insuficiente
     for (const it of items) {
       if (!it.producto_id || it.cantidad <= 0) {
         return alert('Hay productos sin seleccionar o con cantidad cero');
@@ -172,6 +172,10 @@ const VentaCarritoModal = ({ onClose, onSuccess, initialType = 'directa' }) => {
       const prod = productos.find(p => p.id === parseInt(it.producto_id));
       if (prod?.tiene_variantes && !it.variante_id) {
         return alert(`El producto "${prod.linea_nombre}" requiere seleccionar una variante.`);
+      }
+      // Validación preventiva de stock
+      if (it.cantidad > it.stock_disponible) {
+        return alert(`Stock insuficiente para "${it.nombre}${it.variante_info ? ' ('+it.variante_info+')' : ''}". Disponible: ${it.stock_disponible}, Solicitado: ${it.cantidad}`);
       }
     }
 
@@ -202,11 +206,14 @@ const VentaCarritoModal = ({ onClose, onSuccess, initialType = 'directa' }) => {
       if (res.error.detalles) {
         const erroresLineas = res.error.detalles
           .filter(d => !d.ok)
-          .map(d => `- ${d.linea.producto_nombre}: ${d.error}`)
+          .map(d => {
+            const errorMsg = typeof d.error === 'object' ? (d.error.message || JSON.stringify(d.error)) : d.error;
+            return `- ${d.linea.producto_nombre}: ${errorMsg}`;
+          })
           .join('\n');
         alert('Error en algunas líneas:\n' + erroresLineas);
       } else {
-        alert('Error: ' + res.error.message);
+        alert('Error: ' + (res.error.message || res.error));
       }
       console.error(res.error);
     } else {
