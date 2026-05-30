@@ -1829,6 +1829,23 @@ export const registrarVentaMultiple = async (header, lineas) => {
       continue;
     }
 
+    // Guard: si el producto tiene variantes activas pero no se eligió una,
+    // NO se puede ajustar stock (viviría en la variante, no en productos.stock).
+    // Rechazar la línea ANTES de crear venta/movimiento para no dejar una venta
+    // sin su descuento de stock. (El fix de fondo es que la UI exija variante.)
+    if (!varianteId) {
+      const { data: vars } = await supabase
+        .from('variantes_producto')
+        .select('id')
+        .eq('producto_id', productoId)
+        .eq('activo', true)
+        .limit(1);
+      if (vars && vars.length > 0) {
+        resultados.push({ linea: l, ok: false, error: { message: `"${l.producto_nombre || 'Producto'}" tiene variantes: debes elegir una variante` } });
+        continue;
+      }
+    }
+
     const movimiento = {
       producto_id: productoId,
       cliente_id: header.cliente_id,
