@@ -86,9 +86,15 @@ const VentaCarritoModal = ({ onClose, onSuccess, initialType = 'directa' }) => {
     if (!clienteId && !clienteNombre) return alert('Selecciona o escribe un cliente');
     if (items.length === 0) return alert('El carrito está vacío');
     
-    // Validar líneas incompletas
-    if (items.some(it => !it.producto_id || it.cantidad <= 0)) {
-      return alert('Hay productos sin seleccionar o con cantidad cero');
+    // Validar líneas incompletas o sin variante obligatoria
+    for (const it of items) {
+      if (!it.producto_id || it.cantidad <= 0) {
+        return alert('Hay productos sin seleccionar o con cantidad cero');
+      }
+      const prod = productos.find(p => p.id === parseInt(it.producto_id));
+      if (prod?.tiene_variantes && !it.variante_id) {
+        return alert(`El producto "${prod.linea_nombre}" requiere seleccionar una variante.`);
+      }
     }
 
     setLoading(true);
@@ -115,7 +121,15 @@ const VentaCarritoModal = ({ onClose, onSuccess, initialType = 'directa' }) => {
     setLoading(false);
 
     if (res.error) {
-      alert('Error parcial o total: ' + res.error.message);
+      if (res.error.detalles) {
+        const erroresLineas = res.error.detalles
+          .filter(d => !d.ok)
+          .map(d => `- ${d.linea.producto_nombre}: ${d.error}`)
+          .join('\n');
+        alert('Error en algunas líneas:\n' + erroresLineas);
+      } else {
+        alert('Error: ' + res.error.message);
+      }
       console.error(res.error);
     } else {
       alert('Operación registrada con éxito');
