@@ -11,6 +11,7 @@ import StocksView from "./views/StocksView";
 import AnalyticsView from './views/AnalyticsView';
 import ComprasView from './views/ComprasView';
 import CotizacionesView from './views/CotizacionesView';
+import VentaCarritoModal from './views/VentaCarritoModal';
 import {
   isSupabaseConfigured,
   cargarDatosDashboard,
@@ -5321,6 +5322,7 @@ const SalidasView = ({ isAdmin }) => {
   const [clientes, setClientes] = useState([]);
   const [movimientos, setMovimientos] = useState([]);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
+  const [mostrarCarrito, setMostrarCarrito] = useState(false);
   const [mostrarNuevoCliente, setMostrarNuevoCliente] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
@@ -5994,24 +5996,43 @@ const SalidasView = ({ isAdmin }) => {
             + Cliente
           </button>
           {isAdmin && (
-            <button
-              onClick={() => setMostrarFormulario(true)}
-              onMouseEnter={() => setHoverBtn({ ...hoverBtn, salida: true })}
-              onMouseLeave={() => setHoverBtn({ ...hoverBtn, salida: false })}
-              style={{
-                padding: '10px 20px',
-                background: hoverBtn.salida ? colors.sidebarText : colors.sidebarBg,
-                color: hoverBtn.salida ? colors.sidebarBg : colors.sidebarText,
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '13px',
-                fontWeight: '500',
-                transition: 'all 0.3s ease'
-              }}
-            >
-              + Nueva Salida
-            </button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={() => setMostrarFormulario(true)}
+                onMouseEnter={() => setHoverBtn({ ...hoverBtn, salida: true })}
+                onMouseLeave={() => setHoverBtn({ ...hoverBtn, salida: false })}
+                style={{
+                  padding: '10px 20px',
+                  background: 'transparent',
+                  color: colors.sidebarBg,
+                  border: `1px solid ${colors.sidebarBg}`,
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                + Devolución / Cobro
+              </button>
+              <button
+                onClick={() => setMostrarCarrito(true)}
+                style={{
+                  padding: '10px 20px',
+                  background: colors.sidebarBg,
+                  color: colors.sidebarText,
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  transition: 'all 0.3s ease',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                }}
+              >
+                🛒 Registrar Salida (Carrito)
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -6572,6 +6593,15 @@ const SalidasView = ({ isAdmin }) => {
           </div>
         </div>
       )}
+
+      {/* Modal Carrito (Fase 11) */}
+      {mostrarCarrito && (
+        <VentaCarritoModal 
+          onClose={() => setMostrarCarrito(false)} 
+          onSuccess={cargarDatos}
+          initialType="consignacion"
+        />
+      )}
     </div>
   );
 };
@@ -6587,6 +6617,7 @@ const VentasView = ({ isAdmin }) => {
   const [clientes, setClientes] = useState([]);
   const [resumen, setResumen] = useState(null);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
+  const [mostrarCarrito, setMostrarCarrito] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
   const [hoverBtn, setHoverBtn] = useState({});
@@ -7239,22 +7270,21 @@ const VentasView = ({ isAdmin }) => {
         </h2>
         {isAdmin && (
           <button
-            onClick={() => setMostrarFormulario(true)}
-            onMouseEnter={() => setHoverBtn({ ...hoverBtn, nueva: true })}
-            onMouseLeave={() => setHoverBtn({ ...hoverBtn, nueva: false })}
+            onClick={() => setMostrarCarrito(true)}
             style={{
-              padding: '10px 20px',
-              background: hoverBtn.nueva ? colors.sidebarText : colors.sidebarBg,
-              color: hoverBtn.nueva ? colors.sidebarBg : colors.sidebarText,
+              padding: '10px 24px',
+              background: colors.sidebarBg,
+              color: colors.sidebarText,
               border: 'none',
               borderRadius: '4px',
               cursor: 'pointer',
               fontSize: '14px',
-              fontWeight: '500',
-              transition: 'all 0.3s ease'
+              fontWeight: '600',
+              transition: 'all 0.3s ease',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
             }}
           >
-            + Nueva Venta
+            🛒 Registrar Venta (Carrito)
           </button>
         )}
       </div>
@@ -7955,11 +7985,20 @@ const VentasView = ({ isAdmin }) => {
           <span style={{ fontSize: '48px' }}>💵</span>
           <h3 style={{ margin: '20px 0 10px', color: colors.espresso }}>Sin ventas registradas</h3>
           <p style={{ color: colors.camel, fontSize: '14px' }}>
-            {filtroCliente !== 'todos' ? 'No hay ventas para este cliente en el período seleccionado' : 'Haz clic en "+ Nueva Venta" para registrar tu primera venta'}
+            {filtroCliente !== 'todos' ? 'No hay ventas para este cliente en el período seleccionado' : 'Haz clic en "🛒 Registrar Venta (Carrito)" para registrar tu primera venta'}
           </p>
         </div>
       );
       })()}
+
+      {/* Modal Carrito (Fase 11) */}
+      {mostrarCarrito && (
+        <VentaCarritoModal 
+          onClose={() => setMostrarCarrito(false)} 
+          onSuccess={cargarDatos}
+          initialType="directa"
+        />
+      )}
 
       {/* Popup de confirmación de eliminación */}
       {popupEliminar && (
