@@ -1775,6 +1775,25 @@ export const registrarDevolucionConsignacion = async (movimiento, datosDevolucio
 // descuadres si el mismo producto/variante aparece más de una vez en el carrito).
 // directa  → resta del stock de taller (consignación sin cambio).
 // consignación → resta de taller y suma a stock_consignacion.
+// Lee el stock de taller disponible (FRESCO) de una línea, para validar
+// que no se venda/consigne más de lo que hay antes de crear la venta.
+const getStockTallerLinea = async (productoId, varianteId) => {
+  if (varianteId) {
+    const { data } = await supabase
+      .from('variantes_producto')
+      .select('stock')
+      .eq('id', varianteId)
+      .single();
+    return data?.stock || 0;
+  }
+  const { data } = await supabase
+    .from('productos')
+    .select('stock')
+    .eq('id', productoId)
+    .single();
+  return data?.stock || 0;
+};
+
 const ajustarStockLinea = async (productoId, varianteId, cantidad, esConsignacion) => {
   if (varianteId) {
     const { data: v } = await supabase
@@ -1844,6 +1863,15 @@ export const registrarVentaMultiple = async (header, lineas) => {
         resultados.push({ linea: l, ok: false, error: { message: `"${l.producto_nombre || 'Producto'}" tiene variantes: debes elegir una variante` } });
         continue;
       }
+    }
+
+    // Guard: no vender más que el stock disponible (taller). Tanto venta directa
+    // como consignación salen del stock de taller. Se lee FRESCO: si el mismo
+    // producto/variante va en 2 líneas, la 2ª ya ve el descuento de la 1ª.
+    const stockDisp = await getStockTallerLinea(productoId, varianteId);
+    if (cantidad > stockDisp) {
+      resultados.push({ linea: l, ok: false, error: { message: `"${l.producto_nombre || 'Producto'}": stock insuficiente (disponible ${stockDisp}, solicitado ${cantidad})` } });
+      continue;
     }
 
     const movimiento = {
