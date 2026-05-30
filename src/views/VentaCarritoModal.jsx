@@ -98,7 +98,8 @@ const VentaCarritoModal = ({ onClose, onSuccess, initialType = 'directa' }) => {
     doc.text('BLANCOS SINAÍ', 15, 18);
     doc.setFontSize(10);
     doc.text('RECIBO DE OPERACIÓN - Yolotl Gestora', 15, 26);
-    doc.text(`FECHA: ${fechaStr}`, 195, 22, { align: 'right' });
+    doc.text(`FOLIO: NS-${new Date().getTime().toString().slice(-6)}`, 195, 18, { align: 'right' });
+    doc.text(`FECHA: ${fechaStr}`, 195, 26, { align: 'right' });
 
     // Datos Cliente
     doc.setTextColor(0);
