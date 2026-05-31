@@ -1502,7 +1502,9 @@ export const registrarPagoVenta = async (ventaId, montoPago, options = {}, metod
         venta_id: ventaId,
         categoria: categoriaCaja,
         metodo_pago: metodoPago,
-        descripcion: descripcionCaja
+        descripcion: descripcionCaja,
+        // Agrupa los N fragmentos de un mismo abono como UN evento (estado de cuenta)
+        abono_grupo: options.abonoGrupo || null
       }])
       .select()
       .single();
@@ -1512,6 +1514,138 @@ export const registrarPagoVenta = async (ventaId, montoPago, options = {}, metod
   }
 
   return { data, error: null };
+};
+
+// =====================================================
+// ABONO DE CLIENTE COMO EVENTO ÚNICO + ESTADO DE CUENTA (Fase 12)
+// =====================================================
+
+// Registra UN abono del cliente distribuyéndolo FIFO entre sus ventas
+// pendientes, pero estampando un MISMO folio de abono (AB-AAAA-MM-NNN) en
+// todos los ingresos de caja que genera → el estado de cuenta lo ve como UN
+// evento, aunque internamente cubra varios productos.
+// `ventas` = lista de ventas pendientes del cliente (las que hoy arma la UI),
+// cada una con { id, total, monto_pagado, created_at, _es_servicio? }.
+export const registrarAbonoCliente = async (clienteId, monto, ventas, metodoPago = 'efectivo') => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  const montoNum = parseFloat(monto);
+  if (!montoNum || montoNum <= 0) return { data: null, error: { message: 'Monto inválido' } };
+  if (!ventas || ventas.length === 0) return { data: null, error: { message: 'Sin ventas pendientes' } };
+
+  // UN folio de abono para todo el pago (resiliente: si falla, el abono igual procede sin agrupar)
+  let abonoGrupo = null;
+  try {
+    const { data: f, error: fErr } = await supabase.rpc('siguiente_folio_abono');
+    if (fErr) console.error('No se pudo generar folio de abono:', fErr);
+    else abonoGrupo = f;
+  } catch (e) {
+    console.error('Error llamando siguiente_folio_abono:', e);
+  }
+
+  let montoRestante = montoNum;
+  const ventasOrdenadas = [...ventas].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  const aplicados = [];
+
+  for (const venta of ventasOrdenadas) {
+    if (montoRestante <= 0) break;
+    const pendiente = (parseFloat(venta.total) || 0) - (parseFloat(venta.monto_pagado) || 0);
+    if (pendiente <= 0) continue;
+    const montoAplicar = Math.min(montoRestante, pendiente);
+
+    let res;
+    if (venta._es_servicio) {
+      // servicios de maquila: tabla aparte, no llevan abono_grupo (flujo distinto)
+      res = await registrarPagoServicio(venta.id, montoAplicar, metodoPago);
+    } else {
+      res = await registrarPagoVenta(venta.id, montoAplicar, { abonoGrupo }, metodoPago);
+    }
+    if (res.error) {
+      return { data: { folio: abonoGrupo, aplicados }, error: res.error };
+    }
+    aplicados.push({ venta_id: venta.id, monto: montoAplicar });
+    montoRestante -= montoAplicar;
+  }
+
+  return {
+    data: { folio: abonoGrupo, aplicados, sobrante: montoRestante },
+    folio: abonoGrupo,
+    error: null
+  };
+};
+
+// Estado de cuenta de un vendedor (cliente de consignación), mensual o por rango.
+// Devuelve sus entregas (ventas) y sus abonos como EVENTOS (agrupados por
+// abono_grupo), más totales. El saldo pendiente es el saldo VIVO total del
+// cliente (no acotado al periodo): la deuda es la deuda.
+export const getEstadoCuentaVendedor = async (clienteId, { desde, hasta } = {}) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  if (!clienteId) return { data: null, error: { message: 'Falta el cliente' } };
+
+  // 1. Todas las ventas del cliente (para ligar abonos y calcular saldo vivo)
+  const { data: ventasAll, error: errV } = await supabase
+    .from('ventas')
+    .select('id, folio_operacion, producto_nombre, cantidad, total, monto_pagado, monto_pendiente, tipo_venta, estado_pago, created_at')
+    .eq('cliente_id', clienteId)
+    .eq('activo', true)
+    .order('created_at', { ascending: true });
+  if (errV) return { data: null, error: handleRLSError(errV) };
+
+  const dentroRango = (fecha) => {
+    if (!fecha) return false;
+    const t = new Date(fecha).getTime();
+    if (desde && t < new Date(desde).getTime()) return false;
+    if (hasta && t > new Date(hasta).getTime()) return false;
+    return true;
+  };
+
+  // Entregas del periodo (por fecha de la venta)
+  const ventas = (ventasAll || []).filter(v => (!desde && !hasta) || dentroRango(v.created_at));
+
+  // 2. Abonos: ingresos de caja ligados a CUALQUIER venta del cliente, agrupados
+  //    por abono_grupo. Se filtran por la fecha DEL ABONO (no de la venta), para
+  //    que un pago de este mes sobre una venta vieja sí aparezca en el mes.
+  const ventaIds = (ventasAll || []).map(v => v.id);
+  let abonos = [];
+  if (ventaIds.length > 0) {
+    const { data: ingresos, error: errC } = await supabase
+      .from('movimientos_caja')
+      .select('id, monto, fecha, metodo_pago, abono_grupo, venta_id, activo')
+      .eq('tipo', 'ingreso')
+      .in('venta_id', ventaIds);
+    if (errC) return { data: null, error: handleRLSError(errC) };
+
+    const mapa = new Map();
+    for (const ing of (ingresos || [])) {
+      if (ing.activo === false) continue;
+      if ((desde || hasta) && !dentroRango(ing.fecha)) continue;
+      const key = ing.abono_grupo || `solo-${ing.id}`; // abonos viejos sin grupo: cada uno su evento
+      if (!mapa.has(key)) {
+        mapa.set(key, { folio: ing.abono_grupo || null, fecha: ing.fecha, metodo: ing.metodo_pago, monto: 0 });
+      }
+      const ev = mapa.get(key);
+      ev.monto += parseFloat(ing.monto) || 0;
+      if (new Date(ing.fecha) < new Date(ev.fecha)) ev.fecha = ing.fecha; // fecha más temprana del grupo
+    }
+    abonos = Array.from(mapa.values()).sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+  }
+
+  // 3. Totales
+  const entregado = ventas.reduce((s, v) => s + (parseFloat(v.total) || 0), 0);
+  const cobrado = abonos.reduce((s, a) => s + a.monto, 0);
+  const pendiente = (ventasAll || [])
+    .filter(v => v.tipo_venta === 'consignacion')
+    .reduce((s, v) => s + (parseFloat(v.monto_pendiente) || 0), 0); // saldo VIVO total
+
+  return {
+    data: {
+      cliente_id: clienteId,
+      periodo: { desde: desde || null, hasta: hasta || null },
+      ventas,
+      abonos,
+      totales: { entregado, cobrado, pendiente }
+    },
+    error: null
+  };
 };
 
 // =====================================================
