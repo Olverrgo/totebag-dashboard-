@@ -1566,9 +1566,27 @@ export const registrarAbonoCliente = async (clienteId, monto, ventas, metodoPago
     montoRestante -= montoAplicar;
   }
 
+  // Saldo pendiente del cliente DESPUÉS del abono (consignación, vivo) → para el recibo de pago
+  let saldoResultante = null;
+  try {
+    const { data: vts } = await supabase
+      .from('ventas')
+      .select('monto_pendiente, tipo_venta')
+      .eq('cliente_id', clienteId)
+      .eq('activo', true);
+    if (vts) {
+      saldoResultante = vts
+        .filter(v => v.tipo_venta === 'consignacion')
+        .reduce((s, v) => s + (parseFloat(v.monto_pendiente) || 0), 0);
+    }
+  } catch (e) {
+    console.error('No se pudo calcular saldo resultante:', e);
+  }
+
   return {
-    data: { folio: abonoGrupo, aplicados, sobrante: montoRestante },
+    data: { folio: abonoGrupo, aplicados, sobrante: montoRestante, saldo_resultante: saldoResultante },
     folio: abonoGrupo,
+    saldo_resultante: saldoResultante,
     error: null
   };
 };
