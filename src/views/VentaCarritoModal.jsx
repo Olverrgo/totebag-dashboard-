@@ -5,12 +5,12 @@ import {
   registrarVentaMultiple 
 } from '../supabaseClient';
 import { colors } from '../utils/colors';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { generarReciboPDF } from '../utils/receiptGenerator';
 
 const VentaCarritoModal = ({ onClose, onSuccess, initialType = 'directa' }) => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [officialFolio, setOfficialFolio] = useState('');
   const [clientes, setClientes] = useState([]);
   const [productos, setProductos] = useState([]);
   
@@ -85,80 +85,17 @@ const VentaCarritoModal = ({ onClose, onSuccess, initialType = 'directa' }) => {
 
   const total = items.reduce((acc, curr) => acc + (curr.cantidad * curr.precio_unitario), 0);
 
-  const generarReciboPDF = () => {
-    const doc = new jsPDF();
-    const fechaStr = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' });
-    const nombreCliente = clienteId ? clientes.find(c => c.id === parseInt(clienteId))?.nombre : clienteNombre;
-
-    // Membrete
-    doc.setFillColor(colors.sidebarBg);
-    doc.rect(0, 0, 210, 35, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
-    doc.text('BLANCOS SINAÍ', 15, 18);
-    doc.setFontSize(10);
-    doc.text('RECIBO DE OPERACIÓN - Yolotl Gestora', 15, 26);
-    doc.text(`FOLIO: NS-${new Date().getTime().toString().slice(-6)}`, 195, 18, { align: 'right' });
-    doc.text(`FECHA: ${fechaStr}`, 195, 26, { align: 'right' });
-
-    // Datos Cliente
-    doc.setTextColor(0);
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('DATOS DEL CLIENTE:', 15, 48);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Cliente: ${nombreCliente}`, 15, 55);
-    doc.text(`Tipo de Operación: ${tipoOperacion === 'directa' ? 'VENTA DIRECTA' : 'CONSIGNACIÓN'}`, 15, 62);
-    if (tipoOperacion === 'directa') {
-      doc.text(`Método de Pago: ${metodoPago.toUpperCase()} (${estadoPago.toUpperCase()})`, 15, 69);
-    }
-
-    // Tabla
-    const tableData = items.map(it => [
-      `${it.nombre}${it.variante_info ? ' ('+it.variante_info+')' : ''}`,
-      it.cantidad,
-      formatCurrency(it.precio_unitario),
-      formatCurrency(it.cantidad * it.precio_unitario)
-    ]);
-
-    autoTable(doc, {
-      startY: 75,
-      head: [['Producto / Descripción', 'Cant.', 'Precio Unit.', 'Subtotal']],
-      body: tableData,
-      headStyles: { fillColor: colors.sidebarBg },
-      foot: [[
-        { content: 'TOTAL:', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } },
-        { content: formatCurrency(total), styles: { fontStyle: 'bold' } }
-      ]],
-      theme: 'grid'
+  const handleImprimirRecibo = () => {
+    generarReciboPDF({
+      folio: officialFolio,
+      clienteNombre: clienteId ? clientes.find(c => c.id === parseInt(clienteId))?.nombre : clienteNombre,
+      tipoOperacion,
+      metodoPago,
+      estadoPago: tipoOperacion === 'consignacion' ? 'pendiente' : estadoPago,
+      items,
+      total,
+      notas
     });
-
-    // Leyenda Final
-    const finalY = doc.lastAutoTable.finalY + 15;
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    
-    if (tipoOperacion === 'directa' && estadoPago === 'pagado') {
-      doc.setTextColor(39, 174, 96); // Verde
-      doc.text('ESTADO: PAGADO - ¡GRACIAS POR SU COMPRA!', 105, finalY, { align: 'center' });
-    } else if (tipoOperacion === 'consignacion') {
-      doc.setTextColor(211, 84, 0); // Naranja
-      doc.text('ESTADO: ENTREGA EN CONSIGNACIÓN (PENDIENTE DE LIQUIDAR)', 105, finalY, { align: 'center' });
-    } else if (estadoPago === 'pendiente') {
-      doc.setTextColor(192, 57, 43); // Rojo
-      doc.text(`ESTADO: PENDIENTE DE PAGO - SALDO: ${formatCurrency(total)}`, 105, finalY, { align: 'center' });
-    }
-
-    if (notas) {
-      doc.setTextColor(0);
-      doc.setFontSize(9);
-      doc.text('Notas:', 15, finalY + 15);
-      doc.setFont('helvetica', 'normal');
-      const splitNotas = doc.splitTextToSize(notas, 180);
-      doc.text(splitNotas, 15, finalY + 20);
-    }
-
-    doc.save(`recibo-${tipoOperacion}-${new Date().getTime()}.pdf`);
   };
 
   const handleGuardar = async () => {
@@ -218,6 +155,7 @@ const VentaCarritoModal = ({ onClose, onSuccess, initialType = 'directa' }) => {
       }
       console.error(res.error);
     } else {
+      setOfficialFolio(res.folio || '');
       setSuccess(true);
       onSuccess();
     }
@@ -233,9 +171,10 @@ const VentaCarritoModal = ({ onClose, onSuccess, initialType = 'directa' }) => {
         <div style={{ background: 'white', borderRadius: '15px', width: '500px', padding: '40px', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}>
           <div style={{ fontSize: '60px', marginBottom: '20px' }}>✅</div>
           <h2 style={{ color: colors.espresso, margin: '0 0 10px 0' }}>¡Registro Exitoso!</h2>
-          <p style={{ color: colors.camel, marginBottom: '30px' }}>La operación se ha guardado correctamente y el stock ha sido actualizado.</p>
+          <p style={{ color: colors.camel, marginBottom: '5px' }}>La operación se ha guardado correctamente.</p>
+          <div style={{ fontSize: '18px', fontWeight: 'bold', color: colors.sidebarBg, marginBottom: '25px' }}>Folio: {officialFolio}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <button onClick={generarReciboPDF} style={{ padding: '15px', borderRadius: '8px', background: colors.sidebarBg, color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '16px' }}>
+            <button onClick={handleImprimirRecibo} style={{ padding: '15px', borderRadius: '8px', background: colors.sidebarBg, color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '16px' }}>
               📄 Descargar Recibo PDF
             </button>
             <button onClick={onClose} style={{ padding: '12px', borderRadius: '8px', background: 'white', border: `1px solid ${colors.sand}`, cursor: 'pointer', color: colors.camel }}>
