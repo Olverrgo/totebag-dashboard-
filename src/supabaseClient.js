@@ -1600,7 +1600,9 @@ export const createConsignacionConVenta = async (movimiento, datosVenta) => {
     tipo_venta: 'consignacion',
     estado_pago: 'pendiente',
     monto_pagado: 0,
-    notas: datosVenta.notas || `Consignación automática - ${new Date().toLocaleDateString('es-MX')}`
+    notas: datosVenta.notas || `Consignación automática - ${new Date().toLocaleDateString('es-MX')}`,
+    folio_operacion: datosVenta.folio_operacion || null,
+    ...(datosVenta.variante_id ? { variante_id: datosVenta.variante_id } : {})
   };
 
   const { data: ventaData, error: ventaError } = await supabase
@@ -1834,6 +1836,19 @@ export const registrarVentaMultiple = async (header, lineas) => {
   if (!header.cliente_id) return { data: null, error: { message: 'Falta el cliente' } };
 
   const esConsignacion = header.tipo_operacion === 'consignacion';
+
+  // UN folio para toda la operación (lo comparten las N líneas). Lo genera la
+  // BD de forma atómica (BSIN-AAAA-MM-NNN). Si fallara, NO bloqueamos la venta:
+  // queda sin folio (degradación segura), pero registramos el aviso.
+  let folioOperacion = null;
+  try {
+    const { data: f, error: fErr } = await supabase.rpc('siguiente_folio_venta');
+    if (fErr) console.error('No se pudo generar folio de venta:', fErr);
+    else folioOperacion = f;
+  } catch (e) {
+    console.error('Error llamando siguiente_folio_venta:', e);
+  }
+
   const resultados = [];
 
   for (const l of lineas) {
@@ -1897,6 +1912,7 @@ export const registrarVentaMultiple = async (header, lineas) => {
         precio_unitario: precio,
         costo_unitario: parseFloat(l.costo_unitario) || 0,
         notas: header.notas,
+        folio_operacion: folioOperacion,
         ...(varianteId ? { variante_id: varianteId } : {})
       };
       const res = await createConsignacionConVenta(movimiento, datosVenta);
@@ -1923,6 +1939,7 @@ export const registrarVentaMultiple = async (header, lineas) => {
         monto_pagado: estado === 'pagado' ? total : 0,
         tipo_venta: 'directa',
         notas: header.notas,
+        folio_operacion: folioOperacion,
         ...(varianteId ? { variante_id: varianteId } : {})
       };
       const { data: ventaData, error: ventaErr } = await createVenta(venta);
@@ -1950,10 +1967,25 @@ export const registrarVentaMultiple = async (header, lineas) => {
   const errores = resultados.filter(r => !r.ok);
   return {
     data: resultados,
+    folio: folioOperacion, // la UI imprime ESTE folio en el recibo (no uno propio)
     error: errores.length
       ? { message: `${errores.length} de ${lineas.length} línea(s) no se registraron`, detalles: errores }
       : null
   };
+};
+
+// Trae todas las líneas (ventas) de una operación por su folio. Sirve para
+// el buscador de recibos y para regenerar el PDF histórico. Ordena por id
+// para conservar el orden de captura del carrito.
+export const getVentasPorFolio = async (folio) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  if (!folio) return { data: null, error: { message: 'Folio vacío' } };
+  const { data, error } = await supabase
+    .from('ventas')
+    .select('*')
+    .eq('folio_operacion', folio)
+    .order('id', { ascending: true });
+  return { data, error: handleRLSError(error) };
 };
 
 // Obtener resumen de stock por producto
