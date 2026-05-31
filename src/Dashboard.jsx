@@ -44,6 +44,7 @@ import {
   deleteCategoria,
   deleteSubcategoria,
   getVentas,
+  getVentasPorFolio,
   createVenta,
   updateVenta,
   deleteVenta,
@@ -6608,6 +6609,8 @@ const SalidasView = ({ isAdmin }) => {
 
 
 // Vista Ventas
+import { generarReciboPDF } from './utils/receiptGenerator';
+
 const VentasView = ({ isAdmin }) => {
   const isMobile = window.innerWidth <= 768;
   const [ventas, setVentas] = useState([]);
@@ -6619,6 +6622,8 @@ const VentasView = ({ isAdmin }) => {
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [mostrarCarrito, setMostrarCarrito] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  const [searchFolio, setSearchFolio] = useState('');
+  const [cargandoFolio, setCargandoFolio] = useState(false);
   const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
   const [hoverBtn, setHoverBtn] = useState({});
   const [filtroEstado, setFiltroEstado] = useState('todos');
@@ -6811,6 +6816,41 @@ const VentasView = ({ isAdmin }) => {
       tipoVenta: 'directa',
       notas: ''
     });
+  };
+
+  const handleBuscarFolio = async (e) => {
+    e.preventDefault();
+    if (!searchFolio.trim()) return;
+    
+    setCargandoFolio(true);
+    const { data, error } = await getVentasPorFolio(searchFolio.trim());
+    setCargandoFolio(false);
+
+    if (error) {
+      setMensaje({ tipo: 'error', texto: 'Folio no encontrado o error de red' });
+    } else if (data && data.length > 0) {
+      const first = data[0];
+      generarReciboPDF({
+        folio: first.folio_operacion,
+        clienteNombre: first.cliente_nombre,
+        tipoOperacion: first.tipo_venta,
+        metodoPago: first.metodo_pago,
+        estadoPago: first.estado_pago,
+        items: data.map(linea => ({
+          nombre: linea.producto_nombre,
+          variante_info: '',
+          cantidad: linea.cantidad,
+          precio_unitario: linea.precio_unitario,
+          subtotal: linea.total
+        })),
+        total: data.reduce((acc, curr) => acc + (parseFloat(curr.total) || 0), 0),
+        notas: first.notas,
+        fecha: first.created_at
+      });
+      setSearchFolio('');
+    } else {
+      setMensaje({ tipo: 'error', texto: 'Folio no encontrado' });
+    }
   };
 
   // Registrar venta
@@ -7268,25 +7308,45 @@ const VentasView = ({ isAdmin }) => {
         <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '300', letterSpacing: '2px', color: colors.espresso }}>
           Ventas
         </h2>
-        {isAdmin && (
-          <button
-            onClick={() => setMostrarCarrito(true)}
-            style={{
-              padding: '10px 24px',
-              background: colors.sidebarBg,
-              color: colors.sidebarText,
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: '600',
-              transition: 'all 0.3s ease',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-            }}
-          >
-            🛒 Registrar Venta (Carrito)
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+          {/* Widget de Búsqueda por Folio */}
+          <form onSubmit={handleBuscarFolio} style={{ display: 'flex', background: 'white', borderRadius: '4px', border: `1px solid ${colors.sand}`, overflow: 'hidden' }}>
+            <input 
+              type="text" 
+              placeholder="Buscar Folio (BSIN-...)" 
+              value={searchFolio}
+              onChange={(e) => setSearchFolio(e.target.value.toUpperCase())}
+              style={{ border: 'none', padding: '10px 15px', fontSize: '13px', width: '180px', outline: 'none' }}
+            />
+            <button 
+              type="submit" 
+              disabled={cargandoFolio}
+              style={{ background: colors.cream, border: 'none', borderLeft: `1px solid ${colors.sand}`, padding: '0 15px', cursor: 'pointer', color: colors.espresso }}
+            >
+              {cargandoFolio ? '...' : '🔍'}
+            </button>
+          </form>
+
+          {isAdmin && (
+            <button
+              onClick={() => setMostrarCarrito(true)}
+              style={{
+                padding: '10px 24px',
+                background: colors.sidebarBg,
+                color: colors.sidebarText,
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '600',
+                transition: 'all 0.3s ease',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+              }}
+            >
+              🛒 Registrar Venta (Carrito)
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Mensaje */}
@@ -8954,6 +9014,32 @@ const BalanceView = ({ isAdmin }) => {
   const [clienteSeleccionado, setClienteSeleccionado] = useState('todos');
   const [expandido, setExpandido] = useState(null);
 
+  const handleReimprimirFolio = async (folio) => {
+    const { data, error } = await getVentasPorFolio(folio);
+    if (!error && data && data.length > 0) {
+      const first = data[0];
+      generarReciboPDF({
+        folio: first.folio_operacion,
+        clienteNombre: first.cliente_nombre,
+        tipoOperacion: first.tipo_venta,
+        metodoPago: first.metodo_pago,
+        estadoPago: first.estado_pago,
+        items: data.map(linea => ({
+          nombre: linea.producto_nombre,
+          variante_info: '',
+          cantidad: linea.cantidad,
+          precio_unitario: linea.precio_unitario,
+          subtotal: linea.total
+        })),
+        total: data.reduce((acc, curr) => acc + (parseFloat(curr.total) || 0), 0),
+        notas: first.notas,
+        fecha: first.created_at
+      });
+    } else {
+      alert('Error al recuperar datos del recibo');
+    }
+  };
+
   const cargarDatos = async () => {
     setCargando(true);
     const [ventasRes, serviciosRes, clientesRes] = await Promise.all([
@@ -9318,8 +9404,17 @@ const BalanceView = ({ isAdmin }) => {
 
                               return (
                                 <tr key={`${r._tipo_registro}-${r.id}`} style={{ borderBottom: `1px solid ${colors.sand}` }}>
-                                  <td style={{ padding: '10px 8px', color: colors.espresso }}>{formatearFecha(fecha)}</td>
-                                  <td style={{ padding: '10px 8px', color: colors.espresso }}>{concepto}</td>
+                                  <td style={{ padding: '10px 8px', color: colors.espresso }}>
+                                    {formatearFecha(fecha)}
+                                    {!esServicio && r.folio_operacion && (
+                                      <div style={{ fontSize: '10px', color: colors.sidebarBg, fontWeight: 'bold', marginTop: '2px' }}>
+                                        {r.folio_operacion}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td style={{ padding: '10px 8px', color: colors.espresso }}>
+                                    {concepto}
+                                  </td>
                                   <td style={{ padding: '10px 8px', textAlign: 'center' }}>
                                     {tipoBadge(r._tipo_registro, r.tipo_venta)}
                                   </td>
@@ -9329,7 +9424,20 @@ const BalanceView = ({ isAdmin }) => {
                                   <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: '600', color: pendiente > 0 ? colors.terracotta : colors.olive }}>
                                     {pendiente > 0 ? formatearMoneda(pendiente) : '-'}
                                   </td>
-                                  <td style={{ padding: '10px 8px', textAlign: 'center' }}>{estadoBadge(r.estado_pago)}</td>
+                                  <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'center' }}>
+                                      {estadoBadge(r.estado_pago)}
+                                      {!esServicio && r.folio_operacion && (
+                                        <button 
+                                          onClick={() => handleReimprimirFolio(r.folio_operacion)}
+                                          title="Reimprimir recibo"
+                                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px' }}
+                                        >
+                                          📄
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
                                 </tr>
                               );
                             })}
