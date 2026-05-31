@@ -1605,44 +1605,70 @@ export const getEstadoCuentaVendedor = async (clienteId, { desde, hasta } = {}) 
   //    por abono_grupo. Se filtran por la fecha DEL ABONO (no de la venta), para
   //    que un pago de este mes sobre una venta vieja sí aparezca en el mes.
   const ventaIds = (ventasAll || []).map(v => v.id);
-  let abonos = [];
+
+  // Traer TODOS los ingresos de caja del cliente (activos). Sirven para los
+  // abonos del periodo Y para el saldo inicial (cobrado antes del periodo).
+  let ingresos = [];
   if (ventaIds.length > 0) {
-    const { data: ingresos, error: errC } = await supabase
+    const { data: ing, error: errC } = await supabase
       .from('movimientos_caja')
       .select('id, monto, fecha, metodo_pago, abono_grupo, venta_id, activo')
       .eq('tipo', 'ingreso')
       .in('venta_id', ventaIds);
     if (errC) return { data: null, error: handleRLSError(errC) };
-
-    const mapa = new Map();
-    for (const ing of (ingresos || [])) {
-      if (ing.activo === false) continue;
-      if ((desde || hasta) && !dentroRango(ing.fecha)) continue;
-      const key = ing.abono_grupo || `solo-${ing.id}`; // abonos viejos sin grupo: cada uno su evento
-      if (!mapa.has(key)) {
-        mapa.set(key, { folio: ing.abono_grupo || null, fecha: ing.fecha, metodo: ing.metodo_pago, monto: 0 });
-      }
-      const ev = mapa.get(key);
-      ev.monto += parseFloat(ing.monto) || 0;
-      if (new Date(ing.fecha) < new Date(ev.fecha)) ev.fecha = ing.fecha; // fecha más temprana del grupo
-    }
-    abonos = Array.from(mapa.values()).sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+    ingresos = (ing || []).filter(i => i.activo !== false);
   }
 
+  // Abonos del periodo, agrupados por abono_grupo (un abono = un evento)
+  const mapa = new Map();
+  for (const i of ingresos) {
+    if ((desde || hasta) && !dentroRango(i.fecha)) continue;
+    const key = i.abono_grupo || `solo-${i.id}`; // abonos viejos sin grupo: cada uno su evento
+    if (!mapa.has(key)) {
+      mapa.set(key, { folio: i.abono_grupo || null, fecha: i.fecha, metodo: i.metodo_pago, monto: 0 });
+    }
+    const ev = mapa.get(key);
+    ev.monto += parseFloat(i.monto) || 0;
+    if (new Date(i.fecha) < new Date(ev.fecha)) ev.fecha = i.fecha; // fecha más temprana del grupo
+  }
+  const abonos = Array.from(mapa.values()).sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
   // 3. Totales
+  // Saldo anterior = (consignación entregada antes de 'desde') − (cobrado antes de 'desde').
+  // Para un cliente de consignación reconcilia: saldo_inicial + entregado − cobrado ≈ pendiente.
+  let saldo_inicial = 0;
+  if (desde) {
+    const t0 = new Date(desde).getTime();
+    const entregadoAntes = (ventasAll || [])
+      .filter(v => v.tipo_venta === 'consignacion' && new Date(v.created_at).getTime() < t0)
+      .reduce((s, v) => s + (parseFloat(v.total) || 0), 0);
+    const cobradoAntes = ingresos
+      .filter(i => new Date(i.fecha).getTime() < t0)
+      .reduce((s, i) => s + (parseFloat(i.monto) || 0), 0);
+    saldo_inicial = entregadoAntes - cobradoAntes;
+  }
+
   const entregado = ventas.reduce((s, v) => s + (parseFloat(v.total) || 0), 0);
   const cobrado = abonos.reduce((s, a) => s + a.monto, 0);
   const pendiente = (ventasAll || [])
     .filter(v => v.tipo_venta === 'consignacion')
-    .reduce((s, v) => s + (parseFloat(v.monto_pendiente) || 0), 0); // saldo VIVO total
+    .reduce((s, v) => s + (parseFloat(v.monto_pendiente) || 0), 0); // saldo VIVO total (actual)
+
+  // Shape amigable para la UI: ventas con fecha/folio/producto (la UI ya los usa así)
+  const ventasUI = ventas.map(v => ({
+    ...v,
+    fecha: v.created_at,
+    folio: v.folio_operacion,
+    producto: v.producto_nombre
+  }));
 
   return {
     data: {
       cliente_id: clienteId,
       periodo: { desde: desde || null, hasta: hasta || null },
-      ventas,
+      ventas: ventasUI,
       abonos,
-      totales: { entregado, cobrado, pendiente }
+      totales: { saldo_inicial, entregado, cobrado, pendiente }
     },
     error: null
   };
