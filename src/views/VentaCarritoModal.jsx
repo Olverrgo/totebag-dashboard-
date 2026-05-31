@@ -130,7 +130,7 @@ const VentaCarritoModal = ({ onClose, onSuccess, initialType = 'directa' }) => {
     const lineas = items.map(it => ({
       producto_id: parseInt(it.producto_id),
       variante_id: it.variante_id ? parseInt(it.variante_id) : null,
-      producto_nombre: it.nombre,
+      producto_nombre: `${it.nombre}${it.variante_info ? ' (' + it.variante_info + ')' : ''}`,
       producto_medidas: productos.find(p => p.id === parseInt(it.producto_id))?.linea_medidas || '',
       cantidad: it.cantidad,
       precio_unitario: it.precio_unitario,

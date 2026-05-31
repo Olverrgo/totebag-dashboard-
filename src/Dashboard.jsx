@@ -12,6 +12,8 @@ import AnalyticsView from './views/AnalyticsView';
 import ComprasView from './views/ComprasView';
 import CotizacionesView from './views/CotizacionesView';
 import VentaCarritoModal from './views/VentaCarritoModal';
+import EstadoCuentaModal from './views/EstadoCuentaModal';
+import { generarReciboPDF } from './utils/receiptGenerator';
 import {
   isSupabaseConfigured,
   cargarDatosDashboard,
@@ -50,6 +52,8 @@ import {
   deleteVenta,
   getResumenVentas,
   registrarPagoVenta,
+  registrarAbonoCliente,
+  getEstadoCuentaVendedor,
   getVariantes,
   createVariante,
   updateVariante,
@@ -6609,8 +6613,6 @@ const SalidasView = ({ isAdmin }) => {
 
 
 // Vista Ventas
-import { generarReciboPDF } from './utils/receiptGenerator';
-
 const VentasView = ({ isAdmin }) => {
   const isMobile = window.innerWidth <= 768;
   const [ventas, setVentas] = useState([]);
@@ -7004,7 +7006,7 @@ const VentasView = ({ isAdmin }) => {
     }
   };
 
-  // Registrar pago
+  // Registrar pago (Refactor Fase 12: Abono como evento único con Folio)
   const hacerPagoCliente = async (clienteId, monto, ventasCliente, metodoPago = 'efectivo') => {
     if (!monto || monto <= 0) {
       setMensaje({ tipo: 'error', texto: 'Ingresa un monto válido' });
@@ -7013,41 +7015,20 @@ const VentasView = ({ isAdmin }) => {
 
     setGuardando(true);
     try {
-      let montoRestante = parseFloat(monto);
-      const ventasOrdenadas = [...ventasCliente].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      // El backend ahora maneja la distribución FIFO y genera el folio de abono oficial
+      const { data, error } = await registrarAbonoCliente(clienteId, monto, ventasCliente, metodoPago);
 
-      for (const venta of ventasOrdenadas) {
-        if (montoRestante <= 0) break;
-        const pendiente = (venta.total || 0) - (venta.monto_pagado || 0);
-        if (pendiente <= 0) continue;
-        const montoAplicar = Math.min(montoRestante, pendiente);
-
-        // Servicios de maquila se pagan con registrarPagoServicio (tabla servicios_maquila)
-        if (venta._es_servicio) {
-          const { error } = await registrarPagoServicio(venta.id, montoAplicar, metodoPago);
-          if (error) {
-            setMensaje({ tipo: 'error', texto: 'Error en pago servicio: ' + error.message });
-            cargarDatos();
-            return;
-          }
-          montoRestante -= montoAplicar;
-          continue;
-        }
-
-        const { error } = await registrarPagoVenta(venta.id, montoAplicar, {}, metodoPago);
-        if (error) {
-          setMensaje({ tipo: 'error', texto: 'Error en pago: ' + error.message });
-          cargarDatos();
-          return;
-        }
-
-        montoRestante -= montoAplicar;
+      if (error) {
+        setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
+      } else {
+        setMensaje({ 
+          tipo: 'exito', 
+          texto: `¡Abono registrado con éxito! Folio: ${data.folio}. Aplicado: ${formatearMoneda(data.aplicados.reduce((a,c)=>a+c.monto, 0))}` 
+        });
+        setMostrarPago(null);
+        cargarDatos();
+        setTimeout(() => setMensaje({ tipo: '', texto: '' }), 4000);
       }
-
-      setMensaje({ tipo: 'exito', texto: 'Pago registrado' });
-      setMostrarPago(null);
-      cargarDatos();
-      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 2000);
     } catch (err) {
       setMensaje({ tipo: 'error', texto: 'Error: ' + err.message });
     } finally {
@@ -9013,6 +8994,7 @@ const BalanceView = ({ isAdmin }) => {
   const [cargando, setCargando] = useState(true);
   const [clienteSeleccionado, setClienteSeleccionado] = useState('todos');
   const [expandido, setExpandido] = useState(null);
+  const [clienteEstadoCuenta, setClienteEstadoCuenta] = useState(null);
 
   const handleReimprimirFolio = async (folio) => {
     const { data, error } = await getVentasPorFolio(folio);
@@ -9334,9 +9316,24 @@ const BalanceView = ({ isAdmin }) => {
                         </div>
                       )}
                     </div>
-                    <span style={{ fontSize: '18px', color: colors.camel, transition: 'transform 0.2s', transform: expandido === cliente.id ? 'rotate(180deg)' : 'rotate(0)' }}>
-                      ▼
-                    </span>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setClienteEstadoCuenta(cliente);
+                        }}
+                        style={{
+                          padding: '6px 12px', background: colors.cream, border: `1px solid ${colors.sand}`,
+                          borderRadius: '6px', fontSize: '11px', fontWeight: '600', cursor: 'pointer',
+                          color: colors.espresso
+                        }}
+                      >
+                        📄 Estado de Cuenta
+                      </button>
+                      <span style={{ fontSize: '18px', color: colors.camel, transition: 'transform 0.2s', transform: expandido === cliente.id ? 'rotate(180deg)' : 'rotate(0)' }}>
+                        ▼
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -9450,6 +9447,14 @@ const BalanceView = ({ isAdmin }) => {
             );
           })}
         </div>
+      )}
+
+      {/* Modal Estado de Cuenta (Fase 12) */}
+      {clienteEstadoCuenta && (
+        <EstadoCuentaModal 
+          cliente={clienteEstadoCuenta} 
+          onClose={() => setClienteEstadoCuenta(null)} 
+        />
       )}
     </div>
   );
