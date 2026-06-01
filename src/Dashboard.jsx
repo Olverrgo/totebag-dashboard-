@@ -4852,11 +4852,13 @@ const ProductosView = ({ isAdmin }) => {
                           color: productoVariantes?.es_manufacturado ? colors.olive : colors.espresso 
                         }}>
                           ${productoVariantes?.es_manufacturado
-                            ? (productoVariantes.costo_calculado_por_variante?.[v.id]?.costo_total || 0).toFixed(2)
+                            ? (parseFloat(v.costo_unitario) > 0
+                                ? parseFloat(v.costo_unitario).toFixed(2)
+                                : (productoVariantes.costo_calculado_por_variante?.[v.id]?.costo_total || 0).toFixed(2))
                             : parseFloat(v.costo_unitario || 0).toFixed(2)
                           }
-                          {productoVariantes?.es_manufacturado && (
-                            <span title="Calculado desde Receta" style={{ cursor: 'help', marginLeft: '3px' }}>✨</span>
+                          {productoVariantes?.es_manufacturado && !(parseFloat(v.costo_unitario) > 0) && (
+                            <span title="Calculado desde la Receta — aún sin patrón de corte guardado. Configura el Corte para fijar el costo." style={{ cursor: 'help', marginLeft: '3px' }}>✨</span>
                           )}
                         </div>
                       </div>
