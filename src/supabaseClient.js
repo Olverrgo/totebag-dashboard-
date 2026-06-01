@@ -504,7 +504,7 @@ export const getProductos = async (categoriaId = null, subcategoriaId = null) =>
       subcategoria:subcategorias(*),
       variantes:variantes_producto(id, sku, material, color, talla, stock, stock_consignacion, costo_unitario, precio_venta, imagen_url, activo),
       recetas:recetas(id, variante_id, material_id, cantidad, opcional, activo,
-        material:materiales(id, nombre, unidad, costo_unitario)),
+        material:materiales(id, nombre, unidad, costo_unitario, categoria)),
       configuraciones_corte:configuraciones_corte(id, variante_id, costo_confeccion, costo_empaque,
         precio_tela_metro, total_metros_lineales, material_id, es_configuracion_actual, activo,
         material:materiales(id, costo_unitario))
@@ -563,9 +563,14 @@ export const getProductos = async (categoriaId = null, subcategoriaId = null) =>
           const merma = parseFloat(config?.porcentaje_desperdicio) || 0;
           const factorMerma = 1 + (merma / 100);
 
-          // 1. Costo de materiales de la receta (insumos extra)
-          // Excluimos el material que ya está en la configuración de corte para no duplicar
+          // 1. Costo de INSUMOS de la receta (resorte, hilo, etc.)
+          // La TELA NO se suma desde la receta: viene exclusivamente del patrón de
+          // corte (paso 2). Esto evita el doble conteo cuando la config aporta la
+          // tela vía `material_id` o `precio_tela_metro` y la receta también la lista
+          // (combinadas blendeadas en el patrón) o cuando hay varias telas alternativas.
+          // Las líneas de tela en la receta quedan como "menú/selección", informativas.
           const costoMaterialesReceta = recetasAplicables
+            .filter(r => r.material?.categoria !== 'tela')
             .filter(r => r.material_id !== config?.material_id)
             .reduce((sum, r) => {
               const cantidadBase = parseFloat(r.cantidad) || 0;
