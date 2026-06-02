@@ -50,6 +50,7 @@ const ProduccionView = ({ isAdmin }) => {
   const [pasoWizard, setPasoWizard] = useState(1);
   const [formOrden, setFormOrden] = useState({ producto_id: '', variante_id: '', cantidad: '' });
   const [materialesOrden, setMaterialesOrden] = useState([]);
+  const [configOrden, setConfigOrden] = useState(null);
   const [variantesProducto, setVariantesProducto] = useState([]);
   const [mostrarCompletar, setMostrarCompletar] = useState(null);
   const [filtroEstadoOrden, setFiltroEstadoOrden] = useState('pendientes');
@@ -197,6 +198,7 @@ const ProduccionView = ({ isAdmin }) => {
   const iniciarWizard = () => {
     setFormOrden({ producto_id: '', variante_id: '', cantidad: '' });
     setMaterialesOrden([]);
+    setConfigOrden(null);
     setVariantesProducto([]);
     setPasoWizard(1);
     setMostrarWizard(true);
@@ -225,6 +227,7 @@ const ProduccionView = ({ isAdmin }) => {
     const config = (producto?.configuraciones_corte || []).find(c => 
       c.es_configuracion_actual && (c.variante_id === vId || c.variante_id === null)
     );
+    setConfigOrden(config || null);
 
     let lineas = (res.data || [])
       .filter(r => r.variante_id === null || r.variante_id === vId)
@@ -234,6 +237,7 @@ const ProduccionView = ({ isAdmin }) => {
           material_id: r.material_id,
           nombre: r.material?.nombre || '',
           unidad: r.material?.unidad || '',
+          categoria: r.material?.categoria || 'otro',
           cantidad_por_pieza: parseFloat(r.cantidad) || 0,
           cantidad_total: opcional ? 0 : (parseFloat(r.cantidad) || 0) * (parseInt(formOrden.cantidad) || 0),
           costo_unitario: parseFloat(r.material?.costo_unitario) || 0,
@@ -255,6 +259,7 @@ const ProduccionView = ({ isAdmin }) => {
           material_id: materialPrincipalId,
           nombre: materialData?.nombre || 'Tela principal',
           unidad: materialData?.unidad || 'metros',
+          categoria: materialData?.categoria || 'tela',
           cantidad_por_pieza: metrosTotales,
           cantidad_total: metrosTotales * (parseInt(formOrden.cantidad) || 0),
           costo_unitario: parseFloat(materialData?.costo_unitario) || 0,
@@ -637,11 +642,19 @@ const ProduccionView = ({ isAdmin }) => {
                   {recetaLineas.length > 0 && (
                     <div style={{ marginTop: '16px', padding: '16px', background: colors.cotton, borderRadius: '10px', border: `1px solid ${colors.sand}` }}>
                       <div style={{ fontSize: '14px', fontWeight: '600', color: colors.espresso }}>
-                        Costo total receta: {formatearMoneda(recetaLineas.reduce((acc, r) => acc + (parseFloat(r.cantidad) || 0) * (parseFloat(r.material?.costo_unitario) || 0), 0))} / pieza
+                        Costo base receta: {formatearMoneda(recetaLineas.reduce((acc, r) => {
+                          if (r.opcional) return acc;
+                          return acc + (parseFloat(r.cantidad) || 0) * (parseFloat(r.material?.costo_unitario) || 0);
+                        }, 0))} / pieza
                       </div>
                       <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>
-                        {recetaLineas.length} material{recetaLineas.length !== 1 ? 'es' : ''}
+                        {recetaLineas.filter(r => !r.opcional).length} fijos + {recetaLineas.filter(r => r.opcional).length} opcionales/alternativas
                       </div>
+                      {recetaLineas.some(r => r.opcional) && (
+                        <div style={{ fontSize: '11px', color: colors.camel, marginTop: '8px', fontStyle: 'italic' }}>
+                          * El costo final varía según la tela opcional que se seleccione al producir.
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -774,7 +787,7 @@ const ProduccionView = ({ isAdmin }) => {
                       {o.materiales_usados && o.materiales_usados.length > 0 && (
                         <div style={{ marginTop: '12px', background: colors.cream, borderRadius: '8px', padding: '10px' }}>
                           <div style={{ fontSize: '11px', color: colors.camel, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>Materiales</div>
-                          {o.materiales_usados.map(mu => (
+                          {o.materiales_usados.filter(mu => (mu.cantidad_real || mu.cantidad_planeada) > 0).map(mu => (
                             <div key={mu.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', padding: '3px 0', borderBottom: `1px solid ${colors.sand}` }}>
                               <span>{mu.material?.nombre || '-'}</span>
                               <span style={{ color: colors.camel }}>
@@ -895,13 +908,21 @@ const ProduccionView = ({ isAdmin }) => {
                                       {esOpcionalDormido && (
                                         <button 
                                           onClick={() => {
-                                            const nuevo = [...materialesOrden];
-                                            nuevo[idx] = { ...nuevo[idx], cantidad_total: m.cantidad_por_pieza * (parseInt(formOrden.cantidad) || 0) };
+                                            const nuevo = materialesOrden.map((item, i) => {
+                                              if (i === idx) {
+                                                return { ...item, cantidad_total: m.cantidad_por_pieza * (parseInt(formOrden.cantidad) || 0) };
+                                              }
+                                              // Si es de la misma categoría (ej. tela) y es opcional, lo desactivamos para que sea alternativa
+                                              if (item.es_opcional && item.categoria === m.categoria && m.categoria === 'tela') {
+                                                return { ...item, cantidad_total: 0 };
+                                              }
+                                              return item;
+                                            });
                                             setMaterialesOrden(nuevo);
                                           }}
                                           style={{ fontSize: '11px', background: 'none', border: 'none', color: colors.olive, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
                                         >
-                                          + Activar cantidad receta
+                                          + Seleccionar esta {m.categoria === 'tela' ? 'tela' : 'opción'}
                                         </button>
                                       )}
                                     </td>
@@ -935,6 +956,45 @@ const ProduccionView = ({ isAdmin }) => {
                             </tbody>
                           </table>
                         )}
+                        
+                        {(materialesOrden.length > 0 || configOrden) && (
+                          <div style={{ 
+                            background: colors.linen, 
+                            padding: '12px', 
+                            borderRadius: '8px', 
+                            marginBottom: '16px',
+                            border: `1px solid ${colors.sand}`
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: colors.espresso }}>
+                              <span>Subtotal Materiales:</span>
+                              <span style={{ fontWeight: '600' }}>{formatearMoneda(materialesOrden.reduce((acc, m) => acc + m.cantidad_total * m.costo_unitario, 0))}</span>
+                            </div>
+                            {configOrden && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: colors.espresso, marginTop: '4px' }}>
+                                <span>Mano de obra + Empaque:</span>
+                                <span style={{ fontWeight: '600' }}>{formatearMoneda(((parseFloat(configOrden.costo_confeccion) || 0) + (parseFloat(configOrden.costo_empaque) || 0)) * (parseInt(formOrden.cantidad) || 0))}</span>
+                              </div>
+                            )}
+                            <div style={{ 
+                              display: 'flex', 
+                              justifyContent: 'space-between', 
+                              fontSize: '15px', 
+                              color: colors.olive, 
+                              marginTop: '8px',
+                              paddingTop: '8px',
+                              borderTop: `1px solid ${colors.sand}`,
+                              fontWeight: '700'
+                            }}>
+                              <span>TOTAL ESTIMADO:</span>
+                              <span>{(() => {
+                                const costMat = materialesOrden.reduce((acc, m) => acc + m.cantidad_total * m.costo_unitario, 0);
+                                const costExtra = ((parseFloat(configOrden?.costo_confeccion) || 0) + (parseFloat(configOrden?.costo_empaque) || 0)) * (parseInt(formOrden.cantidad) || 0);
+                                return formatearMoneda(costMat + costExtra);
+                              })()}</span>
+                            </div>
+                          </div>
+                        )}
+
                         <div style={{ display: 'flex', gap: '10px', justifyContent: 'space-between' }}>
                           <button onClick={() => setPasoWizard(1)} style={{ padding: '8px 20px', background: colors.sand, border: 'none', borderRadius: '8px', cursor: 'pointer', fontFamily: 'inherit' }}>Atrás</button>
                           <button onClick={() => setPasoWizard(3)} style={{ padding: '8px 20px', background: colors.sidebarBg, color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontFamily: 'inherit' }}>Siguiente</button>
@@ -954,13 +1014,45 @@ const ProduccionView = ({ isAdmin }) => {
                           <div style={{ fontSize: '14px', color: colors.espresso, marginTop: '4px' }}>
                             <strong>Cantidad:</strong> {formOrden.cantidad} piezas
                           </div>
+                          <div style={{ borderTop: `1px solid ${colors.sand}`, marginTop: '8px', paddingTop: '8px' }}>
+                            {materialesOrden.filter(m => m.cantidad_total > 0).length > 0 && (
+                              <div style={{ fontSize: '13px', color: colors.camel, marginBottom: '4px' }}>
+                                Materiales: {formatearMoneda(materialesOrden.reduce((acc, m) => acc + m.cantidad_total * m.costo_unitario, 0))}
+                              </div>
+                            )}
+                            {configOrden && (
+                              <>
+                                {(parseFloat(configOrden.costo_confeccion) > 0) && (
+                                  <div style={{ fontSize: '13px', color: colors.camel, marginBottom: '4px' }}>
+                                    Mano de obra (confección): {formatearMoneda(parseFloat(configOrden.costo_confeccion) * (parseInt(formOrden.cantidad) || 0))}
+                                  </div>
+                                )}
+                                {(parseFloat(configOrden.costo_empaque) > 0) && (
+                                  <div style={{ fontSize: '13px', color: colors.camel, marginBottom: '4px' }}>
+                                    Empaque: {formatearMoneda(parseFloat(configOrden.costo_empaque) * (parseInt(formOrden.cantidad) || 0))}
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
                           {materialesOrden.length > 0 && (
                             <>
-                              <div style={{ fontSize: '14px', color: colors.espresso, marginTop: '4px' }}>
-                                <strong>Costo estimado total:</strong> {formatearMoneda(materialesOrden.reduce((acc, m) => acc + m.cantidad_total * m.costo_unitario, 0))}
+                              <div style={{ fontSize: '16px', color: colors.espresso, marginTop: '8px', fontWeight: '700' }}>
+                                <strong>Total estimado:</strong> {(() => {
+                                  const costMat = materialesOrden.reduce((acc, m) => acc + m.cantidad_total * m.costo_unitario, 0);
+                                  const costConf = (parseFloat(configOrden?.costo_confeccion) || 0) * (parseInt(formOrden.cantidad) || 0);
+                                  const costEmp = (parseFloat(configOrden?.costo_empaque) || 0) * (parseInt(formOrden.cantidad) || 0);
+                                  return formatearMoneda(costMat + costConf + costEmp);
+                                })()}
                               </div>
-                              <div style={{ fontSize: '14px', color: colors.espresso, marginTop: '4px' }}>
-                                <strong>Costo estimado/pieza:</strong> {formatearMoneda(materialesOrden.reduce((acc, m) => acc + m.cantidad_total * m.costo_unitario, 0) / (parseInt(formOrden.cantidad) || 1))}
+                              <div style={{ fontSize: '13px', color: colors.olive, marginTop: '2px' }}>
+                                <strong>Costo unitario:</strong> {(() => {
+                                  const qty = parseInt(formOrden.cantidad) || 1;
+                                  const costMat = materialesOrden.reduce((acc, m) => acc + m.cantidad_total * m.costo_unitario, 0);
+                                  const costConf = (parseFloat(configOrden?.costo_confeccion) || 0) * (parseInt(formOrden.cantidad) || 0);
+                                  const costEmp = (parseFloat(configOrden?.costo_empaque) || 0) * (parseInt(formOrden.cantidad) || 0);
+                                  return formatearMoneda((costMat + costConf + costEmp) / qty);
+                                })()}
                               </div>
                             </>
                           )}
