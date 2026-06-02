@@ -52,10 +52,27 @@ function infoProducto(prod, varianteId) {
 const CalculadoraMeta = () => {
   const [productos, setProductos] = useState([]);
   const [cargando, setCargando] = useState(true);
-  const [meta, setMeta] = useState(4000);
-  const [filas, setFilas] = useState({});
-  const [checklist, setChecklist] = useState([]);
-  const [mostrarChecklist, setMostrarChecklist] = useState(false);
+  
+  // Estados persistentes
+  const [meta, setMeta] = useState(() => {
+    const saved = localStorage.getItem('meta_calc_objetivo');
+    return saved ? parseFloat(saved) : 4000;
+  });
+  
+  const [filas, setFilas] = useState(() => {
+    const saved = localStorage.getItem('meta_calc_filas');
+    return saved ? JSON.parse(saved) : {};
+  });
+  
+  const [checklist, setChecklist] = useState(() => {
+    const saved = localStorage.getItem('meta_calc_checklist');
+    return saved ? JSON.parse(saved) : [];
+  });
+  
+  const [mostrarChecklist, setMostrarChecklist] = useState(() => {
+    const saved = localStorage.getItem('meta_calc_mostrar_checklist');
+    return saved === 'true';
+  });
 
   useEffect(() => {
     (async () => {
@@ -66,12 +83,32 @@ const CalculadoraMeta = () => {
     })();
   }, []);
 
+  // Persistir cambios
+  useEffect(() => {
+    localStorage.setItem('meta_calc_objetivo', meta.toString());
+  }, [meta]);
+
+  useEffect(() => {
+    localStorage.setItem('meta_calc_filas', JSON.stringify(filas));
+  }, [filas]);
+
+  useEffect(() => {
+    localStorage.setItem('meta_calc_checklist', JSON.stringify(checklist));
+  }, [checklist]);
+
+  useEffect(() => {
+    localStorage.setItem('meta_calc_mostrar_checklist', mostrarChecklist.toString());
+  }, [mostrarChecklist]);
+
   const setFila = (id, patch) =>
     setFilas((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
 
   const limpiar = () => {
     setFilas({});
     setChecklist([]);
+    setMostrarChecklist(false);
+    localStorage.removeItem('meta_calc_filas');
+    localStorage.removeItem('meta_calc_checklist');
   };
 
   const { lineas, totales, porCategoria } = useMemo(() => {
@@ -194,10 +231,10 @@ const CalculadoraMeta = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '20px', marginBottom: '30px' }}>
         <div>
           <h1 style={{ margin: 0, fontSize: '42px', fontWeight: 900, background: `linear-gradient(45deg, ${energyColors.sidebarBg}, ${energyColors.electric})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            META SEMANAL 🚀
+            KAIZEN 🌱 Metas y Mejoras
           </h1>
           <p style={{ margin: '5px 0 0', fontSize: '16px', color: energyColors.camel, fontWeight: 500 }}>
-            Visualiza tu éxito, planifica tu producción y rompe tus récords.
+            Tu objetivo de la semana: visualiza tu éxito, planifica tu producción y rompe tus récords.
           </p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
