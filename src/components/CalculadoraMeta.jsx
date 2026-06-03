@@ -66,7 +66,15 @@ const CalculadoraMeta = () => {
   
   const [checklist, setChecklist] = useState(() => {
     const saved = localStorage.getItem('meta_calc_checklist');
-    return saved ? JSON.parse(saved) : [];
+    if (!saved) return [];
+    // Migra ítems del formato viejo ({texto, completado}) al nuevo ({nombre, meta, hecho}).
+    return JSON.parse(saved).map(item => {
+      if (item.meta != null) return item;
+      const m = (item.texto || '').match(/^\s*(\d+)x\s*(.*)$/);
+      const meta = m ? parseInt(m[1]) : 0;
+      const nombre = m ? m[2].trim() : (item.texto || '');
+      return { id: item.id, nombre, meta, hecho: item.completado ? meta : 0 };
+    });
   });
   
   const [mostrarChecklist, setMostrarChecklist] = useState(() => {
