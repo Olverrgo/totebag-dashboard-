@@ -1007,6 +1007,47 @@ const DashboardView = ({ productosActualizados }) => {
     return { estructura, totalPzas, totalValor };
   };
 
+  // Tarjeta KPI con refresco visual (elevación al hover si es clickeable)
+  const bigCardDash = (titulo, valor, sub, color, icon, onClick) => (
+    <div
+      onClick={onClick}
+      style={{
+        background: '#FFFFFF',
+        borderRadius: '16px',
+        padding: '24px',
+        textAlign: 'center',
+        cursor: onClick ? 'pointer' : 'default',
+        transition: 'all 0.3s cubic-bezier(0.165, 0.84, 0.44, 1)',
+        boxShadow: '0 4px 15px rgba(0,0,0,0.04)',
+        border: '1px solid rgba(0,0,0,0.05)',
+        position: 'relative',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        minHeight: '120px'
+      }}
+      onMouseEnter={e => {
+        if (onClick) {
+          e.currentTarget.style.transform = 'translateY(-5px)';
+          e.currentTarget.style.boxShadow = '0 12px 30px rgba(0,0,0,0.08)';
+        }
+      }}
+      onMouseLeave={e => {
+        if (onClick) {
+          e.currentTarget.style.transform = 'translateY(0)';
+          e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.04)';
+        }
+      }}
+    >
+      <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '4px', background: color }} />
+      <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '8px', letterSpacing: '1.5px', textTransform: 'uppercase', fontWeight: 700 }}>{titulo}</div>
+      <div style={{ fontSize: '28px', fontWeight: '900', color: colors.espresso, marginBottom: '4px' }}>{valor}</div>
+      {sub && <div style={{ fontSize: '12px', color: color, fontWeight: 600, opacity: 0.8 }}>{sub}</div>}
+      {icon && <div style={{ position: 'absolute', right: '10px', bottom: '10px', fontSize: '32px', opacity: 0.05 }}>{icon}</div>}
+    </div>
+  );
+
   return (
     <div>
       {/* Popup desglose de inventario */}
@@ -1491,12 +1532,15 @@ const DashboardView = ({ productosActualizados }) => {
       })()}
 
       {/* POSICIÓN ECONÓMICA */}
-      <div style={{ marginBottom: '30px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
-          <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '300', letterSpacing: '2px', color: colors.espresso }}>
-            Posición Económica
-          </h2>
-          <div style={{ display: 'flex', gap: '4px', background: colors.cotton, borderRadius: '8px', padding: '4px' }}>
+      <div style={{ marginBottom: '40px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '15px' }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '32px', fontWeight: '900', letterSpacing: '-0.5px', color: colors.espresso }}>
+              Estado del Negocio 💎
+            </h2>
+            <div style={{ fontSize: '14px', color: colors.camel, fontWeight: 500 }}>Resumen ejecutivo de tu posición económica real.</div>
+          </div>
+          <div style={{ display: 'flex', gap: '6px', background: 'rgba(0,0,0,0.05)', borderRadius: '12px', padding: '5px' }}>
             {[
               { id: 'hoy', label: 'Hoy' },
               { id: 'semana', label: 'Semana' },
@@ -1507,14 +1551,16 @@ const DashboardView = ({ productosActualizados }) => {
                 key={p.id}
                 onClick={() => setPeriodoEcon(p.id)}
                 style={{
-                  padding: '6px 14px',
+                  padding: '8px 18px',
                   border: 'none',
-                  borderRadius: '6px',
+                  borderRadius: '10px',
                   cursor: 'pointer',
                   fontSize: '13px',
-                  fontWeight: periodoEcon === p.id ? '700' : '400',
+                  fontWeight: '700',
+                  transition: 'all 0.2s',
                   background: periodoEcon === p.id ? colors.sidebarBg : 'transparent',
-                  color: periodoEcon === p.id ? 'white' : colors.espresso
+                  color: periodoEcon === p.id ? 'white' : colors.espresso,
+                  boxShadow: periodoEcon === p.id ? '0 4px 10px rgba(0,95,132,0.2)' : 'none'
                 }}
               >
                 {p.label}
@@ -1525,154 +1571,90 @@ const DashboardView = ({ productosActualizados }) => {
 
         {posEcon ? (
           <>
-            {/* Fila principal: Utilidad Bruta, Egresos, Utilidad Neta */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '16px' }}>
-              <div style={{
-                background: colors.cotton,
-                borderRadius: '12px',
-                padding: '20px',
-                textAlign: 'center'
-              }}>
-                <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Ingresos totales</div>
-                <div style={{ fontSize: '26px', fontWeight: '700', color: colors.sidebarBg }}>{formatearMonedaDash(posEcon.ingresoVentas)}</div>
-                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>{posEcon.numVentas} ventas • {posEcon.piezasVendidas} pzas{posEcon.numServicios > 0 ? ` • ${posEcon.numServicios} servicios` : ''}</div>
-              </div>
-
-              <div
-                onClick={() => setPopupUtilidad(true)}
-                style={{
-                background: colors.cotton,
-                borderRadius: '12px',
-                padding: '20px',
-                textAlign: 'center',
-                border: `2px solid ${colors.olive}`,
-                cursor: 'pointer',
-                transition: 'transform 0.15s, box-shadow 0.15s'
-              }}
-                onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'; }}
-                onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
-              >
-                <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Utilidad bruta</div>
-                <div style={{ fontSize: '26px', fontWeight: '700', color: colors.olive }}>{formatearMonedaDash(posEcon.utilidadBruta)}</div>
-                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Ganancia real sobre lo cobrado</div>
-              </div>
-
-              <div
-                onClick={() => setPopupEgresos(true)}
-                style={{
-                  background: colors.cotton,
-                  borderRadius: '12px',
-                  padding: '20px',
-                  textAlign: 'center',
-                  cursor: 'pointer',
-                  transition: 'transform 0.2s, box-shadow 0.2s'
-                }}
-                onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.1)'; }}
-                onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
-              >
-                <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Egresos</div>
-                <div style={{ fontSize: '26px', fontWeight: '700', color: colors.terracotta }}>{formatearMonedaDash(posEcon.egresos)}</div>
-                <div style={{ fontSize: '10px', color: colors.camel, marginTop: '3px' }}>
-                  Gastos: {formatearMonedaDash(posEcon.gastosOperativos || 0)}{(posEcon.reinversionPeriodo || 0) > 0 ? ` • Reinv: ${formatearMonedaDash(posEcon.reinversionPeriodo)}` : ''}
-                </div>
-              </div>
+            {/* Fila principal: Ingresos, Utilidad Bruta, Egresos, Utilidad Neta */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '20px' }}>
+              {bigCardDash('Ingresos Totales', formatearMonedaDash(posEcon.ingresoVentas), `${posEcon.numVentas} ventas • ${posEcon.piezasVendidas} pzas`, colors.sidebarBg, '📈')}
+              {bigCardDash('Utilidad Bruta', formatearMonedaDash(posEcon.utilidadBruta), 'Basada en lo cobrado', colors.olive, '🍀', () => setPopupUtilidad(true))}
+              {bigCardDash('Egresos', formatearMonedaDash(posEcon.egresos), `Gastos: ${formatearMonedaDash(posEcon.gastosOperativos || 0)}`, colors.terracotta, '💸', () => setPopupEgresos(true))}
 
               <div style={{
-                background: posEcon.utilidadNeta >= 0 ? 'rgba(171,213,94,0.08)' : 'rgba(196,120,74,0.08)',
-                borderRadius: '12px',
-                padding: '20px',
+                background: posEcon.utilidadNeta >= 0 ? `linear-gradient(135deg, ${colors.olive}15, ${colors.olive}05)` : `linear-gradient(135deg, ${colors.terracotta}15, ${colors.terracotta}05)`,
+                borderRadius: '16px',
+                padding: '24px',
                 textAlign: 'center',
-                border: `2px solid ${posEcon.utilidadNeta >= 0 ? colors.olive : colors.terracotta}`
+                border: `2px solid ${posEcon.utilidadNeta >= 0 ? colors.olive : colors.terracotta}`,
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                minHeight: '120px',
+                boxShadow: '0 8px 25px rgba(0,0,0,0.05)'
               }}>
-                <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Utilidad neta</div>
-                <div style={{ fontSize: '28px', fontWeight: '700', color: posEcon.utilidadNeta >= 0 ? colors.olive : colors.terracotta }}>
+                <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '8px', letterSpacing: '1.5px', textTransform: 'uppercase', fontWeight: 700 }}>Utilidad Neta</div>
+                <div style={{ fontSize: '32px', fontWeight: '900', color: posEcon.utilidadNeta >= 0 ? colors.olive : colors.terracotta }}>
                   {formatearMonedaDash(posEcon.utilidadNeta)}
                 </div>
-                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Utilidad bruta - Gastos operativos</div>
+                <div style={{ fontSize: '12px', color: colors.camel, fontWeight: 500 }}>Libre de gastos operativos</div>
               </div>
             </div>
 
             {/* Fila secundaria: Cobrado, Por cobrar, Por cobrar maquila, Balance caja */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
-              <div style={{ background: colors.cotton, borderRadius: '10px', padding: '14px', textAlign: 'center' }}>
-                <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Cobrado</div>
-                <div style={{ fontSize: '18px', fontWeight: '600', color: colors.olive }}>{formatearMonedaDash(posEcon.ventasCobradas)}</div>
-                <div style={{ fontSize: '10px', color: colors.camel, marginTop: '3px' }}>
-                  Ventas: {formatearMonedaDash(posEcon.ventasCobradas - (posEcon.cobradoServicios || 0))} • Maquila: {formatearMonedaDash(posEcon.cobradoServicios || 0)}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '30px' }}>
+              {[
+                { label: 'Cobrado', value: posEcon.ventasCobradas, sub: `Ventas: ${formatearMonedaDash(posEcon.ventasCobradas - (posEcon.cobradoServicios || 0))} • Maquila: ${formatearMonedaDash(posEcon.cobradoServicios || 0)}`, color: colors.olive, icon: '💰' },
+                { label: 'Por Cobrar', value: posEcon.ventasPendientes, sub: 'Ventas pendientes', color: posEcon.ventasPendientes > 0 ? colors.terracotta : colors.olive, icon: '⏳' },
+                { label: 'Por Cobrar Maquila', value: posEcon.porCobrarMaquila, sub: 'Servicios de taller', color: posEcon.porCobrarMaquila > 0 ? colors.terracotta : colors.olive, icon: '🧵' },
+                { label: 'Balance Caja', value: posEcon.balanceCaja, sub: 'Saldo actual', color: posEcon.balanceCaja >= 0 ? colors.sidebarBg : colors.terracotta, icon: '🏦' }
+              ].map((item, i) => (
+                <div key={i} style={{ background: '#FFFFFF', borderRadius: '12px', padding: '16px', border: '1px solid rgba(0,0,0,0.05)', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+                  <div style={{ fontSize: '10px', color: colors.camel, fontWeight: 700, textTransform: 'uppercase', marginBottom: '4px' }}>{item.label}</div>
+                  <div style={{ fontSize: '18px', fontWeight: '800', color: item.color }}>{formatearMonedaDash(item.value)}</div>
+                  <div style={{ fontSize: '11px', color: colors.camel, marginTop: '2px', fontWeight: 500 }}>{item.sub}</div>
                 </div>
-              </div>
-              <div style={{ background: colors.cotton, borderRadius: '10px', padding: '14px', textAlign: 'center' }}>
-                <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Por cobrar</div>
-                <div style={{ fontSize: '18px', fontWeight: '600', color: posEcon.ventasPendientes > 0 ? colors.terracotta : colors.olive }}>
-                  {formatearMonedaDash(posEcon.ventasPendientes)}
-                </div>
-              </div>
-              <div style={{ background: colors.cotton, borderRadius: '10px', padding: '14px', textAlign: 'center' }}>
-                <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Por cobrar maquila</div>
-                <div style={{ fontSize: '18px', fontWeight: '600', color: posEcon.porCobrarMaquila > 0 ? colors.terracotta : colors.olive }}>
-                  {formatearMonedaDash(posEcon.porCobrarMaquila)}
-                </div>
-              </div>
-              <div style={{ background: colors.cotton, borderRadius: '10px', padding: '14px', textAlign: 'center' }}>
-                <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Balance caja</div>
-                <div style={{ fontSize: '18px', fontWeight: '600', color: posEcon.balanceCaja >= 0 ? colors.sidebarBg : colors.terracotta }}>
-                  {formatearMonedaDash(posEcon.balanceCaja)}
-                </div>
-              </div>
+              ))}
             </div>
 
             {/* Fila de Capital: Inventario + Por cobrar = Capital total */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginTop: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
               <div
                 onClick={() => setPopupInventario('taller')}
-                style={{ background: colors.cotton, borderRadius: '12px', padding: '20px', textAlign: 'center', cursor: 'pointer', transition: 'transform 0.15s', border: `1px solid ${colors.sand}` }}
-                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.03)'}
-                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                style={{
+                  background: '#FFFFFF', borderRadius: '16px', padding: '20px', textAlign: 'center', cursor: 'pointer',
+                  transition: 'all 0.2s', border: '1px solid rgba(0,0,0,0.05)', boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
+                }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(0,0,0,0.06)'; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.03)'; }}
               >
-                <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Inventario en taller</div>
-                <div style={{ fontSize: '24px', fontWeight: '700', color: colors.sidebarBg }}>{formatearMonedaDash(posEcon.valorTaller)}</div>
-                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>{posEcon.pzasTaller} piezas</div>
+                <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '6px', fontWeight: 700, textTransform: 'uppercase' }}>Inventario Taller</div>
+                <div style={{ fontSize: '24px', fontWeight: '800', color: colors.sidebarBg }}>{formatearMonedaDash(posEcon.valorTaller)}</div>
+                <div style={{ fontSize: '12px', color: colors.camel, fontWeight: 500 }}>{posEcon.pzasTaller} piezas</div>
               </div>
 
               <div
                 onClick={() => setPopupInventario('consignacion')}
-                style={{ background: colors.cotton, borderRadius: '12px', padding: '20px', textAlign: 'center', cursor: 'pointer', transition: 'transform 0.15s', border: `1px solid ${colors.sand}` }}
-                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.03)'}
-                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                style={{
+                  background: '#FFFFFF', borderRadius: '16px', padding: '20px', textAlign: 'center', cursor: 'pointer',
+                  transition: 'all 0.2s', border: '1px solid rgba(0,0,0,0.05)', boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
+                }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(0,0,0,0.06)'; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.03)'; }}
               >
-                <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Inventario en consignación</div>
-                <div style={{ fontSize: '24px', fontWeight: '700', color: colors.terracotta }}>{formatearMonedaDash(posEcon.valorConsignacion)}</div>
-                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>{posEcon.pzasConsignacion} piezas • precio de venta</div>
+                <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '6px', fontWeight: 700, textTransform: 'uppercase' }}>Consignación</div>
+                <div style={{ fontSize: '24px', fontWeight: '800', color: colors.terracotta }}>{formatearMonedaDash(posEcon.valorConsignacion)}</div>
+                <div style={{ fontSize: '12px', color: colors.camel, fontWeight: 500 }}>{posEcon.pzasConsignacion} piezas</div>
               </div>
 
-              <div style={{ background: colors.cotton, borderRadius: '12px', padding: '20px', textAlign: 'center', border: `1px solid ${colors.sand}` }}>
-                <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Materia prima</div>
-                <div style={{ fontSize: '24px', fontWeight: '700', color: colors.sidebarBg }}>{formatearMonedaDash(posEcon.materiaPrima || 0)}</div>
-                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Inversión en insumos</div>
+              <div style={{ background: '#FFFFFF', borderRadius: '16px', padding: '20px', textAlign: 'center', border: '1px solid rgba(0,0,0,0.05)', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
+                <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '6px', fontWeight: 700, textTransform: 'uppercase' }}>Materia Prima</div>
+                <div style={{ fontSize: '24px', fontWeight: '800', color: colors.sidebarBg }}>{formatearMonedaDash(posEcon.materiaPrima || 0)}</div>
+                <div style={{ fontSize: '12px', color: colors.camel, fontWeight: 500 }}>Inversión en insumos</div>
               </div>
 
-              <div style={{ background: colors.cotton, borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
-                <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Total por cobrar</div>
-                <div style={{ fontSize: '24px', fontWeight: '700', color: (posEcon.ventasPendientes + posEcon.porCobrarMaquila) > 0 ? colors.terracotta : colors.olive }}>
+              <div style={{ background: '#FFFFFF', borderRadius: '16px', padding: '20px', textAlign: 'center', border: '1px solid rgba(0,0,0,0.05)', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
+                <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '6px', fontWeight: 700, textTransform: 'uppercase' }}>Total por Cobrar</div>
+                <div style={{ fontSize: '24px', fontWeight: '800', color: (posEcon.ventasPendientes + posEcon.porCobrarMaquila) > 0 ? colors.terracotta : colors.olive }}>
                   {formatearMonedaDash(posEcon.ventasPendientes + posEcon.porCobrarMaquila)}
                 </div>
-                <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>Ventas + Maquila</div>
-              </div>
-
-              <div style={{
-                background: 'rgba(0,95,132,0.06)',
-                borderRadius: '12px',
-                padding: '20px',
-                textAlign: 'center',
-                border: `2px solid ${colors.sidebarBg}`
-              }}>
-                <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Capital total</div>
-                <div style={{ fontSize: '28px', fontWeight: '700', color: colors.sidebarBg }}>
-                  {formatearMonedaDash(posEcon.valorTaller + (posEcon.materiaPrima || 0) + posEcon.ventasPendientes + posEcon.porCobrarMaquila + (posEcon.balanceCajaGlobal || 0))}
-                </div>
-                <div style={{ fontSize: '11px', color: colors.camel, marginTop: '6px', lineHeight: '1.5' }}>
-                  Taller {formatearMonedaDash(posEcon.valorTaller)} + Mat. prima {formatearMonedaDash(posEcon.materiaPrima || 0)} + Por cobrar {formatearMonedaDash(posEcon.ventasPendientes + posEcon.porCobrarMaquila)} + Caja {formatearMonedaDash(posEcon.balanceCajaGlobal || 0)}
-                </div>
+                <div style={{ fontSize: '12px', color: colors.camel, fontWeight: 500 }}>Ventas + Maquila</div>
               </div>
 
               {posEcon.inversionTotal > 0 && (() => {
@@ -1681,28 +1663,40 @@ const DashboardView = ({ productosActualizados }) => {
                 // ROI solo si hay capital externo inyectado (inversion_capital)
                 const roiPct = capitalInvertido > 0 ? (((capitalTotal - capitalInvertido) / capitalInvertido) * 100).toFixed(1) : null;
                 return (
-                  <div style={{
-                    background: colors.cotton,
-                    borderRadius: '12px',
-                    padding: '20px',
-                    textAlign: 'center',
-                    border: `1px solid ${colors.sand}`
-                  }}>
-                    <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '6px', letterSpacing: '1px', textTransform: 'uppercase' }}>Inversión acumulada{roiPct !== null ? ' / ROI' : ''}</div>
-                    <div style={{ fontSize: '24px', fontWeight: '700', color: colors.sidebarBg }}>
+                  <div style={{ background: '#FFFFFF', borderRadius: '16px', padding: '20px', textAlign: 'center', border: '1px solid rgba(0,0,0,0.05)', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
+                    <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '6px', fontWeight: 700, textTransform: 'uppercase' }}>Inversión acumulada{roiPct !== null ? ' / ROI' : ''}</div>
+                    <div style={{ fontSize: '24px', fontWeight: '800', color: colors.sidebarBg }}>
                       {formatearMonedaDash(posEcon.inversionTotal)}
                     </div>
                     {roiPct !== null && (
-                      <div style={{ fontSize: '18px', fontWeight: '600', color: roiPct >= 0 ? colors.olive : colors.terracotta, marginTop: '4px' }}>
+                      <div style={{ fontSize: '18px', fontWeight: '700', color: roiPct >= 0 ? colors.olive : colors.terracotta, marginTop: '4px' }}>
                         ROI: {roiPct}%
                       </div>
                     )}
-                    <div style={{ fontSize: '11px', color: colors.camel, marginTop: '6px', lineHeight: '1.5' }}>
+                    <div style={{ fontSize: '11px', color: colors.camel, marginTop: '6px', lineHeight: '1.5', fontWeight: 500 }}>
                       Material {formatearMonedaDash(posEcon.compraMaterialTotal || 0)} + Reinversión {formatearMonedaDash(posEcon.reinversionTotal || 0)}{capitalInvertido > 0 ? ` + Inv. capital ${formatearMonedaDash(capitalInvertido)}` : ''}
                     </div>
                   </div>
                 );
               })()}
+
+              <div style={{
+                background: `linear-gradient(135deg, ${colors.sidebarBg}, #0087BA)`,
+                borderRadius: '16px',
+                padding: '24px',
+                textAlign: 'center',
+                boxShadow: '0 10px 30px rgba(0,95,132,0.15)',
+                color: 'white',
+                gridColumn: 'span 2'
+              }}>
+                <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', marginBottom: '8px', letterSpacing: '2px', textTransform: 'uppercase', fontWeight: 700 }}>Capital Total del Negocio</div>
+                <div style={{ fontSize: '36px', fontWeight: '900' }}>
+                  {formatearMonedaDash(posEcon.valorTaller + (posEcon.materiaPrima || 0) + posEcon.ventasPendientes + posEcon.porCobrarMaquila + (posEcon.balanceCajaGlobal || 0))}
+                </div>
+                <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)', marginTop: '8px', fontWeight: 500, lineHeight: '1.5' }}>
+                  Taller {formatearMonedaDash(posEcon.valorTaller)} + Mat. prima {formatearMonedaDash(posEcon.materiaPrima || 0)} + Por cobrar {formatearMonedaDash(posEcon.ventasPendientes + posEcon.porCobrarMaquila)} + Caja {formatearMonedaDash(posEcon.balanceCajaGlobal || 0)}
+                </div>
+              </div>
             </div>
           </>
         ) : (
