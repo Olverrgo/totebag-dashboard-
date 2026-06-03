@@ -212,6 +212,15 @@ const CalculadoraMeta = () => {
 
   const pctMeta = meta > 0 ? (totales.utilidad / meta) * 100 : 0;
 
+  // Avance REAL según el checklist: utilidad ya producida (piezas hechas × utilidad/pieza del plan).
+  const utilidadPorPieza = {};
+  for (const l of lineas) {
+    const id = `${l.id}-${l.variante?.id || 'base'}`;
+    utilidadPorPieza[id] = l.cantidad > 0 ? l.utilidad / l.cantidad : 0;
+  }
+  const utilidadReal = checklist.reduce((acc, it) => acc + (it.hecho || 0) * (utilidadPorPieza[it.id] || 0), 0);
+  const pctReal = meta > 0 ? (utilidadReal / meta) * 100 : 0;
+
   if (cargando) {
     return (
       <div style={{ textAlign: 'center', padding: '50px', color: energyColors.electric }}>
@@ -335,7 +344,12 @@ const CalculadoraMeta = () => {
           </div>
         </div>
 
-        <div style={{ position: 'relative', height: '35px', background: '#F0F2F5', borderRadius: '17px', overflow: 'hidden', marginBottom: '15px', boxShadow: 'inset 0 2px 5px rgba(0,0,0,0.1)' }}>
+        {/* Barra 1: utilidad PROYECTADA (lo que daría el plan completo) */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: energyColors.camel, textTransform: 'uppercase', letterSpacing: '0.5px' }}>📊 Utilidad proyectada (plan)</span>
+          <span style={{ fontSize: '13px', fontWeight: 800, color: energyColors.electric }}>{money0(totales.utilidad)} · {pctMeta.toFixed(0)}%</span>
+        </div>
+        <div style={{ position: 'relative', height: '28px', background: '#F0F2F5', borderRadius: '14px', overflow: 'hidden', marginBottom: '16px', boxShadow: 'inset 0 2px 5px rgba(0,0,0,0.1)' }}>
           <div
             className={pctMeta > 0 && pctMeta < 100 ? 'progress-pulse' : ''}
             style={{
@@ -346,6 +360,25 @@ const CalculadoraMeta = () => {
             }}
           >
             {pctMeta > 10 && <span style={{ color: 'white', fontWeight: 900, fontSize: '14px' }}>🔥</span>}
+          </div>
+        </div>
+
+        {/* Barra 2: avance REAL producido (según el check-list) */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: energyColors.camel, textTransform: 'uppercase', letterSpacing: '0.5px' }}>✅ Avance real producido</span>
+          <span style={{ fontSize: '13px', fontWeight: 800, color: energyColors.success }}>{money0(utilidadReal)} · {pctReal.toFixed(0)}%</span>
+        </div>
+        <div style={{ position: 'relative', height: '28px', background: '#F0F2F5', borderRadius: '14px', overflow: 'hidden', marginBottom: '15px', boxShadow: 'inset 0 2px 5px rgba(0,0,0,0.1)' }}>
+          <div
+            className={pctReal > 0 && pctReal < 100 ? 'progress-pulse' : ''}
+            style={{
+              height: '100%', width: `${Math.min(pctReal, 100)}%`,
+              background: `linear-gradient(90deg, ${energyColors.olive}, ${energyColors.success})`,
+              transition: 'width 1s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+              display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '15px'
+            }}
+          >
+            {pctReal > 10 && <span style={{ color: 'white', fontWeight: 900, fontSize: '14px' }}>💪</span>}
           </div>
         </div>
 
