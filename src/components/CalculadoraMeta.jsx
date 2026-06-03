@@ -159,18 +159,37 @@ const CalculadoraMeta = () => {
   }, [productos, filas]);
 
   const generarChecklist = () => {
-    const items = lineas.map(l => ({
-      id: `${l.id}-${l.variante?.id || 'base'}`,
-      texto: `${l.cantidad}x ${l.nombre} ${l.variante ? `(${[l.variante.material, l.variante.talla].filter(Boolean).join(' ')})` : ''}`,
-      completado: false
-    }));
-    setChecklist(items);
+    setChecklist(prev => {
+      const prevById = Object.fromEntries(prev.map(i => [i.id, i]));
+      return lineas.map(l => {
+        const id = `${l.id}-${l.variante?.id || 'base'}`;
+        const varTxt = l.variante ? `(${[l.variante.material, l.variante.talla].filter(Boolean).join(' ')})` : '';
+        const meta = l.cantidad;
+        const hechoPrev = prevById[id]?.hecho || 0;
+        return {
+          id,
+          nombre: `${l.nombre} ${varTxt}`.trim(),
+          meta,
+          hecho: Math.min(hechoPrev, meta), // conserva avance al regenerar el plan
+        };
+      });
+    });
     setMostrarChecklist(true);
   };
 
+  // Anota el avance parcial (entero, acotado entre 0 y la meta)
+  const setAvance = (id, valor) => {
+    setChecklist(prev => prev.map(item => {
+      if (item.id !== id) return item;
+      const n = Math.max(0, Math.min(parseInt(valor) || 0, item.meta));
+      return { ...item, hecho: n };
+    }));
+  };
+
+  // Click en el check: completa todo o reinicia a 0
   const toggleCheck = (id) => {
-    setChecklist(prev => prev.map(item => 
-      item.id === id ? { ...item, completado: !item.completado } : item
+    setChecklist(prev => prev.map(item =>
+      item.id === id ? { ...item, hecho: item.hecho >= item.meta ? 0 : item.meta } : item
     ));
   };
 
@@ -442,51 +461,86 @@ const CalculadoraMeta = () => {
               </div>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {checklist.length > 0 ? checklist.map(item => (
-                  <div 
-                    key={item.id} 
-                    onClick={() => toggleCheck(item.id)}
-                    style={{ 
-                      display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', 
-                      borderRadius: '12px', background: item.completado ? '#F0FFF4' : '#F8F9FA',
-                      cursor: 'pointer', transition: 'all 0.2s',
-                      border: `1px solid ${item.completado ? '#C6F6D5' : '#E2E8F0'}`
+                {checklist.length > 0 ? checklist.map(item => {
+                  const meta = item.meta || 0;
+                  const hecho = item.hecho || 0;
+                  const completado = meta > 0 && hecho >= meta;
+                  return (
+                  <div
+                    key={item.id}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '12px', padding: '12px',
+                      borderRadius: '12px', background: completado ? '#F0FFF4' : '#F8F9FA',
+                      transition: 'all 0.2s',
+                      border: `1px solid ${completado ? '#C6F6D5' : '#E2E8F0'}`
                     }}
                   >
-                    <div style={{ 
-                      width: '24px', height: '24px', borderRadius: '6px', 
-                      border: `2px solid ${item.completado ? energyColors.success : energyColors.camel}`,
-                      background: item.completado ? energyColors.success : 'transparent',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: 'white', fontSize: '14px', fontWeight: 900
-                    }}>
-                      {item.completado && '✓'}
+                    <div
+                      onClick={() => toggleCheck(item.id)}
+                      title={completado ? 'Reiniciar a 0' : 'Marcar todo hecho'}
+                      style={{
+                        flexShrink: 0, width: '24px', height: '24px', borderRadius: '6px',
+                        border: `2px solid ${completado ? energyColors.success : energyColors.camel}`,
+                        background: completado ? energyColors.success : 'transparent',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: 'white', fontSize: '14px', fontWeight: 900, cursor: 'pointer'
+                      }}
+                    >
+                      {completado && '✓'}
                     </div>
-                    <span style={{ 
-                      fontSize: '15px', fontWeight: 600, 
-                      textDecoration: item.completado ? 'line-through' : 'none',
-                      color: item.completado ? '#A0AEC0' : energyColors.espresso
+                    <span style={{
+                      flex: 1, fontSize: '15px', fontWeight: 600,
+                      textDecoration: completado ? 'line-through' : 'none',
+                      color: completado ? '#A0AEC0' : energyColors.espresso
                     }}>
-                      {item.texto}
+                      {item.nombre || item.texto}
                     </span>
+                    {/* Stepper de avance parcial (enteros) */}
+                    <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <button
+                        onClick={() => setAvance(item.id, hecho - 1)}
+                        disabled={hecho <= 0}
+                        style={{ width: '26px', height: '26px', borderRadius: '8px', border: 'none', background: hecho > 0 ? energyColors.cotton : '#EEE', color: energyColors.espresso, fontSize: '16px', fontWeight: 900, cursor: hecho > 0 ? 'pointer' : 'not-allowed', lineHeight: 1 }}
+                      >−</button>
+                      <input
+                        type="number"
+                        min="0"
+                        max={meta}
+                        value={hecho}
+                        onChange={(e) => setAvance(item.id, e.target.value)}
+                        style={{ width: '42px', textAlign: 'center', padding: '4px 2px', borderRadius: '8px', border: `2px solid ${completado ? energyColors.success : '#ddd'}`, fontWeight: 900, fontSize: '14px', color: energyColors.espresso }}
+                      />
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: energyColors.camel, minWidth: '28px' }}>/ {meta}</span>
+                      <button
+                        onClick={() => setAvance(item.id, hecho + 1)}
+                        disabled={hecho >= meta}
+                        style={{ width: '26px', height: '26px', borderRadius: '8px', border: 'none', background: hecho < meta ? energyColors.success : '#EEE', color: hecho < meta ? 'white' : energyColors.camel, fontSize: '16px', fontWeight: 900, cursor: hecho < meta ? 'pointer' : 'not-allowed', lineHeight: 1 }}
+                      >+</button>
+                    </div>
                   </div>
-                )) : (
+                  );
+                }) : (
                   <div style={{ textAlign: 'center', color: energyColors.camel, padding: '20px' }}>
                     Agrega productos al plan para generar tu lista de éxito.
                   </div>
                 )}
               </div>
 
-              {checklist.length > 0 && (
-                <div style={{ marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #EEE', textAlign: 'center' }}>
-                  <div style={{ fontSize: '13px', color: energyColors.camel, fontWeight: 700, marginBottom: '5px' }}>
-                    PROGRESO DE TAREAS
+              {checklist.length > 0 && (() => {
+                const totalMeta = checklist.reduce((a, i) => a + (i.meta || 0), 0);
+                const totalHecho = checklist.reduce((a, i) => a + (i.hecho || 0), 0);
+                const pct = totalMeta > 0 ? Math.round((totalHecho / totalMeta) * 100) : 0;
+                return (
+                  <div style={{ marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #EEE', textAlign: 'center' }}>
+                    <div style={{ fontSize: '13px', color: energyColors.camel, fontWeight: 700, marginBottom: '5px' }}>
+                      PIEZAS PRODUCIDAS
+                    </div>
+                    <div style={{ fontWeight: 900, fontSize: '24px', color: pct >= 100 ? energyColors.success : energyColors.electric }}>
+                      {totalHecho} / {totalMeta} <span style={{ fontSize: '16px', color: energyColors.camel }}>({pct}%)</span>
+                    </div>
                   </div>
-                  <div style={{ fontWeight: 900, fontSize: '24px', color: energyColors.success }}>
-                    {Math.round((checklist.filter(i => i.completado).length / checklist.length) * 100)}%
-                  </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           )}
 
