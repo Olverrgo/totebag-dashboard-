@@ -43,6 +43,7 @@ const DEFAULT_PARAMS = {
   stockTerminado: 7000, // capital en producto terminado
   exposicion: 70,       // % de la tela que puede flotar en la calle
   efectivo: 2700,       // efectivo líquido para pagar mano de obra
+  lineaRojaObjetivo: 1500, // línea roja total por vendedor que se busca (modo objetivo)
 };
 
 const load = (key, def) => {
@@ -97,6 +98,22 @@ const EstrategiaOperativa = () => {
   const vendedoresNec = utilidadVend > 0 ? Math.ceil(contribObjetivo / utilidadVend) : 0;
   const ventasNec = vendedoresNec * ventaVend;
   const piezasNec = vendedoresNec * PIEZAS_BENCH;
+
+  // ---- MODO OBJETIVO: defines la línea roja por vendedor → tamaño de la red ----
+  // Piezas totales para la meta son fijas: (meta + fijos) / utilidadPz, sin importar el reparto.
+  // Línea roja total = P × (costoPz + fijos/totalPiezasMeta) → P es lineal respecto a la línea roja.
+  const totalPiezasMeta = utilidadPz > 0 ? (params.metaSemanal + gastosFijos) / utilidadPz : 0;
+  const factorPorPieza = costoPz + (totalPiezasMeta > 0 ? gastosFijos / totalPiezasMeta : 0);
+  const obj = {};
+  obj.piezasPorVend = factorPorPieza > 0 ? Math.max(1, Math.round(params.lineaRojaObjetivo / factorPorPieza)) : 0;
+  obj.vendedores = obj.piezasPorVend > 0 ? Math.ceil(totalPiezasMeta / obj.piezasPorVend) : 0;
+  obj.totalPiezas = obj.vendedores * obj.piezasPorVend;
+  obj.lineaRojaReal = obj.piezasPorVend * costoPz + (obj.vendedores > 0 ? gastosFijos / obj.vendedores : 0);
+  obj.exposicion = obj.totalPiezas * costoPz;
+  obj.efectivoReq = obj.totalPiezas * params.manoObra; // mano de obra flotando a 7 días
+  obj.efectivoOk = obj.efectivoReq <= params.efectivo;
+  obj.utilidadNeta = obj.totalPiezas * utilidadPz - gastosFijos;
+  obj.maxVendEfectivo = (obj.piezasPorVend > 0 && params.manoObra > 0) ? Math.floor(params.efectivo / (obj.piezasPorVend * params.manoObra)) : 0;
 
   // ---- Simulador de portafolio ----
   const tot = NIVELES.reduce((acc, n) => {
@@ -226,6 +243,50 @@ const EstrategiaOperativa = () => {
       </div>
       <div style={{ ...card({ background: `${energyColors.warning}12`, border: `1px solid ${energyColors.warning}40`, marginBottom: '30px', fontSize: '14px' }) }}>
         💡 Los primeros <strong>{vendedoresEquilibrio} vendedores</strong> solo cubren tus gastos fijos (no ganas todavía). A partir de ahí cada uno suma <strong>{money(utilidadVend)}/sem</strong> de utilidad neta. Llegas a tu meta de {money(params.metaSemanal)} con <strong>{vendedoresNec}</strong>.
+      </div>
+
+      {/* MODO OBJETIVO */}
+      <div style={{ fontSize: '20px', fontWeight: 800, marginBottom: '4px', color: energyColors.sidebarBg }}>🎯 Modo objetivo — baja la línea roja, gana alcance</div>
+      <p style={{ margin: '0 0 14px', fontSize: '13px', color: energyColors.camel }}>
+        Más vendedores con cargas más chicas = entrada más accesible por vendedor + más puntos de venta. Define la línea roja que quieres y te dimensiono la red.
+      </p>
+      <div style={{ ...card({ borderTop: `4px solid ${energyColors.purple || '#9B59B6'}`, marginBottom: '30px' }) }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', marginBottom: '16px' }}>
+          <div>
+            <div style={labelChip}>Línea roja objetivo / vendedor</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+              <span style={{ fontSize: '22px', fontWeight: 900 }}>$</span>
+              <input type="number" value={params.lineaRojaObjetivo} onChange={e => setParam('lineaRojaObjetivo', e.target.value)}
+                style={{ width: '130px', fontSize: '22px', fontWeight: 900, border: 'none', borderBottom: `3px solid ${energyColors.sidebarBg}`, color: energyColors.espresso, padding: '2px 4px', outline: 'none' }} />
+            </div>
+          </div>
+          <div style={{ flex: 1, minWidth: '180px', fontSize: '13px', color: energyColors.camel, fontWeight: 500 }}>
+            Tu línea roja actual de referencia (38 pz) es {money(lineaRojaTotal)}/vend. Baja el objetivo para repartir en más vendedores.
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '14px' }}>
+          <div style={card({ textAlign: 'center', background: energyColors.cotton })}>
+            <div style={labelChip}>Piezas por vendedor</div>
+            <div style={{ fontSize: '26px', fontWeight: 900 }}>{obj.piezasPorVend}</div>
+          </div>
+          <div style={card({ textAlign: 'center', background: energyColors.cotton })}>
+            <div style={labelChip}>Vendedores para la meta</div>
+            <div style={{ fontSize: '26px', fontWeight: 900, color: energyColors.electric }}>{obj.vendedores}</div>
+          </div>
+          <div style={card({ textAlign: 'center', background: energyColors.cotton })}>
+            <div style={labelChip}>Línea roja real/vend</div>
+            <div style={{ fontSize: '26px', fontWeight: 900, color: energyColors.danger }}>{money(obj.lineaRojaReal)}</div>
+          </div>
+          <div style={card({ textAlign: 'center', background: energyColors.cotton })}>
+            <div style={labelChip}>Utilidad neta/sem</div>
+            <div style={{ fontSize: '26px', fontWeight: 900, color: obj.utilidadNeta >= 0 ? energyColors.success : energyColors.danger }}>{money(obj.utilidadNeta)}</div>
+          </div>
+        </div>
+        <div style={{ marginTop: '14px', padding: '12px', borderRadius: '10px', background: obj.efectivoOk ? `${energyColors.success}15` : `${energyColors.danger}15`, border: `1px solid ${obj.efectivoOk ? energyColors.success : energyColors.danger}40`, fontSize: '14px' }}>
+          {obj.efectivoOk
+            ? <span><strong style={{ color: energyColors.success }}>✓ Cabe en tu efectivo.</strong> Necesitas {money(obj.efectivoReq)} de mano de obra flotando ({money(params.efectivo)} disponibles). A esta carga tu efectivo soporta hasta <strong>{obj.maxVendEfectivo} vendedores</strong>.</span>
+            : <span><strong style={{ color: energyColors.danger }}>⚠ No cabe en tu efectivo.</strong> Necesitas {money(obj.efectivoReq)} de mano de obra flotando, pero solo tienes {money(params.efectivo)}. A esta carga tu efectivo soporta máximo <strong>{obj.maxVendEfectivo} vendedores</strong> (no {obj.vendedores}). Sube efectivo o reactiva maquila.</span>}
+        </div>
       </div>
 
       {/* Simulador de portafolio */}
