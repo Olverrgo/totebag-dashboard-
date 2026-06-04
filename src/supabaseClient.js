@@ -1646,7 +1646,7 @@ export const getEstadoCuentaVendedor = async (clienteId, { desde, hasta } = {}) 
   // 1. Todas las ventas del cliente (para ligar abonos y calcular saldo vivo)
   const { data: ventasAll, error: errV } = await supabase
     .from('ventas')
-    .select('id, folio_operacion, producto_nombre, cantidad, total, monto_pagado, monto_pendiente, tipo_venta, estado_pago, created_at')
+    .select('id, folio_operacion, producto_nombre, cantidad, total, monto_pagado, monto_pendiente, tipo_venta, estado_pago, notas, created_at')
     .eq('cliente_id', clienteId)
     .eq('activo', true)
     .order('created_at', { ascending: true });
@@ -1724,12 +1724,27 @@ export const getEstadoCuentaVendedor = async (clienteId, { desde, hasta } = {}) 
     producto: v.producto_nombre
   }));
 
+  // 4. Devoluciones: ventas canceladas o reducidas por devolución (el sistema marca
+  //    estado_pago='cancelado' o deja nota "...devolución..."). Se ligan a la fecha
+  //    de la venta original (no se guarda fecha de devolución por separado).
+  const esDevolucion = (v) => v.estado_pago === 'cancelado' || /devoluci/i.test(v.notas || '');
+  const devoluciones = ventas.filter(esDevolucion).map(v => ({
+    fecha: v.created_at,
+    folio: v.folio_operacion,
+    producto: v.producto_nombre,
+    cantidad: v.cantidad,
+    total: parseFloat(v.total) || 0,
+    tipo: v.estado_pago === 'cancelado' ? 'cancelada' : 'parcial',
+    notas: v.notas || ''
+  }));
+
   return {
     data: {
       cliente_id: clienteId,
       periodo: { desde: desde || null, hasta: hasta || null },
       ventas: ventasUI,
       abonos,
+      devoluciones,
       totales: { saldo_inicial, entregado, cobrado, pendiente }
     },
     error: null

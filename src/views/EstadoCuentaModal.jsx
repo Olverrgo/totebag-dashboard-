@@ -45,7 +45,7 @@ const EstadoCuentaModal = ({ cliente, onClose }) => {
     doc.setFont('helvetica', 'bold');
     doc.text('VENDEDOR / CLIENTE:', 15, 55);
     doc.setFont('helvetica', 'normal');
-    doc.text(data.cliente?.nombre || 'N/A', 15, 62);
+    doc.text(cliente?.nombre || 'N/A', 15, 62);
     doc.text(`Periodo: ${new Date(periodo.desde).toLocaleDateString()} al ${new Date(periodo.hasta).toLocaleDateString()}`, 15, 69);
 
     // Tabla Entregas
@@ -84,6 +84,26 @@ const EstadoCuentaModal = ({ cliente, onClose }) => {
       theme: 'grid'
     });
 
+    // Tabla Devoluciones (si hay)
+    if (data.devoluciones && data.devoluciones.length > 0) {
+      const devY = doc.lastAutoTable.finalY + 15;
+      doc.setFont('helvetica', 'bold');
+      doc.text('DEVOLUCIONES', 15, devY);
+      autoTable(doc, {
+        startY: devY + 5,
+        head: [['Fecha', 'Folio', 'Producto', 'Tipo', 'Total']],
+        body: data.devoluciones.map(d => [
+          new Date(d.fecha).toLocaleDateString(),
+          d.folio || '-',
+          d.producto,
+          d.tipo === 'cancelada' ? 'Cancelada' : 'Parcial',
+          formatearMoneda(d.total)
+        ]),
+        headStyles: { fillColor: colors.terracotta },
+        theme: 'grid'
+      });
+    }
+
     // Totales
     const finalY = doc.lastAutoTable.finalY + 15;
     doc.setFillColor(colors.cream);
@@ -96,7 +116,7 @@ const EstadoCuentaModal = ({ cliente, onClose }) => {
     doc.setFont('helvetica', 'bold');
     doc.text(`SALDO VIVO: ${formatearMoneda(data.totales.pendiente)}`, 135, finalY + 28);
 
-    doc.save(`estado-cuenta-${data.cliente?.nombre || 'vendedor'}-${periodo.desde}.pdf`);
+    doc.save(`estado-cuenta-${cliente?.nombre || 'vendedor'}-${periodo.desde}.pdf`);
   };
 
   return (
@@ -126,6 +146,7 @@ const EstadoCuentaModal = ({ cliente, onClose }) => {
         </div>
 
         {loading ? <p>Cargando datos...</p> : data && (
+          <>
           <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '30px' }}>
             {/* Columna Entregas */}
             <div>
@@ -196,6 +217,44 @@ const EstadoCuentaModal = ({ cliente, onClose }) => {
               </div>
             </div>
           </div>
+
+          {/* Devoluciones */}
+          {data.devoluciones && data.devoluciones.length > 0 && (
+            <div style={{ marginTop: '30px' }}>
+              <h4 style={{ borderBottom: `2px solid ${colors.terracotta}`, paddingBottom: '5px' }}>↩️ Devoluciones en el periodo</h4>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                <thead>
+                  <tr style={{ textAlign: 'left', color: colors.camel }}>
+                    <th style={{ padding: '8px 0' }}>Fecha/Folio</th>
+                    <th>Producto</th>
+                    <th>Tipo</th>
+                    <th style={{ textAlign: 'right' }}>Total venta</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.devoluciones.map((d, i) => (
+                    <tr key={i} style={{ borderBottom: `1px solid ${colors.cream}` }}>
+                      <td style={{ padding: '10px 0' }}>
+                        <div>{new Date(d.fecha).toLocaleDateString()}</div>
+                        <div style={{ fontSize: '10px', color: colors.terracotta, fontWeight: 'bold' }}>{d.folio}</div>
+                      </td>
+                      <td>{d.producto} ({d.cantidad} pza)</td>
+                      <td>
+                        <span style={{ fontSize: '10px', fontWeight: 'bold', padding: '2px 8px', borderRadius: '10px', background: d.tipo === 'cancelada' ? colors.terracotta : colors.gold, color: 'white' }}>
+                          {d.tipo === 'cancelada' ? 'CANCELADA' : 'PARCIAL'}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'right', fontWeight: '600' }}>{formatearMoneda(d.total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p style={{ fontSize: '10px', color: colors.camel, marginTop: '8px' }}>
+                * "Cancelada" = se devolvió todo lo pendiente de esa entrega. "Parcial" = se redujo la cantidad (ver nota en la venta).
+              </p>
+            </div>
+          )}
+          </>
         )}
       </div>
     </div>
