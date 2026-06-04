@@ -1646,17 +1646,21 @@ export const getEstadoCuentaVendedor = async (clienteId, { desde, hasta } = {}) 
   // 1. Todas las ventas del cliente (para ligar abonos y calcular saldo vivo)
   const { data: ventasAll, error: errV } = await supabase
     .from('ventas')
-    .select('id, folio_operacion, producto_nombre, cantidad, total, monto_pagado, monto_pendiente, tipo_venta, estado_pago, notas, created_at')
+    .select('id, folio_operacion, producto_id, producto_nombre, cantidad, precio_unitario, total, monto_pagado, monto_pendiente, tipo_venta, estado_pago, notas, created_at')
     .eq('cliente_id', clienteId)
     .eq('activo', true)
     .order('created_at', { ascending: true });
   if (errV) return { data: null, error: handleRLSError(errV) };
 
+  // 'hasta' se toma como FIN del día (si viene como fecha sin hora), para no
+  // excluir abonos/ventas/devoluciones hechos hoy mismo.
+  const desdeT = desde ? new Date(desde).getTime() : null;
+  const hastaT = hasta ? new Date((String(hasta).length <= 10 ? hasta + 'T23:59:59.999' : hasta)).getTime() : null;
   const dentroRango = (fecha) => {
     if (!fecha) return false;
     const t = new Date(fecha).getTime();
-    if (desde && t < new Date(desde).getTime()) return false;
-    if (hasta && t > new Date(hasta).getTime()) return false;
+    if (desdeT != null && t < desdeT) return false;
+    if (hastaT != null && t > hastaT) return false;
     return true;
   };
 
@@ -1724,19 +1728,38 @@ export const getEstadoCuentaVendedor = async (clienteId, { desde, hasta } = {}) 
     producto: v.producto_nombre
   }));
 
-  // 4. Devoluciones: ventas canceladas o reducidas por devolución (el sistema marca
-  //    estado_pago='cancelado' o deja nota "...devolución..."). Se ligan a la fecha
-  //    de la venta original (no se guarda fecha de devolución por separado).
-  const esDevolucion = (v) => v.estado_pago === 'cancelado' || /devoluci/i.test(v.notas || '');
-  const devoluciones = ventas.filter(esDevolucion).map(v => ({
-    fecha: v.created_at,
-    folio: v.folio_operacion,
-    producto: v.producto_nombre,
-    cantidad: v.cantidad,
-    total: parseFloat(v.total) || 0,
-    tipo: v.estado_pago === 'cancelado' ? 'cancelada' : 'parcial',
-    notas: v.notas || ''
-  }));
+  // 4. Devoluciones REALES: cada evento está en movimientos_stock
+  //    (tipo_movimiento='devolucion') con la cantidad efectivamente devuelta y su fecha.
+  //    El valor que se resta a la deuda = cantidad × precio de consignación del producto.
+  const precioPorProducto = {};
+  (ventasAll || []).forEach(v => {
+    if (v.tipo_venta === 'consignacion' && v.producto_id != null && (parseFloat(v.precio_unitario) || 0) > 0) {
+      precioPorProducto[v.producto_id] = parseFloat(v.precio_unitario);
+    }
+  });
+
+  let devoluciones = [];
+  {
+    const { data: movsDev } = await supabase
+      .from('movimientos_stock')
+      .select('id, producto_id, cantidad, notas, fecha, producto:productos(linea_nombre)')
+      .eq('cliente_id', clienteId)
+      .eq('tipo_movimiento', 'devolucion')
+      .order('fecha', { ascending: true });
+    devoluciones = (movsDev || [])
+      .filter(m => (!desde && !hasta) || dentroRango(m.fecha))
+      .map(m => {
+        const precio = precioPorProducto[m.producto_id] || 0;
+        return {
+          fecha: m.fecha,
+          producto: m.producto?.linea_nombre || `Producto ${m.producto_id}`,
+          cantidad: parseFloat(m.cantidad) || 0,
+          valor: (parseFloat(m.cantidad) || 0) * precio,
+          notas: m.notas || ''
+        };
+      });
+  }
+  const devuelto = devoluciones.reduce((s, d) => s + d.valor, 0);
 
   return {
     data: {
@@ -1745,7 +1768,9 @@ export const getEstadoCuentaVendedor = async (clienteId, { desde, hasta } = {}) 
       ventas: ventasUI,
       abonos,
       devoluciones,
-      totales: { saldo_inicial, entregado, cobrado, pendiente }
+      // entregado_bruto = entregado + devuelto, para que el flujo reconcilie:
+      // saldo_inicial + entregado_bruto − devuelto − cobrado = saldo
+      totales: { saldo_inicial, entregado, devuelto, entregado_bruto: entregado + devuelto, cobrado, pendiente }
     },
     error: null
   };

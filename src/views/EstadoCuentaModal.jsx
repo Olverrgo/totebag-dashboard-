@@ -91,30 +91,32 @@ const EstadoCuentaModal = ({ cliente, onClose }) => {
       doc.text('DEVOLUCIONES', 15, devY);
       autoTable(doc, {
         startY: devY + 5,
-        head: [['Fecha', 'Folio', 'Producto', 'Tipo', 'Total']],
+        head: [['Fecha', 'Producto', 'Piezas', 'Se resta a deuda']],
         body: data.devoluciones.map(d => [
           new Date(d.fecha).toLocaleDateString(),
-          d.folio || '-',
           d.producto,
-          d.tipo === 'cancelada' ? 'Cancelada' : 'Parcial',
-          formatearMoneda(d.total)
+          `${d.cantidad} pz`,
+          '-' + formatearMoneda(d.valor)
         ]),
         headStyles: { fillColor: colors.terracotta },
         theme: 'grid'
       });
     }
 
-    // Totales
+    // Totales — flujo de la deuda
     const finalY = doc.lastAutoTable.finalY + 15;
+    const tieneDev = data.totales.devuelto > 0;
     doc.setFillColor(colors.cream);
-    doc.rect(130, finalY, 65, 35, 'F');
+    doc.rect(125, finalY, 70, tieneDev ? 46 : 38, 'F');
     doc.setTextColor(0);
     doc.setFontSize(10);
-    doc.text(`Total Entregado: ${formatearMoneda(data.totales.entregado)}`, 135, finalY + 10);
-    doc.text(`Total Cobrado: ${formatearMoneda(data.totales.cobrado)}`, 135, finalY + 18);
+    let yy = finalY + 9;
+    doc.text(`Entregado: ${formatearMoneda(data.totales.entregado_bruto ?? data.totales.entregado)}`, 130, yy); yy += 8;
+    if (tieneDev) { doc.text(`(-) Devuelto: ${formatearMoneda(data.totales.devuelto)}`, 130, yy); yy += 8; }
+    doc.text(`(-) Cobrado: ${formatearMoneda(data.totales.cobrado)}`, 130, yy); yy += 10;
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text(`SALDO VIVO: ${formatearMoneda(data.totales.pendiente)}`, 135, finalY + 28);
+    doc.text(`SALDO VIVO: ${formatearMoneda(data.totales.pendiente)}`, 130, yy);
 
     doc.save(`estado-cuenta-${cliente?.nombre || 'vendedor'}-${periodo.desde}.pdf`);
   };
@@ -197,22 +199,34 @@ const EstadoCuentaModal = ({ cliente, onClose }) => {
                 </tbody>
               </table>
 
-              {/* Resumen Final */}
+              {/* Resumen Final — flujo de la deuda */}
               <div style={{ marginTop: '30px', background: colors.cotton, padding: '20px', borderRadius: '12px', border: `1px solid ${colors.sand}` }}>
+                {data.totales.saldo_inicial > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', color: colors.camel }}>
+                    <span>Saldo anterior:</span>
+                    <strong>{formatearMoneda(data.totales.saldo_inicial)}</strong>
+                  </div>
+                )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                  <span>Total Entregado:</span>
-                  <strong>{formatearMoneda(data.totales.entregado)}</strong>
+                  <span>(+) Entregado:</span>
+                  <strong>{formatearMoneda(data.totales.entregado_bruto ?? data.totales.entregado)}</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                  <span>Total Cobrado:</span>
-                  <strong>{formatearMoneda(data.totales.cobrado)}</strong>
+                {data.totales.devuelto > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', color: colors.terracotta }}>
+                    <span>(−) Devuelto:</span>
+                    <strong>−{formatearMoneda(data.totales.devuelto)}</strong>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', color: colors.olive }}>
+                  <span>(−) Cobrado:</span>
+                  <strong>−{formatearMoneda(data.totales.cobrado)}</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '15px', borderTop: `2px solid ${colors.sand}`, paddingTop: '15px', fontSize: '18px' }}>
                   <span style={{ fontWeight: 'bold' }}>SALDO VIVO:</span>
                   <strong style={{ color: colors.terracotta }}>{formatearMoneda(data.totales.pendiente)}</strong>
                 </div>
                 <p style={{ fontSize: '10px', color: colors.camel, textAlign: 'center', marginTop: '15px' }}>
-                  * El saldo vivo incluye todas las deudas históricas fuera de este periodo.
+                  * El saldo vivo es la deuda total actual del cliente (incluye periodos anteriores).
                 </p>
               </div>
             </div>
@@ -225,32 +239,25 @@ const EstadoCuentaModal = ({ cliente, onClose }) => {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                 <thead>
                   <tr style={{ textAlign: 'left', color: colors.camel }}>
-                    <th style={{ padding: '8px 0' }}>Fecha/Folio</th>
+                    <th style={{ padding: '8px 0' }}>Fecha</th>
                     <th>Producto</th>
-                    <th>Tipo</th>
-                    <th style={{ textAlign: 'right' }}>Total venta</th>
+                    <th style={{ textAlign: 'center' }}>Piezas</th>
+                    <th style={{ textAlign: 'right' }}>Se resta a la deuda</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.devoluciones.map((d, i) => (
                     <tr key={i} style={{ borderBottom: `1px solid ${colors.cream}` }}>
-                      <td style={{ padding: '10px 0' }}>
-                        <div>{new Date(d.fecha).toLocaleDateString()}</div>
-                        <div style={{ fontSize: '10px', color: colors.terracotta, fontWeight: 'bold' }}>{d.folio}</div>
-                      </td>
-                      <td>{d.producto} ({d.cantidad} pza)</td>
-                      <td>
-                        <span style={{ fontSize: '10px', fontWeight: 'bold', padding: '2px 8px', borderRadius: '10px', background: d.tipo === 'cancelada' ? colors.terracotta : colors.gold, color: 'white' }}>
-                          {d.tipo === 'cancelada' ? 'CANCELADA' : 'PARCIAL'}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: 'right', fontWeight: '600' }}>{formatearMoneda(d.total)}</td>
+                      <td style={{ padding: '10px 0' }}>{new Date(d.fecha).toLocaleDateString()}</td>
+                      <td>{d.producto}</td>
+                      <td style={{ textAlign: 'center', fontWeight: '700', color: colors.terracotta }}>{d.cantidad} pz</td>
+                      <td style={{ textAlign: 'right', fontWeight: '600', color: colors.terracotta }}>−{formatearMoneda(d.valor)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               <p style={{ fontSize: '10px', color: colors.camel, marginTop: '8px' }}>
-                * "Cancelada" = se devolvió todo lo pendiente de esa entrega. "Parcial" = se redujo la cantidad (ver nota en la venta).
+                * Cada devolución regresa piezas al taller y resta su valor a la cuenta por cobrar del cliente.
               </p>
             </div>
           )}
