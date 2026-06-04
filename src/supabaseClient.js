@@ -1922,6 +1922,36 @@ export const registrarVentaConsignacion = async (movimiento, datosVenta) => {
   };
 };
 
+// Consignación pendiente (devolvible) de un cliente, agrupada por producto.
+// Piezas pendientes por venta = cantidad − (monto_pagado / precio_unitario).
+// Excluye canceladas. Agrupa por producto_id (igual que la búsqueda LIFO de la devolución).
+export const getConsignacionPendienteCliente = async (clienteId) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  if (!clienteId) return { data: [], error: null };
+
+  const { data, error } = await supabase
+    .from('ventas')
+    .select('producto_id, producto_nombre, cantidad, monto_pagado, precio_unitario, estado_pago')
+    .eq('cliente_id', clienteId)
+    .eq('tipo_venta', 'consignacion')
+    .eq('activo', true);
+  if (error) return { data: null, error: handleRLSError(error) };
+
+  const mapa = new Map();
+  (data || []).forEach(v => {
+    if (v.estado_pago === 'cancelado') return;
+    const precio = parseFloat(v.precio_unitario) || 0;
+    const pagadas = precio > 0 ? (parseFloat(v.monto_pagado) || 0) / precio : 0;
+    const pendientes = (parseFloat(v.cantidad) || 0) - pagadas;
+    if (pendientes <= 0.001) return;
+    const key = v.producto_id;
+    if (!mapa.has(key)) mapa.set(key, { producto_id: v.producto_id, producto_nombre: v.producto_nombre, piezas: 0 });
+    mapa.get(key).piezas += pendientes;
+  });
+
+  return { data: Array.from(mapa.values()).map(x => ({ ...x, piezas: Math.round(x.piezas) })), error: null };
+};
+
 // Registrar devolución de consignación (reduce cuenta por cobrar)
 export const registrarDevolucionConsignacion = async (movimiento, datosDevolucion) => {
   if (!supabase) return { data: null, error: 'Supabase no configurado' };

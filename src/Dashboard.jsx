@@ -16,6 +16,7 @@ import ComprasView from './views/ComprasView';
 import CotizacionesView from './views/CotizacionesView';
 import VentaCarritoModal from './views/VentaCarritoModal';
 import EstadoCuentaModal from './views/EstadoCuentaModal';
+import DevolucionModal from './views/DevolucionModal';
 import { generarReciboPDF } from './utils/receiptGenerator';
 import {
   isSupabaseConfigured,
@@ -8997,6 +8998,7 @@ const BalanceView = ({ isAdmin }) => {
   const [clienteSeleccionado, setClienteSeleccionado] = useState('todos');
   const [expandido, setExpandido] = useState(null);
   const [clienteEstadoCuenta, setClienteEstadoCuenta] = useState(null);
+  const [mostrarDevolucion, setMostrarDevolucion] = useState(false);
 
   const handleReimprimirFolio = async (folio) => {
     const { data, error } = await getVentasPorFolio(folio);
@@ -9193,7 +9195,15 @@ const BalanceView = ({ isAdmin }) => {
 
   return (
     <div>
-      <h2 style={{ color: colors.espresso, marginBottom: '20px' }}>Balance de Cuentas</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
+        <h2 style={{ color: colors.espresso, margin: 0 }}>Balance de Cuentas</h2>
+        {isAdmin && (
+          <button onClick={() => setMostrarDevolucion(true)}
+            style={{ padding: '10px 18px', background: colors.terracotta, color: 'white', border: 'none', borderRadius: '10px', fontWeight: 700, cursor: 'pointer' }}>
+            ↩️ Devolución
+          </button>
+        )}
+      </div>
 
       {/* Tarjetas resumen */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px', marginBottom: '24px' }}>
@@ -9453,9 +9463,18 @@ const BalanceView = ({ isAdmin }) => {
 
       {/* Modal Estado de Cuenta (Fase 12) */}
       {clienteEstadoCuenta && (
-        <EstadoCuentaModal 
-          cliente={clienteEstadoCuenta} 
-          onClose={() => setClienteEstadoCuenta(null)} 
+        <EstadoCuentaModal
+          cliente={clienteEstadoCuenta}
+          onClose={() => setClienteEstadoCuenta(null)}
+        />
+      )}
+
+      {/* Modal Devolución (centrado en el cliente) */}
+      {mostrarDevolucion && (
+        <DevolucionModal
+          clientes={clientes}
+          onClose={() => setMostrarDevolucion(false)}
+          onDone={cargarDatos}
         />
       )}
     </div>
