@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { colors } from '../utils/colors';
+import { getMercanciaEnCalle } from '../supabaseClient';
 
 // Proyección financiera de la red de vendedores en consignación (modelo Blancos Sinaí).
-// Parametrizable (no toca Supabase). Responde: cuántos vendedores, capital mínimo para no
-// descapitalizar, entrada mínima por vendedor (línea roja), punto de equilibrio y
-// días máximos de consignación sin riesgo.
-// Capital por vendedor = piezas × costo unitario. Línea roja = costo de un N2 (38 pz).
-// La meta es utilidad NETA (después de gastos fijos).
+// Parametrizable (no toca Supabase). Responde: cuántos vendedores, flujo mínimo de cobranza
+// para ganar utilidad ya descontando costos totales, entrada mínima por vendedor (línea roja),
+// punto de equilibrio, capital pipeline y días máximos de consignación sin descapitalizar.
+// La meta es utilidad NETA (después de gastos fijos). Capital pipeline = materia prima + stock.
 
 const energyColors = {
   ...colors,
@@ -36,10 +36,13 @@ const DEFAULT_PARAMS = {
   precioPz: 65.40,
   material: 42.16,
   manoObra: 5.93,
-  metaSemanal: 4000,   // utilidad NETA objetivo
-  sueldo: 2300,        // gasto fijo semanal
-  operacion: 1000,     // gasto fijo semanal (gasolina, etc.)
-  capitalDisponible: 83000,
+  metaSemanal: 4000,    // utilidad NETA objetivo
+  sueldo: 2300,         // gasto fijo semanal
+  operacion: 1000,      // gasto fijo semanal (gasolina, etc.)
+  materiaPrima: 63000,  // capital en tela
+  stockTerminado: 7000, // capital en producto terminado
+  exposicion: 70,       // % de la tela que puede flotar en la calle
+  efectivo: 2700,       // efectivo líquido para pagar mano de obra
 };
 
 const load = (key, def) => {
@@ -55,8 +58,21 @@ const EstrategiaOperativa = () => {
   // Portafolio de vendedores por nivel (arranque escalonado 4/3/3)
   const [portafolio, setPortafolio] = useState(() => load('estrategia_portafolio', { N1: 4, N2: 3, N3: 3 }));
 
+  // Mercancía real en la calle (desde Supabase)
+  const [real, setReal] = useState(null);
+  const [cargandoReal, setCargandoReal] = useState(true);
+
   useEffect(() => { localStorage.setItem('estrategia_params', JSON.stringify(params)); }, [params]);
   useEffect(() => { localStorage.setItem('estrategia_portafolio', JSON.stringify(portafolio)); }, [portafolio]);
+
+  useEffect(() => {
+    (async () => {
+      setCargandoReal(true);
+      const { data } = await getMercanciaEnCalle();
+      setReal(data || null);
+      setCargandoReal(false);
+    })();
+  }, []);
 
   const setParam = (k, v) => setParams(p => ({ ...p, [k]: parseFloat(v) || 0 }));
   const setNivel = (id, v) => setPortafolio(p => ({ ...p, [id]: Math.max(0, parseInt(v) || 0) }));
@@ -66,7 +82,8 @@ const EstrategiaOperativa = () => {
   const utilidadPz = params.precioPz - costoPz;
   const margen = params.precioPz > 0 ? (utilidadPz / params.precioPz) * 100 : 0;
   const gastosFijos = params.sueldo + params.operacion;
-  const lineaRoja = PIEZAS_BENCH * costoPz; // costo de un vendedor estándar
+  const telaFlotante = params.materiaPrima * (params.exposicion / 100) + params.stockTerminado; // tela que puede exponerse
+  const lineaRojaVar = PIEZAS_BENCH * costoPz; // costo de un vendedor estándar (solo mercancía)
 
   // Vendedor benchmark (sano)
   const ventaVend = PIEZAS_BENCH * params.precioPz;
@@ -74,8 +91,6 @@ const EstrategiaOperativa = () => {
 
   // ---- Punto de equilibrio (cubrir gastos fijos) ----
   const vendedoresEquilibrio = utilidadVend > 0 ? Math.ceil(gastosFijos / utilidadVend) : 0;
-  const ventasEquilibrio = vendedoresEquilibrio * ventaVend;
-  const piezasEquilibrio = vendedoresEquilibrio * PIEZAS_BENCH;
 
   // ---- Vendedores para la meta NETA (gastos fijos + meta) ----
   const contribObjetivo = gastosFijos + params.metaSemanal;
@@ -97,11 +112,23 @@ const EstrategiaOperativa = () => {
   const utilidadNeta = tot.contribucion - gastosFijos;
   const pctMeta = params.metaSemanal > 0 ? (utilidadNeta / params.metaSemanal) * 100 : 0;
   const excedente = utilidadNeta - params.metaSemanal;
-  const capitalOk = tot.capital <= params.capitalDisponible;
+  const capitalOk = tot.capital <= telaFlotante;
 
-  // ---- Días máximos de consignación sin descapitalizar ----
-  // Capital flotando = reposición semanal a costo × (plazo/7). Tope: ≤ capital disponible.
-  const diasMaxConsig = tot.capital > 0 ? (params.capitalDisponible / tot.capital) * 7 : 0;
+  // ---- Flujo de efectivo semanal ----
+  // Mínimo a cobrar para NO perder = reposición de mercancía + gastos fijos.
+  const flujoMinimo = tot.capital + gastosFijos;
+  // Línea roja por vendedor "completa": su costo + su parte de gastos fijos.
+  const gastosFijosPorVend = tot.vendedores > 0 ? gastosFijos / tot.vendedores : 0;
+  const lineaRojaTotal = lineaRojaVar + gastosFijosPorVend;
+
+  // ---- Días máximos de consignación sin descapitalizar (el MENOR de dos límites) ----
+  // Mercancía flotando se descompone en material (lo financia la tela) y mano de obra (efectivo).
+  const materialSemanal = tot.piezas * params.material; // tela consumida por semana
+  const laborSemanal = tot.piezas * params.manoObra;     // mano de obra por semana (efectivo)
+  const diasTela = materialSemanal > 0 ? (telaFlotante / materialSemanal) * 7 : Infinity;
+  const diasEfectivo = laborSemanal > 0 ? (params.efectivo / laborSemanal) * 7 : Infinity;
+  const diasMaxConsig = Math.min(diasTela, diasEfectivo);
+  const limitante = diasEfectivo <= diasTela ? 'efectivo' : 'tela';
   const consigOk = diasMaxConsig >= TOPE_POLITICA_DIAS;
 
   // ---- estilos ----
@@ -125,7 +152,7 @@ const EstrategiaOperativa = () => {
           🎯 Estrategia Operativa
         </h1>
         <p style={{ margin: '5px 0 0', fontSize: '15px', color: energyColors.camel, fontWeight: 500 }}>
-          Proyección financiera de tu red de vendedores en consignación, sin descapitalizarte.
+          Proyección financiera: cuántos vendedores y qué flujo mínimo te dejan utilidad, sin descapitalizarte.
         </p>
       </div>
 
@@ -140,7 +167,10 @@ const EstrategiaOperativa = () => {
             { k: 'metaSemanal', label: 'Meta neta/sem' },
             { k: 'sueldo', label: 'Sueldo/sem' },
             { k: 'operacion', label: 'Operación/sem' },
-            { k: 'capitalDisponible', label: 'Capital disponible' },
+            { k: 'materiaPrima', label: 'Materia prima ($)' },
+            { k: 'stockTerminado', label: 'Stock terminado ($)' },
+            { k: 'exposicion', label: '% tela expuesta' },
+            { k: 'efectivo', label: 'Efectivo líquido ($)' },
           ].map(f => (
             <div key={f.k}>
               <div style={labelChip}>{f.label}</div>
@@ -153,8 +183,28 @@ const EstrategiaOperativa = () => {
           <span><strong style={{ color: energyColors.sidebarBg }}>Costo/pz:</strong> {money2(costoPz)}</span>
           <span><strong>Margen:</strong> {margen.toFixed(1)}%</span>
           <span><strong>Gastos fijos:</strong> {money(gastosFijos)}/sem</span>
-          <span><strong style={{ color: energyColors.danger }}>Línea roja/vend:</strong> {money(lineaRoja)}/sem</span>
+          <span><strong>Tela flotante:</strong> {money(telaFlotante)} ({params.exposicion}%)</span>
         </div>
+      </div>
+
+      {/* Mercancía REAL en la calle (desde la base) */}
+      <div style={{ ...card({ borderLeft: `6px solid ${energyColors.electric}`, marginBottom: '24px' }) }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ fontSize: '16px', fontWeight: 800, color: energyColors.sidebarBg }}>📡 Mercancía en la calle — HOY (real, desde la base)</div>
+          {cargandoReal && <span style={{ fontSize: '12px', color: energyColors.camel }}>cargando…</span>}
+        </div>
+        {!cargandoReal && real ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px', marginTop: '12px' }}>
+            <div><div style={labelChip}>Piezas en consignación</div><div style={{ fontSize: '24px', fontWeight: 900 }}>{real.piezas}</div></div>
+            <div><div style={labelChip}>Capital en la calle (costo)</div><div style={{ fontSize: '24px', fontWeight: 900, color: energyColors.danger }}>{money(real.costoTotal)}</div></div>
+            <div><div style={labelChip}>Cobranza potencial (venta)</div><div style={{ fontSize: '24px', fontWeight: 900, color: energyColors.olive }}>{money(real.valorVenta)}</div></div>
+            <div><div style={labelChip}>vs. tu tela flotante</div><div style={{ fontSize: '24px', fontWeight: 900, color: real.costoTotal <= telaFlotante ? energyColors.success : energyColors.danger }}>{telaFlotante > 0 ? Math.round((real.costoTotal / telaFlotante) * 100) : 0}%</div></div>
+          </div>
+        ) : !cargandoReal ? (
+          <div style={{ fontSize: '13px', color: energyColors.camel, marginTop: '8px' }}>
+            Sin datos de consignación (o sin conexión a la base). Se usa el simulador de abajo.
+          </div>
+        ) : null}
       </div>
 
       {/* Punto de equilibrio + meta */}
@@ -175,12 +225,12 @@ const EstrategiaOperativa = () => {
         ))}
       </div>
       <div style={{ ...card({ background: `${energyColors.warning}12`, border: `1px solid ${energyColors.warning}40`, marginBottom: '30px', fontSize: '14px' }) }}>
-        💡 Los primeros <strong>{vendedoresEquilibrio} vendedores</strong> solo cubren tus gastos fijos (no ganas todavía). A partir del vendedor <strong>{vendedoresEquilibrio + 1}</strong> cada uno suma <strong>{money(utilidadVend)}/sem</strong> de utilidad neta. Llegas a tu meta de {money(params.metaSemanal)} con <strong>{vendedoresNec}</strong>.
+        💡 Los primeros <strong>{vendedoresEquilibrio} vendedores</strong> solo cubren tus gastos fijos (no ganas todavía). A partir de ahí cada uno suma <strong>{money(utilidadVend)}/sem</strong> de utilidad neta. Llegas a tu meta de {money(params.metaSemanal)} con <strong>{vendedoresNec}</strong>.
       </div>
 
       {/* Simulador de portafolio */}
       <div style={{ fontSize: '20px', fontWeight: 800, marginBottom: '14px', color: energyColors.sidebarBg }}>🧮 Simulador de portafolio</div>
-      <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', marginBottom: '20px' }}>
         {/* Inputs por nivel */}
         <div style={{ flex: '1 1 320px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {NIVELES.map(n => {
@@ -211,11 +261,9 @@ const EstrategiaOperativa = () => {
               <span style={{ fontSize: '13px', fontWeight: 700 }}>{tot.vendedores} vend · {tot.piezas} pz</span>
             </div>
             <div style={{ fontSize: '40px', fontWeight: 900, margin: '4px 0', color: utilidadNeta >= 0 ? energyColors.white : '#FFD2CC' }}>{money(utilidadNeta)}</div>
-            {/* desglose */}
             <div style={{ fontSize: '12px', opacity: 0.85, marginBottom: '8px' }}>
-              Contribución {money(tot.contribucion)} − gastos fijos {money(gastosFijos)}
+              Cobranza {money(tot.ventas)} − reposición {money(tot.capital)} − gastos fijos {money(gastosFijos)}
             </div>
-            {/* barra vs meta */}
             <div style={{ height: '12px', background: 'rgba(255,255,255,0.25)', borderRadius: '6px', overflow: 'hidden', margin: '4px 0 6px' }}>
               <div style={{ height: '100%', width: `${Math.min(Math.max(pctMeta, 0), 100)}%`, background: pctMeta >= 100 ? energyColors.success : energyColors.warning, transition: 'width .4s' }} />
             </div>
@@ -233,23 +281,44 @@ const EstrategiaOperativa = () => {
               <div style={labelChip}>Capital en la calle</div>
               <div style={{ fontSize: '22px', fontWeight: 900, color: capitalOk ? energyColors.success : energyColors.danger }}>{money(tot.capital)}</div>
               <div style={{ fontSize: '11px', color: energyColors.camel, fontWeight: 600 }}>
-                {capitalOk ? `✓ cabe en ${money(params.capitalDisponible)}` : `⚠ excede tu capital`}
+                {capitalOk ? `✓ cabe en tela flotante ${money(telaFlotante)}` : `⚠ excede tu tela flotante`}
               </div>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Flujo de efectivo semanal */}
+      <div style={{ fontSize: '20px', fontWeight: 800, marginBottom: '14px', color: energyColors.sidebarBg }}>💸 Flujo de efectivo semanal</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+        <div style={card({ textAlign: 'center', borderTop: `4px solid ${energyColors.danger}` })}>
+          <div style={labelChip}>Flujo mínimo a cobrar/sem</div>
+          <div style={{ fontSize: '26px', fontWeight: 900, color: energyColors.danger, margin: '4px 0' }}>{money(flujoMinimo)}</div>
+          <div style={{ fontSize: '12px', color: energyColors.camel, fontWeight: 600 }}>reposición + gastos fijos · debajo de esto pierdes</div>
+        </div>
+        <div style={card({ textAlign: 'center', borderTop: `4px solid ${energyColors.olive}` })}>
+          <div style={labelChip}>Cobranza potencial/sem</div>
+          <div style={{ fontSize: '26px', fontWeight: 900, color: energyColors.olive, margin: '4px 0' }}>{money(tot.ventas)}</div>
+          <div style={{ fontSize: '12px', color: energyColors.camel, fontWeight: 600 }}>si se vende y paga todo lo entregado</div>
+        </div>
+        <div style={card({ textAlign: 'center', borderTop: `4px solid ${energyColors.danger}` })}>
+          <div style={labelChip}>Línea roja TOTAL/vendedor</div>
+          <div style={{ fontSize: '26px', fontWeight: 900, color: energyColors.danger, margin: '4px 0' }}>{money(lineaRojaTotal)}</div>
+          <div style={{ fontSize: '12px', color: energyColors.camel, fontWeight: 600 }}>su costo {money(lineaRojaVar)} + parte de fijos {money(gastosFijosPorVend)}</div>
+        </div>
+      </div>
+
       {/* Días máximos de consignación */}
       <div style={{ ...card({ borderLeft: `6px solid ${consigOk ? energyColors.success : energyColors.danger}`, marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '18px', flexWrap: 'wrap' }) }}>
         <div style={{ fontSize: '34px' }}>⏳</div>
-        <div style={{ flex: 1, minWidth: '200px' }}>
+        <div style={{ flex: 1, minWidth: '220px' }}>
           <div style={labelChip}>Días máximos de consignación sin riesgo</div>
           <div style={{ fontSize: '30px', fontWeight: 900, color: consigOk ? energyColors.success : energyColors.danger }}>
-            {Math.floor(diasMaxConsig)} días
+            {Number.isFinite(diasMaxConsig) ? Math.floor(diasMaxConsig) : '∞'} días
+            <span style={{ fontSize: '13px', fontWeight: 700, color: energyColors.camel, marginLeft: '8px' }}>te frena: {limitante === 'efectivo' ? '💵 efectivo' : '🧵 tela'}</span>
           </div>
           <div style={{ fontSize: '12px', color: energyColors.camel, fontWeight: 500 }}>
-            Tu capital ({money(params.capitalDisponible)}) financia ~{(diasMaxConsig / 7).toFixed(1)} semanas de mercancía flotando. Política del modelo: tope {TOPE_POLITICA_DIAS} días.
+            Pista de tela {Number.isFinite(diasTela) ? Math.floor(diasTela) : '∞'} días ({money(telaFlotante)}) · pista de efectivo {Number.isFinite(diasEfectivo) ? Math.floor(diasEfectivo) : '∞'} días ({money(params.efectivo)} para mano de obra). Política: tope {TOPE_POLITICA_DIAS} días.
           </div>
         </div>
         <div style={{ fontSize: '13px', fontWeight: 700, color: consigOk ? energyColors.success : energyColors.danger, textAlign: 'right' }}>
@@ -261,7 +330,7 @@ const EstrategiaOperativa = () => {
 
       {/* Nota línea roja */}
       <div style={{ ...card({ background: `${energyColors.danger}10`, border: `1px solid ${energyColors.danger}40` }) }}>
-        <strong style={{ color: energyColors.danger }}>🚦 Línea roja de caja:</strong> cada vendedor debe ingresar mínimo <strong>{money(lineaRoja)}/sem</strong> (su costo material + mano de obra). Por debajo de eso, descapitalizas. Sano + crecer = {money(ventaVend)}/sem (paga lo que vende). <strong>Regla de oro:</strong> resurtir = lo vendido y pagado, nunca tope ciego.
+        <strong style={{ color: energyColors.danger }}>🚦 Línea roja de caja:</strong> para no descapitalizar la <em>mercancía</em>, cada vendedor regresa mínimo <strong>{money(lineaRojaVar)}/sem</strong> (su costo material + mano de obra). Para que el <em>negocio completo</em> no pierda, debe regresar <strong>{money(lineaRojaTotal)}/sem</strong> (incluye su parte de gastos fijos). <strong>Regla de oro:</strong> resurtir = lo vendido y pagado, nunca tope ciego.
       </div>
     </div>
   );

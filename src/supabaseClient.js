@@ -1017,6 +1017,45 @@ export const updateCliente = async (id, updates) => {
 };
 
 // =====================================================
+// MERCANCÍA EN LA CALLE (consignación real)
+// =====================================================
+
+// Suma el inventario que está físicamente en consignación (stock_consignacion),
+// valuado a costo (capital en la calle real) y a precio de venta (cobranza potencial).
+// Reutiliza getProductos(): variantes con stock_consignacion/costo_unitario/precio_venta,
+// fallback a nivel producto (costo_total_1_tinta) para los legacy sin variantes.
+export const getMercanciaEnCalle = async () => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const { data: productos, error } = await getProductos();
+  if (error) return { data: null, error };
+
+  let piezas = 0, costoTotal = 0, valorVenta = 0;
+  (productos || []).forEach(p => {
+    const variantes = (p.variantes || []).filter(v => v.activo !== false);
+    if (variantes.length > 0) {
+      variantes.forEach(v => {
+        const q = v.stock_consignacion || 0;
+        if (q > 0) {
+          piezas += q;
+          costoTotal += q * (parseFloat(v.costo_unitario) || 0);
+          valorVenta += q * (parseFloat(v.precio_venta) || 0);
+        }
+      });
+    } else {
+      const q = p.stock_consignacion || 0;
+      if (q > 0) {
+        piezas += q;
+        costoTotal += q * (parseFloat(p.costo_total_1_tinta) || 0);
+        // sin precio de venta a nivel producto legacy
+      }
+    }
+  });
+
+  return { data: { piezas, costoTotal, valorVenta }, error: null };
+};
+
+// =====================================================
 // FUNCIONES PARA VENTAS
 // =====================================================
 
