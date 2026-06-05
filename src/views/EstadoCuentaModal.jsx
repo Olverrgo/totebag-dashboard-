@@ -103,11 +103,14 @@ const EstadoCuentaModal = ({ cliente, onClose }) => {
       });
     }
 
-    // Totales — flujo de la deuda
-    const finalY = doc.lastAutoTable.finalY + 15;
+    // Totales — flujo de la deuda (con salto de página si no cabe)
     const tieneDev = data.totales.devuelto > 0;
+    const boxH = tieneDev ? 46 : 38;
+    const pageH = doc.internal.pageSize.height;
+    let finalY = doc.lastAutoTable.finalY + 15;
+    if (finalY + boxH + 12 > pageH) { doc.addPage(); finalY = 20; }
     doc.setFillColor(colors.cream);
-    doc.rect(125, finalY, 70, tieneDev ? 46 : 38, 'F');
+    doc.rect(125, finalY, 70, boxH, 'F');
     doc.setTextColor(0);
     doc.setFontSize(10);
     let yy = finalY + 9;
