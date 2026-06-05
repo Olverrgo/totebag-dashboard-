@@ -74,11 +74,12 @@ const EstadoCuentaModal = ({ cliente, onClose }) => {
       new Date(a.fecha).toLocaleDateString(),
       a.folio || 'Abono Libre',
       a.metodo.toUpperCase(),
-      formatearMoneda(a.monto)
+      '-' + formatearMoneda(a.monto),
+      a.saldo_despues != null ? formatearMoneda(a.saldo_despues) : '-'
     ]);
     autoTable(doc, {
       startY: nextY + 5,
-      head: [['Fecha', 'Folio Abono', 'Método', 'Monto']],
+      head: [['Fecha', 'Folio Abono', 'Método', 'Monto', 'Saldo después']],
       body: abonosRows,
       headStyles: { fillColor: colors.olive },
       theme: 'grid'
@@ -196,7 +197,12 @@ const EstadoCuentaModal = ({ cliente, onClose }) => {
                         <div>{new Date(a.fecha).toLocaleDateString()}</div>
                         <div style={{ fontSize: '10px', color: colors.olive, fontWeight: 'bold' }}>{a.folio || 'S/F'}</div>
                       </td>
-                      <td style={{ textAlign: 'right', fontWeight: '600', color: colors.olive }}>{formatearMoneda(a.monto)}</td>
+                      <td style={{ textAlign: 'right' }}>
+                        <div style={{ fontWeight: '600', color: colors.olive }}>−{formatearMoneda(a.monto)}</div>
+                        {a.saldo_despues != null && (
+                          <div style={{ fontSize: '10px', color: colors.camel }}>saldo: {formatearMoneda(a.saldo_despues)}</div>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

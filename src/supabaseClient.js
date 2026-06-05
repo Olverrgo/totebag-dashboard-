@@ -1691,13 +1691,31 @@ export const getEstadoCuentaVendedor = async (clienteId, { desde, hasta } = {}) 
     if ((desde || hasta) && !dentroRango(i.fecha)) continue;
     const key = i.abono_grupo || `solo-${i.id}`; // abonos viejos sin grupo: cada uno su evento
     if (!mapa.has(key)) {
-      mapa.set(key, { folio: i.abono_grupo || null, fecha: i.fecha, metodo: i.metodo_pago, monto: 0 });
+      mapa.set(key, { folio: i.abono_grupo || null, fecha: i.fecha, metodo: i.metodo_pago, monto: 0, key });
     }
     const ev = mapa.get(key);
     ev.monto += parseFloat(i.monto) || 0;
     if (new Date(i.fecha) < new Date(ev.fecha)) ev.fecha = i.fecha; // fecha más temprana del grupo
   }
-  const abonos = Array.from(mapa.values()).sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+  // Saldo corriente: línea de tiempo de entregas (consignación, neto) + abonos de TODO
+  // el historial, para conocer el saldo vivo DESPUÉS de cada abono (por fecha).
+  const linea = [];
+  (ventasAll || []).forEach(v => {
+    if (v.tipo_venta === 'consignacion') linea.push({ t: new Date(v.created_at).getTime(), tipo: 'entrega', monto: parseFloat(v.total) || 0 });
+  });
+  ingresos.forEach(i => linea.push({ t: new Date(i.fecha).getTime(), tipo: 'abono', monto: parseFloat(i.monto) || 0, key: i.abono_grupo || `solo-${i.id}` }));
+  linea.sort((a, b) => a.t - b.t);
+  let corriente = 0;
+  const saldoDespues = new Map();
+  for (const e of linea) {
+    if (e.tipo === 'entrega') corriente += e.monto;
+    else { corriente -= e.monto; saldoDespues.set(e.key, corriente); }
+  }
+
+  const abonos = Array.from(mapa.values())
+    .map(a => ({ ...a, saldo_despues: saldoDespues.has(a.key) ? saldoDespues.get(a.key) : null }))
+    .sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
 
   // 3. Totales
   // Saldo anterior = (consignación entregada antes de 'desde') − (cobrado antes de 'desde').
