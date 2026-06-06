@@ -17,7 +17,7 @@ import CotizacionesView from './views/CotizacionesView';
 import VentaCarritoModal from './views/VentaCarritoModal';
 import EstadoCuentaModal from './views/EstadoCuentaModal';
 import DevolucionModal from './views/DevolucionModal';
-import { generarReciboPDF } from './utils/receiptGenerator';
+import { generarReciboPDF, generarReciboAbonoPDF } from './utils/receiptGenerator';
 import {
   isSupabaseConfigured,
   cargarDatosDashboard,
@@ -6642,6 +6642,7 @@ const VentasView = ({ isAdmin }) => {
   const [popupEliminar, setPopupEliminar] = useState(null); // { impacto, ventaId }
   const [motivoEliminacion, setMotivoEliminacion] = useState('');
   const [cargandoImpacto, setCargandoImpacto] = useState(false);
+  const [abonoExitoso, setAbonoExitoso] = useState(null);
 
   // Formulario de nueva venta
   const [formVenta, setFormVenta] = useState({
@@ -7024,10 +7025,24 @@ const VentasView = ({ isAdmin }) => {
       if (error) {
         setMensaje({ tipo: 'error', texto: 'Error: ' + error.message });
       } else {
-        setMensaje({ 
-          tipo: 'exito', 
-          texto: `¡Abono registrado con éxito! Folio: ${data.folio}. Aplicado: ${formatearMoneda(data.aplicados.reduce((a,c)=>a+c.monto, 0))}` 
-        });
+        const cliente = clientes.find(c => c.id === clienteId);
+        const abonoData = {
+          folio: data.folio,
+          clienteNombre: cliente?.nombre || 'Cliente',
+          clienteTel: cliente?.telefono || '',
+          monto,
+          metodoPago,
+          aplicados: data.aplicados.map(a => {
+            const v = ventasCliente.find(x => x.id === a.venta_id);
+            return v?.folio_operacion || `Ref: ${a.venta_id}`;
+          }),
+          saldoAnterior: (data.saldo_resultante || 0) + monto,
+          saldoRestante: data.saldo_resultante
+        };
+
+        setAbonoExitoso(abonoData);
+        generarReciboAbonoPDF(abonoData);
+
         setMostrarPago(null);
         cargarDatos();
         setTimeout(() => setMensaje({ tipo: '', texto: '' }), 4000);
@@ -8146,6 +8161,95 @@ const VentasView = ({ isAdmin }) => {
                 }}
               >
                 {guardando ? 'Eliminando...' : 'Confirmar eliminación'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Éxito Abono (Fase 12) */}
+      {abonoExitoso && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.6)', zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '20px'
+        }}>
+          <div style={{
+            background: 'white', borderRadius: '24px', padding: '30px',
+            maxWidth: '450px', width: '100%', textAlign: 'center',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)', position: 'relative'
+          }}>
+            <div style={{ fontSize: '60px', marginBottom: '15px' }}>✅</div>
+            <h3 style={{ margin: '0 0 10px', fontSize: '24px', fontWeight: 900, color: colors.olive }}>¡Abono Registrado!</h3>
+            <p style={{ margin: '0 0 20px', color: colors.camel, fontSize: '14px' }}>
+              El pago se ha aplicado correctamente y se ha generado el folio oficial <b>{abonoExitoso.folio}</b>.
+            </p>
+
+            <div style={{ background: colors.cotton, borderRadius: '16px', padding: '20px', marginBottom: '25px', textAlign: 'left' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span style={{ fontSize: '13px', color: colors.camel }}>Monto abonado:</span>
+                <span style={{ fontWeight: 800, fontSize: '16px' }}>{formatearMoneda(abonoExitoso.monto)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '13px', color: colors.camel }}>Nuevo saldo:</span>
+                <span style={{ fontWeight: 800, fontSize: '16px', color: colors.terracotta }}>{formatearMoneda(abonoExitoso.saldoRestante)}</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button
+                onClick={() => generarReciboAbonoPDF(abonoExitoso)}
+                style={{
+                  width: '100%', padding: '14px', background: colors.sidebarBg, color: 'white',
+                  border: 'none', borderRadius: '12px', fontWeight: 700, cursor: 'pointer', fontSize: '15px'
+                }}
+              >
+                📥 Descargar Recibo PDF
+              </button>
+              
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  onClick={() => {
+                    const msg = `*RECIBO DE PAGO - BLANCOS SINAÍ*\n\n` +
+                                `*Folio:* ${abonoExitoso.folio}\n` +
+                                `*Cliente:* ${abonoExitoso.clienteNombre}\n` +
+                                `*Monto:* ${formatearMoneda(abonoExitoso.monto)}\n` +
+                                `*Saldo Restante:* ${formatearMoneda(abonoExitoso.saldoRestante)}\n\n` +
+                                `Gracias por su pago.`;
+                    const tel = abonoExitoso.clienteTel ? abonoExitoso.clienteTel.replace(/\D/g, '') : '';
+                    window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`, '_blank');
+                  }}
+                  style={{
+                    flex: 1, padding: '12px', background: '#25D366', color: 'white',
+                    border: 'none', borderRadius: '12px', fontWeight: 700, cursor: 'pointer', fontSize: '14px'
+                  }}
+                >
+                  WhatsApp
+                </button>
+                <button
+                  onClick={() => {
+                    const subject = `Recibo de Pago - ${abonoExitoso.folio}`;
+                    const body = `Hola ${abonoExitoso.clienteNombre},\n\nLe enviamos el comprobante de su abono por ${formatearMoneda(abonoExitoso.monto)}.\nFolio: ${abonoExitoso.folio}\nSaldo restante: ${formatearMoneda(abonoExitoso.saldoRestante)}\n\nGracias por su preferencia.`;
+                    window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
+                  }}
+                  style={{
+                    flex: 1, padding: '12px', background: '#E74C3C', color: 'white',
+                    border: 'none', borderRadius: '12px', fontWeight: 700, cursor: 'pointer', fontSize: '14px'
+                  }}
+                >
+                  Email
+                </button>
+              </div>
+
+              <button
+                onClick={() => setAbonoExitoso(null)}
+                style={{
+                  width: '100%', padding: '12px', background: 'transparent', color: colors.camel,
+                  border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: '14px', marginTop: '10px'
+                }}
+              >
+                Cerrar
               </button>
             </div>
           </div>

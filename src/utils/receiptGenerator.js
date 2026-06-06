@@ -121,3 +121,114 @@ export const generarReciboPDF = (data) => {
 
   doc.save(`recibo-${folio || 'sin-folio'}.pdf`);
 };
+
+/**
+ * Genera un Recibo de Pago (Abono) profesional.
+ * @param {Object} data - Datos del abono
+ * @param {string} data.folio - Folio AB-AAAA-MM-NNN
+ * @param {string} data.clienteNombre
+ * @param {number} data.monto - Cantidad abonada
+ * @param {string} data.metodoPago
+ * @param {Array} data.aplicados - Folios a los que se aplicó el pago (ej: ['BSIN-001', 'BSIN-002'])
+ * @param {number} data.saldoAnterior
+ * @param {number} data.saldoRestante
+ * @param {string} data.fecha - Opcional
+ */
+export const generarReciboAbonoPDF = (data) => {
+  const { 
+    folio, 
+    clienteNombre, 
+    monto, 
+    metodoPago, 
+    aplicados, 
+    saldoAnterior, 
+    saldoRestante, 
+    fecha 
+  } = data;
+
+  const doc = new jsPDF();
+  const fechaStr = fecha 
+    ? new Date(fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })
+    : new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' });
+
+  const formatCurrency = (val) => {
+    return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(val || 0);
+  };
+
+  // Header
+  doc.setFillColor(colors.olive); // Color verde para abonos
+  doc.rect(0, 0, 210, 35, 'F');
+  
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(22);
+  doc.text('BLANCOS SINAÍ', 15, 18);
+  
+  doc.setFontSize(10);
+  doc.text('COMPROBANTE DE PAGO / ABONO', 15, 26);
+  
+  doc.setFontSize(11);
+  doc.text(`FOLIO: ${folio || 'S/F'}`, 195, 18, { align: 'right' });
+  doc.text(`FECHA: ${fechaStr}`, 195, 26, { align: 'right' });
+
+  // Cuerpo
+  doc.setTextColor(0);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('RECIBIMOS DE:', 15, 50);
+  doc.text(clienteNombre || 'Cliente General', 15, 60);
+
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`La cantidad de:`, 15, 75);
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.text(formatCurrency(monto), 15, 85);
+
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Método de pago: ${(metodoPago || 'efectivo').toUpperCase()}`, 15, 95);
+
+  // Desglose de aplicación
+  if (aplicados && aplicados.length > 0) {
+    doc.setFont('helvetica', 'bold');
+    doc.text('ESTE PAGO SE APLICÓ A LOS SIGUIENTES FOLIOS:', 15, 110);
+    doc.setFont('helvetica', 'normal');
+    const foliosStr = Array.isArray(aplicados) ? aplicados.join(', ') : aplicados;
+    const splitFolios = doc.splitTextToSize(foliosStr, 180);
+    doc.text(splitFolios, 15, 116);
+  }
+
+  // Estado de Cuenta Resumen
+  doc.setFillColor(colors.cream);
+  doc.rect(15, 135, 180, 40, 'F');
+  
+  doc.setFontSize(10);
+  doc.setTextColor(colors.espresso);
+  doc.text('RESUMEN DE SALDO:', 20, 145);
+  
+  doc.setFontSize(11);
+  doc.text(`Saldo Anterior:`, 20, 155);
+  doc.text(formatCurrency(saldoAnterior), 190, 155, { align: 'right' });
+  
+  doc.text(`Monto Abonado:`, 20, 162);
+  doc.text(`- ${formatCurrency(monto)}`, 190, 162, { align: 'right' });
+  
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.text(`NUEVO SALDO PENDIENTE:`, 20, 172);
+  doc.text(formatCurrency(saldoRestante), 190, 172, { align: 'right' });
+
+  // Firma / Sellos
+  doc.line(65, 230, 145, 230);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100);
+  doc.text('Firma / Sello de Recepción', 105, 235, { align: 'center' });
+  doc.text('Blancos Sinaí - Puebla', 105, 240, { align: 'center' });
+
+  // Pie
+  doc.setFontSize(8);
+  doc.text('Este recibo es un comprobante oficial de abono a cuenta.', 105, 285, { align: 'center' });
+
+  doc.save(`recibo-pago-${folio || 'sin-folio'}.pdf`);
+};

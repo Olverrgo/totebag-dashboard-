@@ -106,7 +106,7 @@ const EstadoCuentaModal = ({ cliente, onClose }) => {
 
     // Totales — flujo de la deuda (con salto de página si no cabe)
     const tieneDev = data.totales.devuelto > 0;
-    const boxH = tieneDev ? 46 : 38;
+    const boxH = tieneDev ? 54 : 46;
     const pageH = doc.internal.pageSize.height;
     let finalY = doc.lastAutoTable.finalY + 15;
     if (finalY + boxH + 12 > pageH) { doc.addPage(); finalY = 20; }
@@ -115,7 +115,8 @@ const EstadoCuentaModal = ({ cliente, onClose }) => {
     doc.setTextColor(0);
     doc.setFontSize(10);
     let yy = finalY + 9;
-    doc.text(`Entregado: ${formatearMoneda(data.totales.entregado_bruto ?? data.totales.entregado)}`, 130, yy); yy += 8;
+    doc.text(`Saldo Anterior: ${formatearMoneda(data.totales.saldo_inicial || 0)}`, 130, yy); yy += 8;
+    doc.text(`(+) Entregado: ${formatearMoneda(data.totales.entregado_bruto ?? data.totales.entregado)}`, 130, yy); yy += 8;
     if (tieneDev) { doc.text(`(-) Devuelto: ${formatearMoneda(data.totales.devuelto)}`, 130, yy); yy += 8; }
     doc.text(`(-) Cobrado: ${formatearMoneda(data.totales.cobrado)}`, 130, yy); yy += 10;
     doc.setFontSize(12);
@@ -210,12 +211,19 @@ const EstadoCuentaModal = ({ cliente, onClose }) => {
 
               {/* Resumen Final — flujo de la deuda */}
               <div style={{ marginTop: '30px', background: colors.cotton, padding: '20px', borderRadius: '12px', border: `1px solid ${colors.sand}` }}>
-                {data.totales.saldo_inicial > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', color: colors.camel }}>
-                    <span>Saldo anterior:</span>
-                    <strong>{formatearMoneda(data.totales.saldo_inicial)}</strong>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', paddingBottom: '10px', borderBottom: `1px solid ${colors.sand}`, alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', fontWeight: '700', color: colors.camel, textTransform: 'uppercase' }}>Flujo de Cuenta:</span>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '18px', fontWeight: '800', color: colors.espresso }}>
+                      {formatearMoneda(data.totales.saldo_inicial)} → {formatearMoneda(data.totales.pendiente)}
+                    </div>
                   </div>
-                )}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', color: colors.camel }}>
+                  <span>Saldo anterior:</span>
+                  <strong>{formatearMoneda(data.totales.saldo_inicial)}</strong>
+                </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                   <span>(+) Entregado:</span>
                   <strong>{formatearMoneda(data.totales.entregado_bruto ?? data.totales.entregado)}</strong>
