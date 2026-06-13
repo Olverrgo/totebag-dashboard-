@@ -8,7 +8,7 @@ const DevolucionModal = ({ clientes = [], onClose, onDone }) => {
   const [clienteId, setClienteId] = useState('');
   const [pendientes, setPendientes] = useState([]);
   const [cargando, setCargando] = useState(false);
-  const [cantidades, setCantidades] = useState({}); // { producto_id: qty }
+  const [cantidades, setCantidades] = useState({}); // { "producto_id__variante": qty }
   const [notas, setNotas] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState(null);
@@ -24,39 +24,60 @@ const DevolucionModal = ({ clientes = [], onClose, onDone }) => {
     })();
   }, [clienteId]);
 
-  const setCant = (prodId, max, val) => {
+  // Clave única por producto + variante (un mismo producto puede estar en la calle
+  // en varias variantes y cada una se devuelve por separado).
+  const keyOf = (p) => `${p.producto_id}__${p.variante_id ?? 'base'}`;
+
+  const setCant = (key, max, val) => {
     const n = Math.max(0, Math.min(parseInt(val) || 0, max));
-    setCantidades(prev => ({ ...prev, [prodId]: n }));
+    setCantidades(prev => ({ ...prev, [key]: n }));
   };
 
-  const totalADevolver = pendientes.reduce((s, p) => s + (cantidades[p.producto_id] || 0), 0);
+  const totalADevolver = pendientes.reduce((s, p) => s + (cantidades[keyOf(p)] || 0), 0);
 
   const confirmar = async () => {
-    const aDevolver = pendientes.filter(p => (cantidades[p.producto_id] || 0) > 0);
+    const aDevolver = pendientes.filter(p => (cantidades[keyOf(p)] || 0) > 0);
     if (aDevolver.length === 0) { setMensaje({ tipo: 'error', texto: 'Indica al menos una pieza a devolver' }); return; }
     setGuardando(true);
     setMensaje(null);
     let ok = 0, fallidas = [];
     for (const p of aDevolver) {
-      const cantidad = cantidades[p.producto_id];
+      const cantidad = cantidades[keyOf(p)];
+      const etiqueta = p.variante_label ? `${p.producto_nombre} (${p.variante_label})` : p.producto_nombre;
       const movimiento = {
         producto_id: p.producto_id,
         cliente_id: parseInt(clienteId),
         tipo_movimiento: 'devolucion',
         cantidad,
-        notas: notas || `Devolución de ${cantidad} pza`
+        notas: notas || `Devolución de ${cantidad} pza`,
+        ...(p.variante_id != null ? { variante_id: p.variante_id } : {})
       };
-      const datosDevolucion = { producto_id: p.producto_id, cliente_id: parseInt(clienteId), cantidad };
+      const datosDevolucion = {
+        producto_id: p.producto_id,
+        cliente_id: parseInt(clienteId),
+        cantidad,
+        ...(p.variante_id != null ? { variante_id: p.variante_id } : {})
+      };
       const { error } = await registrarDevolucionConsignacion(movimiento, datosDevolucion);
-      if (error) fallidas.push(p.producto_nombre); else ok++;
+      if (error) fallidas.push(etiqueta); else ok++;
     }
     setGuardando(false);
+
+    // Si al menos UNA se registró, refrescamos la lista SIEMPRE (aunque otras
+    // fallen): las exitosas desaparecen del listado, así un reintento solo cubre
+    // las fallidas y no duplica las que ya pasaron.
+    if (ok > 0) {
+      onDone && onDone();
+      const { data } = await getConsignacionPendienteCliente(parseInt(clienteId));
+      setPendientes(data || []);
+      setCantidades({});
+      if (fallidas.length === 0) setNotas('');
+    }
+
     if (fallidas.length === 0) {
       setMensaje({ tipo: 'ok', texto: `✓ ${ok} devolución(es) registrada(s)` });
-      onDone && onDone();
-      // recargar pendientes
-      const { data } = await getConsignacionPendienteCliente(parseInt(clienteId));
-      setPendientes(data || []); setCantidades({}); setNotas('');
+    } else if (ok > 0) {
+      setMensaje({ tipo: 'error', texto: `Se registraron ${ok}. Falló en: ${fallidas.join(', ')} — vuelve a intentar solo esa(s).` });
     } else {
       setMensaje({ tipo: 'error', texto: `Falló en: ${fallidas.join(', ')}` });
     }
@@ -94,21 +115,26 @@ const DevolucionModal = ({ clientes = [], onClose, onDone }) => {
             <>
               <div style={{ fontSize: '13px', fontWeight: 700, color: colors.espresso, marginBottom: '8px' }}>En consignación (elige cuánto devuelve):</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
-                {pendientes.map(p => (
-                  <div key={p.producto_id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', background: colors.cotton, borderRadius: '10px' }}>
+                {pendientes.map(p => {
+                  const k = keyOf(p);
+                  const val = cantidades[k] || 0;
+                  return (
+                  <div key={k} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', background: colors.cotton, borderRadius: '10px' }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 600, fontSize: '14px' }}>{p.producto_nombre || `Producto ${p.producto_id}`}</div>
+                      {p.variante_label && <div style={{ fontSize: '12px', color: colors.espresso }}>{p.variante_label}</div>}
                       <div style={{ fontSize: '12px', color: colors.camel }}>{p.piezas} pz pendientes</div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <button onClick={() => setCant(p.producto_id, p.piezas, (cantidades[p.producto_id] || 0) - 1)} style={{ width: '28px', height: '28px', borderRadius: '8px', border: 'none', background: colors.sand, fontWeight: 900, cursor: 'pointer' }}>−</button>
-                      <input type="number" min="0" max={p.piezas} value={cantidades[p.producto_id] || 0}
-                        onChange={e => setCant(p.producto_id, p.piezas, e.target.value)}
-                        style={{ width: '52px', textAlign: 'center', padding: '6px', borderRadius: '8px', border: `2px solid ${(cantidades[p.producto_id] || 0) > 0 ? colors.terracotta : colors.sand}`, fontWeight: 700 }} />
-                      <button onClick={() => setCant(p.producto_id, p.piezas, (cantidades[p.producto_id] || 0) + 1)} style={{ width: '28px', height: '28px', borderRadius: '8px', border: 'none', background: colors.terracotta, color: 'white', fontWeight: 900, cursor: 'pointer' }}>+</button>
+                      <button onClick={() => setCant(k, p.piezas, val - 1)} style={{ width: '28px', height: '28px', borderRadius: '8px', border: 'none', background: colors.sand, fontWeight: 900, cursor: 'pointer' }}>−</button>
+                      <input type="number" min="0" max={p.piezas} value={val}
+                        onChange={e => setCant(k, p.piezas, e.target.value)}
+                        style={{ width: '52px', textAlign: 'center', padding: '6px', borderRadius: '8px', border: `2px solid ${val > 0 ? colors.terracotta : colors.sand}`, fontWeight: 700 }} />
+                      <button onClick={() => setCant(k, p.piezas, val + 1)} style={{ width: '28px', height: '28px', borderRadius: '8px', border: 'none', background: colors.terracotta, color: 'white', fontWeight: 900, cursor: 'pointer' }}>+</button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
               <label style={{ fontSize: '12px', color: colors.camel, display: 'block', marginBottom: '4px' }}>Nota (opcional)</label>

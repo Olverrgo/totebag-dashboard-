@@ -1974,12 +1974,16 @@ export const getConsignacionPendienteCliente = async (clienteId) => {
 
   const { data, error } = await supabase
     .from('ventas')
-    .select('producto_id, producto_nombre, cantidad, monto_pagado, precio_unitario, estado_pago')
+    .select('producto_id, producto_nombre, variante_id, cantidad, monto_pagado, precio_unitario, estado_pago, variante:variantes_producto(material, color, talla, sku)')
     .eq('cliente_id', clienteId)
     .eq('tipo_venta', 'consignacion')
     .eq('activo', true);
   if (error) return { data: null, error: handleRLSError(error) };
 
+  // Agrupamos por producto + variante: un mismo producto puede estar en la calle
+  // en varias variantes (material/color/talla) y cada una se devuelve por separado.
+  // Antes se agrupaba solo por producto_id y las variantes se colapsaban en una
+  // sola línea (parecía que "solo cargaban 3" productos).
   const mapa = new Map();
   (data || []).forEach(v => {
     if (v.estado_pago === 'cancelado') return;
@@ -1987,8 +1991,18 @@ export const getConsignacionPendienteCliente = async (clienteId) => {
     const pagadas = precio > 0 ? (parseFloat(v.monto_pagado) || 0) / precio : 0;
     const pendientes = (parseFloat(v.cantidad) || 0) - pagadas;
     if (pendientes <= 0.001) return;
-    const key = v.producto_id;
-    if (!mapa.has(key)) mapa.set(key, { producto_id: v.producto_id, producto_nombre: v.producto_nombre, piezas: 0 });
+    const varianteId = v.variante_id ?? null;
+    const key = `${v.producto_id}__${varianteId ?? 'base'}`;
+    if (!mapa.has(key)) {
+      const detalle = v.variante ? [v.variante.material, v.variante.color, v.variante.talla].filter(Boolean).join(' / ') : '';
+      mapa.set(key, {
+        producto_id: v.producto_id,
+        variante_id: varianteId,
+        producto_nombre: v.producto_nombre,
+        variante_label: detalle,
+        piezas: 0
+      });
+    }
     mapa.get(key).piezas += pendientes;
   });
 
@@ -2009,14 +2023,20 @@ export const registrarDevolucionConsignacion = async (movimiento, datosDevolucio
   if (movError) return { data: null, error: handleRLSError(movError) };
 
   // 2. Buscar ventas pendientes de consignación para este producto/cliente
-  const { data: ventasPendientes, error: searchError } = await supabase
+  let searchQuery = supabase
     .from('ventas')
     .select('*')
     .eq('producto_id', datosDevolucion.producto_id)
     .eq('cliente_id', datosDevolucion.cliente_id)
     .eq('tipo_venta', 'consignacion')
     .in('estado_pago', ['pendiente', 'parcial'])
-    .eq('activo', true)
+    .eq('activo', true);
+  // Si la devolución es de una variante específica, acotamos a esa variante para
+  // no descontar de la variante equivocada (mismo producto, otro color/talla).
+  if (datosDevolucion.variante_id != null) {
+    searchQuery = searchQuery.eq('variante_id', datosDevolucion.variante_id);
+  }
+  const { data: ventasPendientes, error: searchError } = await searchQuery
     .order('created_at', { ascending: false }); // LIFO para devoluciones - las más recientes primero
 
   if (searchError) {
