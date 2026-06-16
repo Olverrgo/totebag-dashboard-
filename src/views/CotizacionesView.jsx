@@ -10,7 +10,8 @@ import {
   calcularPrecioSugerido,
   updateCotizacion,
   convertirCotizacionEnVenta,
-  actualizarTierPrecio
+  actualizarTierPrecio,
+  generarOrdenesDesdeFaltantes
 } from '../supabaseClient';
 
 const ESTADOS = ['borrador', 'enviada', 'aceptada', 'rechazada', 'vencida'];
@@ -35,6 +36,7 @@ const CotizacionesView = ({ isAdmin }) => {
   const [selectedCot, setSelectedCot] = useState(null);
   const [showTarifas, setShowTarifas] = useState(false);
   const [convirtiendo, setConvirtiendo] = useState(null); // id en proceso de conversión
+  const [faltantesCot, setFaltantesCot] = useState(null); // { cotizacion, faltantes } → modal producir
 
   useEffect(() => {
     fetchData();
@@ -72,21 +74,27 @@ const CotizacionesView = ({ isAdmin }) => {
     if (!window.confirm(`Convertir la cotización ${c.folio} en ${tipo}.\nSe descontará stock del taller.${aviso}\n\n¿Continuar?`)) return;
 
     setConvirtiendo(c.id);
-    const { folio, okCount, total, error } = await convertirCotizacionEnVenta(c);
+    const { folio, okCount, total, faltantes, error } = await convertirCotizacionEnVenta(c);
     setConvirtiendo(null);
 
     if (folio && total && okCount === total) {
       // Éxito completo: las N líneas entraron y la cotización quedó sellada.
       alert(`✅ Venta ${folio} generada (${okCount} de ${total} línea(s)).`);
+      fetchData();
+    } else if (faltantes && faltantes.length > 0) {
+      // Faltó stock terminado → ofrecer producir lo que falta (no recargamos aún;
+      // la cotización sigue 'aceptada' y reconvertible cuando haya stock).
+      setFaltantesCot({ cotizacion: c, faltantes });
     } else if (folio && okCount > 0) {
       // Parcial: NO se selló (todo-o-nada). Quedó como venta suelta; la cotización
       // sigue convertible. Avisar para que se revise/limpie.
       alert(`⚠️ Conversión PARCIAL: solo ${okCount} de ${total} línea(s) entraron, así que la cotización NO se marcó como vendida.\n\n${error?.message || ''}\n\nRevisa la venta ${folio} y vuelve a intentar cuando haya stock completo.`);
+      fetchData();
     } else {
-      // Falla total (pre-chequeo de stock o error). error.message ya trae el detalle.
+      // Falla total (error sin faltantes). error.message ya trae el detalle.
       alert(error?.message || 'No se pudo convertir (error desconocido)');
+      fetchData();
     }
-    fetchData();
   };
 
   return (
@@ -211,6 +219,108 @@ const CotizacionesView = ({ isAdmin }) => {
       {showTarifas && (
         <TarifasModal onClose={() => setShowTarifas(false)} />
       )}
+
+      {faltantesCot && (
+        <ProducirFaltantesModal
+          cotizacion={faltantesCot.cotizacion}
+          faltantes={faltantesCot.faltantes}
+          onClose={() => { setFaltantesCot(null); fetchData(); }}
+        />
+      )}
+    </div>
+  );
+};
+
+// --- PRODUCIR FALTANTES (puente cotización → producción) ---
+// Cuando el Vender aborta por falta de stock terminado, este modal ofrece generar
+// las órdenes de producción por el FALTANTE (una por variante). Solo se crean las
+// que tienen materia prima; las que no, se listan con qué material comprar.
+
+const ProducirFaltantesModal = ({ cotizacion, faltantes, onClose }) => {
+  const [generando, setGenerando] = useState(false);
+  const [resultados, setResultados] = useState(null);
+
+  const fmtNum = (n) => Number(n || 0).toLocaleString('es-MX', { maximumFractionDigits: 2 });
+
+  const generar = async () => {
+    setGenerando(true);
+    const { data, creadas, bloqueadas, error } = await generarOrdenesDesdeFaltantes(faltantes, cotizacion);
+    setGenerando(false);
+    if (error) { alert('Error: ' + error.message); return; }
+    setResultados({ data, creadas, bloqueadas });
+  };
+
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: 'white', borderRadius: '15px', width: '560px', maxWidth: '95%', maxHeight: '90vh', overflowY: 'auto', padding: '30px', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <h3 style={{ margin: 0, color: colors.espresso }}>🏭 Producir lo que falta</h3>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: '20px', cursor: 'pointer' }}>✕</button>
+        </div>
+        <p style={{ color: colors.camel, fontSize: '13px', marginTop: 0 }}>
+          La cotización <b>{cotizacion.folio}</b> no tiene stock terminado suficiente. Puedes generar
+          órdenes de producción por el faltante (una por variante). Solo se crean las que tengan
+          materia prima disponible.
+        </p>
+
+        {!resultados ? (
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', margin: '15px 0' }}>
+              {faltantes.map((f, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', background: colors.cream, borderRadius: '8px' }}>
+                  <span style={{ color: colors.espresso, fontSize: '13px' }}>{f.nombre}</span>
+                  <span style={{ color: '#C0392B', fontWeight: '600', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                    faltan {f.faltan} pz
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button onClick={onClose} style={{ padding: '10px 18px', borderRadius: '8px', background: 'white', border: `1px solid ${colors.sand}`, cursor: 'pointer' }}>Cancelar</button>
+              <button onClick={generar} disabled={generando} style={{ padding: '10px 18px', borderRadius: '8px', border: 'none', background: colors.sidebarBg, color: 'white', fontWeight: '600', cursor: 'pointer', opacity: generando ? 0.6 : 1 }}>
+                {generando ? 'Generando…' : `Generar ${faltantes.length} orden(es)`}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ margin: '15px 0', padding: '12px', borderRadius: '8px', background: colors.cream, fontSize: '13px', color: colors.espresso }}>
+              ✅ {resultados.creadas} orden(es) creada(s){resultados.bloqueadas > 0 ? ` · 🔴 ${resultados.bloqueadas} sin materia prima` : ''}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {resultados.data.map((r, i) => (
+                <div key={i} style={{ padding: '12px', borderRadius: '8px', border: `1px solid ${colors.sand}` }}>
+                  <div style={{ fontWeight: '600', color: colors.espresso, fontSize: '13px', marginBottom: '4px' }}>
+                    {r.faltante.nombre} · {r.faltante.faltan} pz
+                  </div>
+                  {r.status === 'creada' && (
+                    <div style={{ color: '#27AE60', fontSize: '12px' }}>✓ Orden de producción creada (en proceso)</div>
+                  )}
+                  {r.status === 'sin_materia_prima' && (
+                    <div style={{ color: '#C0392B', fontSize: '12px' }}>
+                      🔴 Falta materia prima — comprar:
+                      <ul style={{ margin: '4px 0 0', paddingLeft: '18px' }}>
+                        {r.faltantesMP.map((m, j) => (
+                          <li key={j}>{m.nombre}: faltan {fmtNum(m.faltan_mp)} {m.unidad} (hay {fmtNum(m.stock_disponible)}, se necesitan {fmtNum(m.cantidad_total)})</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {r.status === 'error' && (
+                    <div style={{ color: '#C0392B', fontSize: '12px' }}>⚠️ {r.mensaje}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: '16px', padding: '10px', background: '#FCF3CF', borderRadius: '8px', fontSize: '12px', color: '#7D6608' }}>
+              Ve a <b>Producción</b> para completar las órdenes. Al completarlas sube el stock terminado y podrás <b>Vender</b> la cotización.
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+              <button onClick={onClose} style={{ padding: '10px 18px', borderRadius: '8px', border: 'none', background: colors.sidebarBg, color: 'white', fontWeight: '600', cursor: 'pointer' }}>Listo</button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 };

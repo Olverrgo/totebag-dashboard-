@@ -3435,6 +3435,140 @@ export const completarOrdenProduccion = async (ordenId) => {
   return { data: ordenActualizada, error: handleRLSError(errFinal) };
 };
 
+// Calcula la materia prima necesaria para producir `cantidad` piezas de una
+// variante. Replica la lógica del wizard de Producción (receta + patrón de corte)
+// pero desde el backend, para reusarla en el puente cotización→producción.
+// Devuelve las líneas planeadas, el costo, y qué materia prima NO alcanza.
+export const calcularMaterialesProduccion = async (productoId, varianteId, cantidad) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  const pId = parseInt(productoId);
+  const vId = varianteId != null ? parseInt(varianteId) : null;
+  const qty = parseInt(cantidad) || 0;
+  if (!pId || qty <= 0) return { data: null, error: { message: 'Producto o cantidad inválidos' } };
+
+  // Receta (materiales fijos + opcionales) con stock y costo de cada material.
+  const { data: recetas, error: errRec } = await getRecetasProducto(pId);
+  if (errRec) return { data: null, error: errRec };
+
+  // Patrón de corte vigente: define la tela principal y los metros lineales totales.
+  // Se prefiere la config de la variante; si no hay, la del producto (variante NULL).
+  const { data: configs } = await getConfiguracionesCorte(pId, null, true);
+  const config = (configs || []).find(c => c.variante_id === vId)
+              || (configs || []).find(c => c.variante_id === null) || null;
+
+  // Líneas base desde la receta (mismo criterio que el wizard): solo materiales de
+  // la variante o globales; los OPCIONALES (telas alternativas) no se planean auto.
+  let lineas = (recetas || [])
+    .filter(r => r.variante_id === null || r.variante_id === vId)
+    .map(r => {
+      const opcional = r.opcional === true;
+      const porPieza = parseFloat(r.cantidad) || 0;
+      return {
+        material_id: r.material_id,
+        nombre: r.material?.nombre || '',
+        unidad: r.material?.unidad || '',
+        cantidad_por_pieza: porPieza,
+        cantidad_total: opcional ? 0 : porPieza * qty,
+        costo_unitario: parseFloat(r.material?.costo_unitario) || 0,
+        stock_disponible: parseFloat(r.material?.stock) || 0,
+        es_opcional: opcional
+      };
+    });
+
+  // Integrar la tela principal del patrón de corte (metros lineales × cantidad).
+  if (config && config.material_id) {
+    const metros = parseFloat(config.total_metros_lineales) || 0;
+    const idx = lineas.findIndex(l => l.material_id === config.material_id);
+    if (idx === -1) {
+      const { data: mat } = await supabase
+        .from('materiales')
+        .select('id, nombre, unidad, costo_unitario, stock')
+        .eq('id', config.material_id)
+        .single();
+      lineas.unshift({
+        material_id: config.material_id,
+        nombre: mat?.nombre || 'Tela principal',
+        unidad: mat?.unidad || 'metros',
+        cantidad_por_pieza: metros,
+        cantidad_total: metros * qty,
+        costo_unitario: parseFloat(mat?.costo_unitario) || 0,
+        stock_disponible: parseFloat(mat?.stock) || 0,
+        es_opcional: false,
+        es_principal: true
+      });
+    } else {
+      lineas[idx] = { ...lineas[idx], cantidad_por_pieza: metros, cantidad_total: metros * qty, es_principal: true };
+    }
+  }
+
+  // Solo planeamos lo que de verdad se consume (cantidad_total > 0).
+  const planeadas = lineas.filter(l => l.cantidad_total > 0);
+  const costoTotal = planeadas.reduce((acc, l) => acc + l.cantidad_total * l.costo_unitario, 0);
+  const faltantesMP = planeadas
+    .filter(l => l.cantidad_total > l.stock_disponible)
+    .map(l => ({ ...l, faltan_mp: Math.round((l.cantidad_total - l.stock_disponible) * 100) / 100 }));
+
+  return {
+    data: { lineas: planeadas, costoTotal, faltantesMP, hayMateriaPrima: faltantesMP.length === 0, tieneConfig: !!config },
+    error: null
+  };
+};
+
+// Puente cotización→producción. Genera órdenes de producción por el FALTANTE de
+// stock terminado de una cotización (UNA orden por variante). Solo crea la orden si
+// hay materia prima suficiente; si no, la reporta como bloqueada con el detalle de
+// qué comprar. Liga cada orden a la cotización (cotizacion_folio) para trazabilidad.
+// `faltantes` = el array que devuelve convertirCotizacionEnVenta cuando aborta.
+export const generarOrdenesDesdeFaltantes = async (faltantes, cotizacion) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  if (!Array.isArray(faltantes) || faltantes.length === 0) {
+    return { data: null, error: { message: 'No hay faltantes que producir' } };
+  }
+  const folio = cotizacion?.folio || null;
+  const resultados = [];
+
+  for (const f of faltantes) {
+    const qty = parseInt(f.faltan) || 0;
+    if (qty <= 0) continue;
+
+    const { data: calc, error: errCalc } = await calcularMaterialesProduccion(f.producto_id, f.variante_id, qty);
+    if (errCalc) { resultados.push({ faltante: f, status: 'error', mensaje: errCalc.message || 'Error calculando materiales' }); continue; }
+
+    // Sin materia prima suficiente → no se crea la orden; se reporta qué falta comprar.
+    if (!calc.hayMateriaPrima) {
+      resultados.push({ faltante: f, status: 'sin_materia_prima', faltantesMP: calc.faltantesMP });
+      continue;
+    }
+
+    const { data: orden, error: errOrden } = await createOrdenProduccion({
+      producto_id: f.producto_id,
+      variante_id: f.variante_id || null,
+      cantidad: qty,
+      estado: 'en_proceso',
+      cotizacion_folio: folio,
+      notas: folio ? `Generada de cotización ${folio}` : 'Generada desde faltante de venta'
+    });
+    if (errOrden) { resultados.push({ faltante: f, status: 'error', mensaje: errOrden.message || 'Error al crear orden' }); continue; }
+
+    if (calc.lineas.length > 0) {
+      const lineasMU = calc.lineas.map(l => ({
+        orden_id: orden.id,
+        material_id: l.material_id,
+        cantidad_planeada: l.cantidad_total,
+        costo_unitario: l.costo_unitario,
+        costo_total: l.cantidad_total * l.costo_unitario
+      }));
+      await createMaterialesUsados(lineasMU);
+    }
+
+    resultados.push({ faltante: f, status: 'creada', ordenId: orden.id, cantidad: qty, costoTotal: calc.costoTotal });
+  }
+
+  const creadas = resultados.filter(r => r.status === 'creada').length;
+  const bloqueadas = resultados.filter(r => r.status === 'sin_materia_prima').length;
+  return { data: resultados, creadas, bloqueadas, error: null };
+};
+
 // Registrar compra de material:
 // 1. Actualizar stock y costo promedio ponderado
 // 2. Crear movimiento_material tipo 'compra'
