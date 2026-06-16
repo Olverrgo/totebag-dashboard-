@@ -3817,6 +3817,38 @@ export const convertirCotizacionEnVenta = async (cotizacion, opciones = {}) => {
     return { data: null, error: { message: 'La cotización no tiene productos' } };
   }
 
+  // Pre-chequeo TODO-O-NADA. La cotización es un compromiso con el cliente: no la
+  // convertimos a medias. Sumamos la demanda por (producto, variante) — una misma
+  // variante puede ir en 2 líneas — y la comparamos contra el stock de taller. Si
+  // algo falta, NO creamos ninguna venta, NO damos de alta cliente y NO sellamos:
+  // devolvemos `faltantes` para decidir (¿hay stock? ¿se genera orden de producción?).
+  const demanda = new Map();
+  for (const d of detalle) {
+    const key = `${d.producto_id}::${d.variante_id ?? ''}`;
+    const prev = demanda.get(key) || {
+      producto_id: d.producto_id, variante_id: d.variante_id,
+      nombre: d.descripcion || d.productos?.linea_nombre || 'Producto', cantidad: 0
+    };
+    prev.cantidad += parseInt(d.cantidad) || 0;
+    demanda.set(key, prev);
+  }
+  const faltantes = [];
+  for (const d of demanda.values()) {
+    const disponible = await getStockTallerLinea(d.producto_id, d.variante_id);
+    if (d.cantidad > disponible) {
+      faltantes.push({ ...d, disponible, faltan: d.cantidad - disponible });
+    }
+  }
+  if (faltantes.length > 0) {
+    const lista = faltantes
+      .map(f => `• ${f.nombre}: pedido ${f.cantidad}, en taller ${f.disponible} (faltan ${f.faltan})`)
+      .join('\n');
+    return {
+      data: null, folio: null, okCount: 0, faltantes,
+      error: { message: `No se puede convertir: falta stock en taller para ${faltantes.length} producto(s).\n\n${lista}\n\nProduce o repón estas piezas y vuelve a intentar.` }
+    };
+  }
+
   // Resolver cliente_id (registrarVentaMultiple lo exige).
   let clienteId = cotizacion.cliente_id || null;
   let clienteNombre = cotizacion.clientes?.nombre || cotizacion.cliente_nombre || 'Cliente';
@@ -3851,14 +3883,16 @@ export const convertirCotizacionEnVenta = async (cotizacion, opciones = {}) => {
   const res = await registrarVentaMultiple(header, lineas);
   const okCount = Array.isArray(res.data) ? res.data.filter(r => r.ok).length : 0;
 
-  // Sellar la cotización si se generó folio y al menos una línea entró
-  // (el guard de venta_folio evita una segunda conversión que duplicaría stock).
-  if (res.folio && okCount > 0) {
+  // Sellar SOLO si TODAS las líneas entraron (todo-o-nada). El pre-chequeo de stock
+  // de arriba ya debería garantizarlo; esto es red de seguridad ante un fallo de otra
+  // causa (p. ej. carrera de stock). Si quedó parcial, NO sellamos: la cotización
+  // sigue 'aceptada' y reconvertible, evitando marcarla "completa" en falso.
+  if (res.folio && okCount === lineas.length) {
     await updateCotizacion(cotizacion.id, {
       venta_folio: res.folio,
       convertida_at: new Date().toISOString()
     });
   }
 
-  return { data: res.data, folio: res.folio, okCount, error: res.error };
+  return { data: res.data, folio: res.folio, okCount, total: lineas.length, error: res.error };
 };

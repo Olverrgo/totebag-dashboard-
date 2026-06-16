@@ -72,14 +72,19 @@ const CotizacionesView = ({ isAdmin }) => {
     if (!window.confirm(`Convertir la cotización ${c.folio} en ${tipo}.\nSe descontará stock del taller.${aviso}\n\n¿Continuar?`)) return;
 
     setConvirtiendo(c.id);
-    const { folio, okCount, error } = await convertirCotizacionEnVenta(c);
+    const { folio, okCount, total, error } = await convertirCotizacionEnVenta(c);
     setConvirtiendo(null);
 
-    if (folio && okCount > 0) {
-      const parcial = error ? `\n\n⚠️ ${error.message}` : '';
-      alert(`✅ Venta ${folio} generada (${okCount} línea(s)).${parcial}`);
+    if (folio && total && okCount === total) {
+      // Éxito completo: las N líneas entraron y la cotización quedó sellada.
+      alert(`✅ Venta ${folio} generada (${okCount} de ${total} línea(s)).`);
+    } else if (folio && okCount > 0) {
+      // Parcial: NO se selló (todo-o-nada). Quedó como venta suelta; la cotización
+      // sigue convertible. Avisar para que se revise/limpie.
+      alert(`⚠️ Conversión PARCIAL: solo ${okCount} de ${total} línea(s) entraron, así que la cotización NO se marcó como vendida.\n\n${error?.message || ''}\n\nRevisa la venta ${folio} y vuelve a intentar cuando haya stock completo.`);
     } else {
-      alert('No se pudo convertir: ' + (error?.message || 'error desconocido'));
+      // Falla total (pre-chequeo de stock o error). error.message ya trae el detalle.
+      alert(error?.message || 'No se pudo convertir (error desconocido)');
     }
     fetchData();
   };
