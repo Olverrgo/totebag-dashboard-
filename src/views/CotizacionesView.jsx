@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   getTiersPrecio,
   getCotizaciones,
   getCotizacionDetalle,
@@ -7,8 +7,23 @@ import {
   getClientes,
   crearCotizacionCompleta,
   eliminarCotizacion,
-  calcularPrecioSugerido
+  calcularPrecioSugerido,
+  updateCotizacion,
+  convertirCotizacionEnVenta,
+  actualizarTierPrecio
 } from '../supabaseClient';
+
+const ESTADOS = ['borrador', 'enviada', 'aceptada', 'rechazada', 'vencida'];
+
+const estiloEstado = (estado) => {
+  switch (estado) {
+    case 'aceptada':  return { background: '#D5F5E3', color: '#27AE60' };
+    case 'rechazada': return { background: '#FADBD8', color: '#C0392B' };
+    case 'vencida':   return { background: '#EAECEE', color: '#7F8C8D' };
+    case 'enviada':   return { background: '#D6EAF8', color: '#2471A3' };
+    default:          return { background: '#FCF3CF', color: '#B7950B' }; // borrador
+  }
+};
 import { colors } from '../utils/colors';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -18,6 +33,8 @@ const CotizacionesView = ({ isAdmin }) => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [selectedCot, setSelectedCot] = useState(null);
+  const [showTarifas, setShowTarifas] = useState(false);
+  const [convirtiendo, setConvirtiendo] = useState(null); // id en proceso de conversión
 
   useEffect(() => {
     fetchData();
@@ -41,6 +58,32 @@ const CotizacionesView = ({ isAdmin }) => {
     else alert('Error: ' + error.message);
   };
 
+  const handleEstadoChange = async (id, estado) => {
+    // Optimista: pinta el nuevo estado al instante; si falla, recarga del server.
+    setCotizaciones(prev => prev.map(c => (c.id === id ? { ...c, estado } : c)));
+    const { error } = await updateCotizacion(id, { estado });
+    if (error) { alert('No se pudo cambiar el estado: ' + error.message); fetchData(); }
+  };
+
+  const handleConvertir = async (c) => {
+    if (c.venta_folio) return;
+    const tipo = c.tiers_precio?.slug === 'consignacion' ? 'consignación' : 'venta directa';
+    const aviso = c.cliente_id ? '' : `\n\nEl cliente "${c.cliente_nombre}" no está registrado: se dará de alta automáticamente.`;
+    if (!window.confirm(`Convertir la cotización ${c.folio} en ${tipo}.\nSe descontará stock del taller.${aviso}\n\n¿Continuar?`)) return;
+
+    setConvirtiendo(c.id);
+    const { folio, okCount, error } = await convertirCotizacionEnVenta(c);
+    setConvirtiendo(null);
+
+    if (folio && okCount > 0) {
+      const parcial = error ? `\n\n⚠️ ${error.message}` : '';
+      alert(`✅ Venta ${folio} generada (${okCount} línea(s)).${parcial}`);
+    } else {
+      alert('No se pudo convertir: ' + (error?.message || 'error desconocido'));
+    }
+    fetchData();
+  };
+
   return (
     <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
@@ -50,16 +93,28 @@ const CotizacionesView = ({ isAdmin }) => {
           </h2>
           <p style={{ color: colors.camel, margin: 0, fontSize: '14px' }}>Gestión de propuestas para clientes</p>
         </div>
-        <button 
-          onClick={() => setShowModal(true)}
-          style={{
-            background: colors.sidebarBg, color: 'white', border: 'none',
-            padding: '12px 24px', borderRadius: '8px', cursor: 'pointer',
-            fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px'
-          }}
-        >
-          <span>➕</span> Nueva Cotización
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            onClick={() => setShowTarifas(true)}
+            style={{
+              background: 'white', color: colors.espresso, border: `1px solid ${colors.sand}`,
+              padding: '12px 18px', borderRadius: '8px', cursor: 'pointer',
+              fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px'
+            }}
+          >
+            <span>⚙️</span> Tarifas
+          </button>
+          <button
+            onClick={() => setShowModal(true)}
+            style={{
+              background: colors.sidebarBg, color: 'white', border: 'none',
+              padding: '12px 24px', borderRadius: '8px', cursor: 'pointer',
+              fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px'
+            }}
+          >
+            <span>➕</span> Nueva Cotización
+          </button>
+        </div>
       </div>
 
       {loading ? <p>Cargando...</p> : (
@@ -88,17 +143,43 @@ const CotizacionesView = ({ isAdmin }) => {
                     <td style={{ padding: '15px' }}>{c.tiers_precio?.nombre}</td>
                     <td style={{ padding: '15px', fontWeight: '600' }}>{formatCurrency(c.total)}</td>
                     <td style={{ padding: '15px' }}>
-                      <span style={{ 
-                        padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600',
-                        background: c.estado === 'aceptada' ? '#D5F5E3' : c.estado === 'rechazada' ? '#FADBD8' : '#FCF3CF',
-                        color: c.estado === 'aceptada' ? '#27AE60' : c.estado === 'rechazada' ? '#C0392B' : '#B7950B'
-                      }}>
-                        {c.estado.toUpperCase()}
-                      </span>
+                      {c.venta_folio ? (
+                        <span style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: '#D5F5E3', color: '#27AE60' }}>
+                          ✓ {c.venta_folio}
+                        </span>
+                      ) : (
+                        <select
+                          value={c.estado}
+                          onChange={e => handleEstadoChange(c.id, e.target.value)}
+                          style={{
+                            ...estiloEstado(c.estado),
+                            padding: '5px 10px', borderRadius: '20px', fontSize: '11px',
+                            fontWeight: '600', border: 'none', cursor: 'pointer', textTransform: 'uppercase'
+                          }}
+                        >
+                          {ESTADOS.map(e => <option key={e} value={e}>{e.toUpperCase()}</option>)}
+                        </select>
+                      )}
                     </td>
-                    <td style={{ padding: '15px', display: 'flex', gap: '10px' }}>
-                      <button onClick={() => setSelectedCot(c)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>👁️</button>
-                      <button onClick={() => handleEliminar(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>🗑️</button>
+                    <td style={{ padding: '15px', display: 'flex', gap: '10px', alignItems: 'center' }}>
+                      <button onClick={() => setSelectedCot(c)} title="Ver detalle" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>👁️</button>
+                      {c.estado === 'aceptada' && !c.venta_folio && (
+                        <button
+                          onClick={() => handleConvertir(c)}
+                          disabled={convirtiendo === c.id}
+                          title="Convertir en venta"
+                          style={{
+                            background: colors.sage, color: 'white', border: 'none', borderRadius: '6px',
+                            padding: '5px 10px', cursor: 'pointer', fontSize: '12px', fontWeight: '600',
+                            opacity: convirtiendo === c.id ? 0.6 : 1
+                          }}
+                        >
+                          {convirtiendo === c.id ? '…' : '💰 Vender'}
+                        </button>
+                      )}
+                      {!c.venta_folio && (
+                        <button onClick={() => handleEliminar(c.id)} title="Eliminar" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>🗑️</button>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -116,11 +197,87 @@ const CotizacionesView = ({ isAdmin }) => {
       )}
 
       {selectedCot && (
-        <CotizacionDetailModal 
-          cotizacion={selectedCot} 
-          onClose={() => setSelectedCot(null)} 
+        <CotizacionDetailModal
+          cotizacion={selectedCot}
+          onClose={() => setSelectedCot(null)}
         />
       )}
+
+      {showTarifas && (
+        <TarifasModal onClose={() => setShowTarifas(false)} />
+      )}
+    </div>
+  );
+};
+
+// --- TARIFAS / CANALES (editor de multiplicadores) ---
+
+const TarifasModal = ({ onClose }) => {
+  const [tiers, setTiers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [guardando, setGuardando] = useState(null);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      const res = await getTiersPrecio();
+      if (res.data) setTiers(res.data);
+      setLoading(false);
+    };
+    load();
+  }, []);
+
+  const setMult = (id, value) => {
+    setTiers(prev => prev.map(t => (t.id === id ? { ...t, multiplicador: value } : t)));
+  };
+
+  const guardar = async (tier) => {
+    setGuardando(tier.id);
+    const { error } = await actualizarTierPrecio(tier.id, { multiplicador: tier.multiplicador });
+    setGuardando(null);
+    if (error) alert('Error: ' + error.message);
+  };
+
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: 'white', borderRadius: '15px', width: '520px', maxHeight: '90vh', overflowY: 'auto', padding: '30px', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <h3 style={{ margin: 0, color: colors.espresso }}>⚙️ Canales y Tarifas</h3>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: '20px', cursor: 'pointer' }}>✕</button>
+        </div>
+        <p style={{ color: colors.camel, fontSize: '13px', marginTop: 0 }}>
+          El precio sugerido al cotizar = costo de producción × multiplicador del canal.
+        </p>
+
+        {loading ? <p>Cargando...</p> : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '15px' }}>
+            {tiers.map(t => (
+              <div key={t.id} style={{ display: 'grid', gridTemplateColumns: '1fr 120px 90px', gap: '12px', alignItems: 'center', padding: '12px', background: colors.cream, borderRadius: '10px' }}>
+                <div>
+                  <div style={{ fontWeight: '600', color: colors.espresso }}>{t.nombre}</div>
+                  <div style={{ fontSize: '11px', color: colors.camel }}>{t.slug}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <input
+                    type="number" step="0.05" min="0.05"
+                    value={t.multiplicador}
+                    onChange={e => setMult(t.id, e.target.value)}
+                    style={{ width: '70px', padding: '8px', borderRadius: '8px', border: `1px solid ${colors.sand}` }}
+                  />
+                  <span style={{ color: colors.camel }}>×</span>
+                </div>
+                <button
+                  onClick={() => guardar(t)}
+                  disabled={guardando === t.id}
+                  style={{ padding: '8px', borderRadius: '8px', border: 'none', background: colors.sidebarBg, color: 'white', cursor: 'pointer', fontWeight: '600', opacity: guardando === t.id ? 0.6 : 1 }}
+                >
+                  {guardando === t.id ? '…' : 'Guardar'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -380,7 +537,17 @@ const CotizacionWizard = ({ onClose, onSuccess }) => {
 
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: 'white', borderRadius: '15px', width: '850px', maxHeight: '90vh', overflowY: 'auto', padding: '30px', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}>
+      <div style={{ 
+        background: 'white', 
+        borderRadius: '15px', 
+        width: '95%', 
+        maxWidth: '1050px', 
+        maxHeight: '90vh', 
+        overflowY: 'auto', 
+        padding: '30px', 
+        boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+        boxSizing: 'border-box'
+      }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', borderBottom: `1px solid ${colors.sand}`, paddingBottom: '15px' }}>
           <h3 style={{ margin: 0, color: colors.espresso }}>Nueva Cotización - Paso {paso}/3</h3>
           <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: '20px', cursor: 'pointer' }}>✕</button>
@@ -390,19 +557,48 @@ const CotizacionWizard = ({ onClose, onSuccess }) => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
               <div>
-                <label style={{ fontSize: '13px', color: colors.camel }}>Cliente Registrado</label>
-                <select value={clienteId} onChange={e => { setClienteId(e.target.value); setClienteNombre(''); }} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: `1px solid ${colors.sand}` }}>
+                <label style={{ fontSize: '13px', color: colors.camel, display: 'block', marginBottom: '6px' }}>Cliente Registrado</label>
+                <select 
+                  value={clienteId} 
+                  onChange={e => { setClienteId(e.target.value); setClienteNombre(''); }} 
+                  style={{ 
+                    width: '100%', 
+                    boxSizing: 'border-box', 
+                    padding: '8px 12px', 
+                    borderRadius: '8px', 
+                    border: `1px solid ${colors.sand}`,
+                    height: '40px',
+                    fontSize: '14px',
+                    color: colors.espresso,
+                    background: 'white'
+                  }}
+                >
                   <option value="">Seleccionar cliente...</option>
                   {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                 </select>
               </div>
               <div>
-                <label style={{ fontSize: '13px', color: colors.camel }}>O Cliente Nuevo (Nombre)</label>
-                <input value={clienteNombre} onChange={e => { setClienteNombre(e.target.value); setClienteId(''); }} placeholder="Nombre del cliente" style={{ width: '100%', padding: '10px', borderRadius: '8px', border: `1px solid ${colors.sand}` }} />
+                <label style={{ fontSize: '13px', color: colors.camel, display: 'block', marginBottom: '6px' }}>O Cliente Nuevo (Nombre)</label>
+                <input 
+                  value={clienteNombre} 
+                  onChange={e => { setClienteNombre(e.target.value); setClienteId(''); }} 
+                  placeholder="Nombre del cliente" 
+                  style={{ 
+                    width: '100%', 
+                    boxSizing: 'border-box', 
+                    padding: '8px 12px', 
+                    borderRadius: '8px', 
+                    border: `1px solid ${colors.sand}`,
+                    height: '40px',
+                    fontSize: '14px',
+                    color: colors.espresso,
+                    background: 'white'
+                  }} 
+                />
               </div>
             </div>
             <div>
-              <label style={{ fontSize: '13px', color: colors.camel }}>Canal de Venta (Tier)</label>
+              <label style={{ fontSize: '13px', color: colors.camel, display: 'block', marginBottom: '8px' }}>Canal de Venta (Tier)</label>
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                 {tiers.map(t => (
                   <button key={t.id} onClick={() => setTierId(t.id)} style={{
@@ -423,33 +619,154 @@ const CotizacionWizard = ({ onClose, onSuccess }) => {
 
         {paso === 2 && (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
-              <h4 style={{ margin: 0 }}>Productos a Cotizar ({selectedTier?.nombre})</h4>
-              <button onClick={addItem} style={{ padding: '5px 15px', borderRadius: '5px', background: colors.sage, color: 'white', border: 'none', cursor: 'pointer' }}>+ Agregar</button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', alignItems: 'center' }}>
+              <h4 style={{ margin: 0, color: colors.espresso }}>Productos a Cotizar ({selectedTier?.nombre})</h4>
+              <button 
+                onClick={addItem} 
+                style={{ 
+                  padding: '8px 16px', 
+                  borderRadius: '6px', 
+                  background: colors.sage, 
+                  color: 'white', 
+                  border: 'none', 
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: '13px'
+                }}
+              >
+                + Agregar Producto
+              </button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+
+            {items.length > 0 && (
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: '2.5fr 2.5fr 0.8fr 1.5fr 0.3fr', 
+                gap: '12px', 
+                padding: '0 15px 8px 15px', 
+                borderBottom: `1px solid ${colors.sand}`,
+                marginBottom: '10px'
+              }}>
+                <div style={{ fontSize: '12px', fontWeight: '700', color: colors.camel }}>Producto</div>
+                <div style={{ fontSize: '12px', fontWeight: '700', color: colors.camel }}>Variante</div>
+                <div style={{ fontSize: '12px', fontWeight: '700', color: colors.camel }}>Cant.</div>
+                <div style={{ fontSize: '12px', fontWeight: '700', color: colors.camel }}>Precio Unitario</div>
+                <div></div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {items.map((item, idx) => {
                 const prod = productos.find(p => p.id === parseInt(item.producto_id));
                 const floor = item.costo_snapshot;
                 const isUnderFloor = item.precio_unitario < floor;
                 return (
                   <div key={idx} style={{ background: colors.cotton, padding: '15px', borderRadius: '10px', border: `1px solid ${isUnderFloor ? '#E74C3C' : colors.sand}` }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr 0.2fr', gap: '10px' }}>
-                      <select value={item.producto_id} onChange={e => updateItem(idx, 'producto_id', e.target.value)} style={{ padding: '8px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '2.5fr 2.5fr 0.8fr 1.5fr 0.3fr', gap: '12px', alignItems: 'start' }}>
+                      <select 
+                        value={item.producto_id} 
+                        onChange={e => updateItem(idx, 'producto_id', e.target.value)} 
+                        style={{ 
+                          width: '100%', 
+                          minWidth: 0, 
+                          boxSizing: 'border-box', 
+                          padding: '6px 10px', 
+                          borderRadius: '6px', 
+                          border: `1px solid ${colors.sand}`,
+                          height: '38px',
+                          fontSize: '13px',
+                          color: colors.espresso,
+                          background: 'white'
+                        }}
+                      >
                         <option value="">Producto...</option>
                         {productos.map(p => <option key={p.id} value={p.id}>{p.linea_nombre}</option>)}
                       </select>
-                      <select value={item.variante_id} onChange={e => updateItem(idx, 'variante_id', e.target.value)} disabled={!item.producto_id} style={{ padding: '8px' }}>
+
+                      <select 
+                        value={item.variante_id} 
+                        onChange={e => updateItem(idx, 'variante_id', e.target.value)} 
+                        disabled={!item.producto_id} 
+                        style={{ 
+                          width: '100%', 
+                          minWidth: 0, 
+                          boxSizing: 'border-box', 
+                          padding: '6px 10px', 
+                          borderRadius: '6px', 
+                          border: `1px solid ${colors.sand}`,
+                          height: '38px',
+                          fontSize: '13px',
+                          color: colors.espresso,
+                          background: item.producto_id ? 'white' : '#f5f5f5'
+                        }}
+                      >
                         <option value="">Variante...</option>
                         {prod?.variantes?.map(v => <option key={v.id} value={v.id}>{[v.material, v.color, v.talla].filter(Boolean).join(' - ') || v.sku}</option>)}
                       </select>
-                      <input type="number" value={item.cantidad} onChange={e => updateItem(idx, 'cantidad', parseFloat(e.target.value))} placeholder="Cant" style={{ padding: '8px' }} />
-                      <div style={{ position: 'relative' }}>
-                        <input type="number" value={item.precio_unitario} onChange={e => updateItem(idx, 'precio_unitario', parseFloat(e.target.value))} style={{ padding: '8px', width: '100%', border: isUnderFloor ? '2px solid #E74C3C' : '1px solid #ccc' }} />
-                        <div style={{ fontSize: '10px', color: colors.camel }}>Sugerido: {formatCurrency(calcularPrecioSugerido(item.costo_snapshot, item.tier_multiplicador))}</div>
-                        {isUnderFloor && <div style={{ fontSize: '9px', color: '#E74C3C', fontWeight: 'bold' }}>BAJO COSTO (Min: {formatCurrency(floor)})</div>}
+
+                      <input 
+                        type="number" 
+                        value={item.cantidad} 
+                        onChange={e => updateItem(idx, 'cantidad', parseFloat(e.target.value))} 
+                        placeholder="Cant" 
+                        style={{ 
+                          width: '100%', 
+                          minWidth: 0, 
+                          boxSizing: 'border-box', 
+                          padding: '6px 10px', 
+                          borderRadius: '6px', 
+                          border: `1px solid ${colors.sand}`,
+                          height: '38px',
+                          fontSize: '13px',
+                          color: colors.espresso,
+                          background: 'white'
+                        }} 
+                      />
+
+                      <div style={{ position: 'relative', width: '100%', minWidth: 0 }}>
+                        <input 
+                          type="number" 
+                          value={item.precio_unitario} 
+                          onChange={e => updateItem(idx, 'precio_unitario', parseFloat(e.target.value))} 
+                          style={{ 
+                            width: '100%', 
+                            boxSizing: 'border-box', 
+                            padding: '6px 10px', 
+                            borderRadius: '6px', 
+                            border: isUnderFloor ? '2px solid #E74C3C' : `1px solid ${colors.sand}`,
+                            height: '38px',
+                            fontSize: '13px',
+                            color: colors.espresso,
+                            background: 'white'
+                          }} 
+                        />
+                        <div style={{ fontSize: '10px', color: colors.camel, marginTop: '3px', lineHeight: '1.2' }}>
+                          Sugerido: {formatCurrency(calcularPrecioSugerido(item.costo_snapshot, item.tier_multiplicador))}
+                        </div>
+                        {isUnderFloor && (
+                          <div style={{ fontSize: '9px', color: '#E74C3C', fontWeight: 'bold', marginTop: '2px', lineHeight: '1.2' }}>
+                            BAJO COSTO (Min: {formatCurrency(floor)})
+                          </div>
+                        )}
                       </div>
-                      <button onClick={() => setItems(items.filter((_, i) => i !== idx))} style={{ border: 'none', background: 'none', color: '#E74C3C', cursor: 'pointer' }}>✕</button>
+
+                      <button 
+                        onClick={() => setItems(items.filter((_, i) => i !== idx))} 
+                        style={{ 
+                          border: 'none', 
+                          background: 'none', 
+                          color: '#E74C3C', 
+                          cursor: 'pointer',
+                          fontSize: '18px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          height: '38px',
+                          padding: 0
+                        }}
+                      >
+                        ✕
+                      </button>
                     </div>
                   </div>
                 );
@@ -494,7 +811,22 @@ const CotizacionWizard = ({ onClose, onSuccess }) => {
               </table>
               <div style={{ textAlign: 'right', marginTop: '15px', fontSize: '20px', fontWeight: 'bold' }}>Total: {formatCurrency(total)}</div>
             </div>
-            <textarea value={notas} onChange={e => setNotas(e.target.value)} placeholder="Condiciones, tiempo de entrega, etc." style={{ width: '100%', padding: '10px', borderRadius: '8px', minHeight: '100px' }} />
+            <textarea 
+              value={notas} 
+              onChange={e => setNotas(e.target.value)} 
+              placeholder="Condiciones, tiempo de entrega, etc." 
+              style={{ 
+                width: '100%', 
+                boxSizing: 'border-box', 
+                padding: '12px', 
+                borderRadius: '8px', 
+                border: `1px solid ${colors.sand}`, 
+                minHeight: '100px',
+                fontSize: '14px',
+                color: colors.espresso,
+                fontFamily: 'inherit'
+              }} 
+            />
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px' }}>
               <button onClick={() => setPaso(2)} style={{ padding: '10px 20px', borderRadius: '8px', background: 'white', border: `1px solid ${colors.sand}` }}>Atrás</button>
               <button onClick={handleGuardar} disabled={loading} style={{ padding: '12px 40px', borderRadius: '8px', border: 'none', background: colors.sidebarBg, color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>

@@ -3773,3 +3773,92 @@ export const eliminarCotizacion = async (id) => {
     .eq('id', id);
   return { error: handleRLSError(error) };
 };
+
+// Edita un tier de precio (multiplicador, nombre, activo). El multiplicador
+// tiene CHECK (> 0) en la BD; validamos aquí para dar un error claro antes.
+export const actualizarTierPrecio = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  if (updates.multiplicador != null) {
+    const m = parseFloat(updates.multiplicador);
+    if (!(m > 0)) return { data: null, error: { message: 'El multiplicador debe ser mayor que 0' } };
+    updates = { ...updates, multiplicador: m };
+  }
+  const { data, error } = await supabase
+    .from('tiers_precio')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  return { data, error: handleRLSError(error) };
+};
+
+// Convierte una cotización ACEPTADA en una venta real (reusa registrarVentaMultiple).
+// - El tipo de operación lo define el slug del tier: 'consignacion' → consignación,
+//   cualquier otro → venta directa.
+// - Si la cotización no tiene cliente_id (cliente nuevo escrito a mano), se da de alta
+//   el cliente con su nombre y se usa ese id (registrarVentaMultiple exige cliente_id).
+// - Guard anti-doble-conversión: si ya tiene venta_folio, no se vuelve a convertir.
+// - Al terminar, sella la cotización con venta_folio + convertida_at para trazabilidad.
+//   `cotizacion` es la fila tal cual la entrega getCotizaciones (incluye tiers_precio).
+export const convertirCotizacionEnVenta = async (cotizacion, opciones = {}) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  if (!cotizacion?.id) return { data: null, error: { message: 'Cotización inválida' } };
+  if (cotizacion.estado !== 'aceptada') {
+    return { data: null, error: { message: 'Solo se pueden convertir cotizaciones en estado "aceptada"' } };
+  }
+  if (cotizacion.venta_folio) {
+    return { data: null, error: { message: `Esta cotización ya se convirtió en la venta ${cotizacion.venta_folio}` } };
+  }
+
+  // Líneas frescas desde la BD (no confiamos en lo que tenga la UI en memoria).
+  const { data: detalle, error: errDet } = await getCotizacionDetalle(cotizacion.id);
+  if (errDet) return { data: null, error: errDet };
+  if (!detalle || detalle.length === 0) {
+    return { data: null, error: { message: 'La cotización no tiene productos' } };
+  }
+
+  // Resolver cliente_id (registrarVentaMultiple lo exige).
+  let clienteId = cotizacion.cliente_id || null;
+  let clienteNombre = cotizacion.clientes?.nombre || cotizacion.cliente_nombre || 'Cliente';
+  if (!clienteId) {
+    const { data: nuevoCli, error: errCli } = await createCliente({ nombre: clienteNombre, activo: true });
+    if (errCli) return { data: null, error: { message: 'No se pudo dar de alta el cliente nuevo: ' + (errCli.message || errCli) } };
+    clienteId = nuevoCli?.id || null;
+  }
+  if (!clienteId) return { data: null, error: { message: 'No se pudo resolver el cliente de la cotización' } };
+
+  const slug = cotizacion.tiers_precio?.slug || opciones.tipo_operacion;
+  const esConsignacion = slug === 'consignacion';
+
+  const header = {
+    cliente_id: clienteId,
+    cliente_nombre: clienteNombre,
+    tipo_operacion: esConsignacion ? 'consignacion' : 'directa',
+    estado_pago: esConsignacion ? 'pendiente' : (opciones.estado_pago || 'pagado'),
+    metodo_pago: opciones.metodo_pago || 'efectivo',
+    notas: `Generada de cotización ${cotizacion.folio}`
+  };
+
+  const lineas = detalle.map(d => ({
+    producto_id: d.producto_id,
+    variante_id: d.variante_id,
+    cantidad: d.cantidad,
+    precio_unitario: d.precio_unitario,
+    costo_unitario: d.costo_snapshot,
+    producto_nombre: d.descripcion || d.productos?.linea_nombre || 'Producto'
+  }));
+
+  const res = await registrarVentaMultiple(header, lineas);
+  const okCount = Array.isArray(res.data) ? res.data.filter(r => r.ok).length : 0;
+
+  // Sellar la cotización si se generó folio y al menos una línea entró
+  // (el guard de venta_folio evita una segunda conversión que duplicaría stock).
+  if (res.folio && okCount > 0) {
+    await updateCotizacion(cotizacion.id, {
+      venta_folio: res.folio,
+      convertida_at: new Date().toISOString()
+    });
+  }
+
+  return { data: res.data, folio: res.folio, okCount, error: res.error };
+};
