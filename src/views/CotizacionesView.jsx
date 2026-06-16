@@ -768,6 +768,29 @@ const CotizacionWizard = ({ onClose, onSuccess }) => {
                         ✕
                       </button>
                     </div>
+
+                    <div style={{ marginTop: '10px' }}>
+                      <label style={{ fontSize: '11px', color: colors.camel, display: 'block', marginBottom: '3px' }}>
+                        Descripción (editable — aparece en la cotización y el PDF)
+                      </label>
+                      <input
+                        type="text"
+                        value={item.descripcion}
+                        onChange={e => updateItem(idx, 'descripcion', e.target.value)}
+                        placeholder="Describe el producto o variante a tu manera…"
+                        style={{
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          padding: '6px 10px',
+                          borderRadius: '6px',
+                          border: `1px solid ${colors.sand}`,
+                          height: '38px',
+                          fontSize: '13px',
+                          color: colors.espresso,
+                          background: 'white'
+                        }}
+                      />
+                    </div>
                   </div>
                 );
               })}
