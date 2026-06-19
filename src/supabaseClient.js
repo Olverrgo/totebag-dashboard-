@@ -1359,6 +1359,29 @@ export const eliminarVentaCompleta = async (ventaId, motivoEliminacion = '') => 
 
   if (errorDelete) return { error: handleRLSError(errorDelete) };
 
+  // 6. Si esta venta vino de una cotización (folio_operacion == cotizacion.venta_folio)
+  // y ya NO quedan líneas activas de ese folio, des-sellar la cotización para que vuelva
+  // a 'aceptada' y sea re-convertible (el stock ya regresó). NO se des-sella si aún hay
+  // líneas activas (reversa parcial): re-convertir duplicaría las que siguen vivas.
+  let cotizacionDesSellada = null;
+  if (venta.folio_operacion) {
+    const { data: activasFolio } = await supabase
+      .from('ventas')
+      .select('id')
+      .eq('folio_operacion', venta.folio_operacion)
+      .eq('activo', true)
+      .limit(1);
+    if (!activasFolio || activasFolio.length === 0) {
+      const { data: cotSellada } = await supabase
+        .from('cotizaciones')
+        .update({ venta_folio: null, convertida_at: null })
+        .eq('venta_folio', venta.folio_operacion)
+        .select('folio')
+        .maybeSingle();
+      if (cotSellada) cotizacionDesSellada = cotSellada.folio;
+    }
+  }
+
   const totalRevertidoCaja = (movsCaja || []).reduce((s, m) => s + (parseFloat(m.monto) || 0), 0);
 
   return {
@@ -1369,8 +1392,61 @@ export const eliminarVentaCompleta = async (ventaId, motivoEliminacion = '') => 
       totalRevertidoCaja,
       stockRestaurado: cantidad,
       tipo: esConsignacion ? 'consignacion' : 'directa',
+      cotizacionDesSellada,
     }
   };
+};
+
+// Revierte TODAS las líneas activas de una venta (folio) de un jalón. Reusa
+// eliminarVentaCompleta por línea (restaura stock + caja en cada una). La última línea
+// revertida des-sella la cotización origen (lógica dentro de eliminarVentaCompleta).
+export const revertirVentaFolio = async (folio, motivo = '') => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+  if (!folio) return { error: { message: 'Folio vacío' } };
+
+  const { data: lineas, error: errLineas } = await supabase
+    .from('ventas')
+    .select('id')
+    .eq('folio_operacion', folio)
+    .eq('activo', true)
+    .order('id', { ascending: true });
+  if (errLineas) return { error: handleRLSError(errLineas) };
+  if (!lineas || lineas.length === 0) return { error: { message: 'No hay líneas activas para este folio' } };
+
+  const resultados = [];
+  let cotizacionDesSellada = null;
+  let totalCaja = 0;
+  let totalStock = 0;
+  for (const l of lineas) {
+    const { error, resumen } = await eliminarVentaCompleta(l.id, motivo);
+    if (error) { resultados.push({ ventaId: l.id, ok: false, error }); continue; }
+    resultados.push({ ventaId: l.id, ok: true });
+    totalCaja += resumen?.totalRevertidoCaja || 0;
+    totalStock += resumen?.stockRestaurado || 0;
+    if (resumen?.cotizacionDesSellada) cotizacionDesSellada = resumen.cotizacionDesSellada;
+  }
+  const fallidas = resultados.filter(r => !r.ok).length;
+  return {
+    error: fallidas ? { message: `${fallidas} de ${lineas.length} línea(s) no se revirtieron` } : null,
+    resumen: {
+      folio,
+      lineasRevertidas: resultados.filter(r => r.ok).length,
+      totalLineas: lineas.length,
+      totalRevertidoCaja: totalCaja,
+      stockRestaurado: totalStock,
+      cotizacionDesSellada
+    }
+  };
+};
+
+// Valida el PIN de supervisor contra el RPC (el hash vive en la BD, no en el bundle).
+// Devuelve { ok: boolean }. Se usa como segundo factor antes de revertir/editar ventas.
+export const verificarPinSupervisor = async (pin) => {
+  if (!supabase) return { ok: false, error: 'Supabase no configurado' };
+  if (!pin) return { ok: false, error: { message: 'PIN vacío' } };
+  const { data, error } = await supabase.rpc('verificar_pin_supervisor', { pin: String(pin) });
+  if (error) return { ok: false, error: handleRLSError(error) };
+  return { ok: data === true, error: null };
 };
 
 // Obtener resumen de ventas por período

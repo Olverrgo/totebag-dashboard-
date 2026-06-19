@@ -88,6 +88,8 @@ import {
   editarPagoCaja,
   obtenerImpactoEliminacion,
   eliminarVentaCompleta,
+  revertirVentaFolio,
+  verificarPinSupervisor,
   getResurtidos,
   createResurtido,
   getMateriales,
@@ -6639,8 +6641,10 @@ const VentasView = ({ isAdmin }) => {
   const [clienteDesglose, setClienteDesglose] = useState(null); // ID cliente para ver desglose de deuda
   const [editandoPago, setEditandoPago] = useState(null); // ID de venta/servicio para editar pago
   const [montoEditPago, setMontoEditPago] = useState('');
-  const [popupEliminar, setPopupEliminar] = useState(null); // { impacto, ventaId }
+  const [popupEliminar, setPopupEliminar] = useState(null); // { impacto, ventaId, folio, lineasFolio }
   const [motivoEliminacion, setMotivoEliminacion] = useState('');
+  const [pinSupervisor, setPinSupervisor] = useState('');     // 2º factor para revertir
+  const [revertirFolio, setRevertirFolio] = useState(false);  // revertir toda la venta (folio) vs solo la línea
   const [cargandoImpacto, setCargandoImpacto] = useState(false);
   const [abonoExitoso, setAbonoExitoso] = useState(null);
 
@@ -7055,7 +7059,8 @@ const VentasView = ({ isAdmin }) => {
   };
 
   // Paso 1: Obtener impacto y mostrar popup de confirmación
-  const iniciarEliminacionVenta = async (ventaId) => {
+  const iniciarEliminacionVenta = async (registro) => {
+    const ventaId = registro.id;
     setCargandoImpacto(true);
     const { data: impacto, error } = await obtenerImpactoEliminacion(ventaId);
     setCargandoImpacto(false);
@@ -7064,31 +7069,57 @@ const VentasView = ({ isAdmin }) => {
       return;
     }
     setMotivoEliminacion('');
-    setPopupEliminar({ impacto, ventaId });
+    setPinSupervisor('');
+    setRevertirFolio(false);
+    // Si la venta pertenece a un folio con varias líneas, se ofrecerá revertir todo el folio.
+    const folio = registro.folio_operacion || null;
+    const lineasFolio = folio
+      ? ventas.filter(v => v.folio_operacion === folio && v.activo !== false).length
+      : 1;
+    setPopupEliminar({ impacto, ventaId, folio, lineasFolio });
   };
 
-  // Paso 2: Confirmar y ejecutar eliminación completa
+  // Paso 2: Confirmar y ejecutar (con PIN de supervisor). Revierte la línea o todo el folio.
   const confirmarEliminacionVenta = async () => {
     if (!popupEliminar) return;
     if (!motivoEliminacion.trim()) {
       setMensaje({ tipo: 'error', texto: 'Ingresa el motivo de la eliminación para auditoría' });
       return;
     }
+    if (!pinSupervisor.trim()) {
+      setMensaje({ tipo: 'error', texto: 'Ingresa el PIN de supervisor para autorizar' });
+      return;
+    }
     setGuardando(true);
-    const { error, resumen } = await eliminarVentaCompleta(popupEliminar.ventaId, motivoEliminacion.trim());
+    // Segundo factor: validar el PIN en el servidor antes de tocar nada.
+    const { ok: pinOk, error: errPin } = await verificarPinSupervisor(pinSupervisor.trim());
+    if (errPin || !pinOk) {
+      setGuardando(false);
+      setMensaje({ tipo: 'error', texto: errPin ? ('Error validando PIN: ' + (errPin.message || errPin)) : 'PIN de supervisor incorrecto' });
+      return;
+    }
+
+    const revertirTodo = revertirFolio && popupEliminar.folio;
+    const { error, resumen } = revertirTodo
+      ? await revertirVentaFolio(popupEliminar.folio, motivoEliminacion.trim())
+      : await eliminarVentaCompleta(popupEliminar.ventaId, motivoEliminacion.trim());
     setGuardando(false);
+
     if (error) {
       setMensaje({ tipo: 'error', texto: 'Error: ' + (error.message || error) });
     } else {
-      setMensaje({
-        tipo: 'exito',
-        texto: `Venta eliminada. Caja: ${resumen.cajaMomentosDesactivados} mov. revertidos ($${resumen.totalRevertidoCaja.toFixed(2)}). Stock: +${resumen.stockRestaurado} pzas restauradas.`
-      });
+      const dessellada = resumen?.cotizacionDesSellada ? ` Cotización ${resumen.cotizacionDesSellada} reabierta.` : '';
+      const detalle = revertirTodo
+        ? `${resumen.lineasRevertidas}/${resumen.totalLineas} línea(s) del folio ${popupEliminar.folio}. Caja revertida $${resumen.totalRevertidoCaja.toFixed(2)}. Stock +${resumen.stockRestaurado} pzas.`
+        : `Caja: ${resumen.cajaMomentosDesactivados} mov. revertidos ($${resumen.totalRevertidoCaja.toFixed(2)}). Stock: +${resumen.stockRestaurado} pzas.`;
+      setMensaje({ tipo: 'exito', texto: `Venta revertida. ${detalle}${dessellada}` });
       cargarDatos();
-      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 5000);
+      setTimeout(() => setMensaje({ tipo: '', texto: '' }), 6000);
     }
     setPopupEliminar(null);
     setMotivoEliminacion('');
+    setPinSupervisor('');
+    setRevertirFolio(false);
   };
 
   const handleAjustarPago = async (venta) => {
@@ -8015,7 +8046,7 @@ const VentasView = ({ isAdmin }) => {
                           Editar
                         </button>
                         <button
-                          onClick={() => iniciarEliminacionVenta(registro.id)}
+                          onClick={() => iniciarEliminacionVenta(registro)}
                           disabled={cargandoImpacto}
                           style={{
                             padding: '6px 12px',
@@ -8140,10 +8171,39 @@ const VentasView = ({ isAdmin }) => {
               />
             </div>
 
+            {/* Alcance: solo esta línea o todo el folio (si la venta tiene varias líneas) */}
+            {popupEliminar.folio && popupEliminar.lineasFolio > 1 && (
+              <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', background: colors.cotton, borderRadius: '8px', padding: '12px', marginBottom: '16px', cursor: 'pointer', border: `1px solid ${colors.sand}` }}>
+                <input type="checkbox" checked={revertirFolio} onChange={e => setRevertirFolio(e.target.checked)} style={{ marginTop: '3px' }} />
+                <span style={{ fontSize: '13px', color: colors.espresso }}>
+                  <b>Revertir TODA la venta</b> (folio {popupEliminar.folio} — {popupEliminar.lineasFolio} líneas).
+                  <span style={{ color: colors.camel }}> Si vino de una cotización, se reabrirá para re-venderse.</span>
+                </span>
+              </label>
+            )}
+
+            {/* PIN de supervisor (2º factor) */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontWeight: '600', color: colors.espresso, marginBottom: '6px', fontSize: '13px' }}>
+                PIN de supervisor (autorización):
+              </label>
+              <input
+                type="password"
+                value={pinSupervisor}
+                onChange={e => setPinSupervisor(e.target.value)}
+                placeholder="••••"
+                autoComplete="off"
+                style={{
+                  width: '100%', padding: '10px', border: `1px solid ${colors.sand}`,
+                  borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box', letterSpacing: '2px'
+                }}
+              />
+            </div>
+
             {/* Botones */}
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
               <button
-                onClick={() => { setPopupEliminar(null); setMotivoEliminacion(''); }}
+                onClick={() => { setPopupEliminar(null); setMotivoEliminacion(''); setPinSupervisor(''); setRevertirFolio(false); }}
                 style={{
                   padding: '10px 20px', background: colors.sand, color: colors.espresso,
                   border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600'
@@ -8153,14 +8213,14 @@ const VentasView = ({ isAdmin }) => {
               </button>
               <button
                 onClick={confirmarEliminacionVenta}
-                disabled={guardando || !motivoEliminacion.trim()}
+                disabled={guardando || !motivoEliminacion.trim() || !pinSupervisor.trim()}
                 style={{
                   padding: '10px 20px', background: colors.terracotta, color: 'white',
                   border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700',
-                  opacity: (guardando || !motivoEliminacion.trim()) ? 0.5 : 1
+                  opacity: (guardando || !motivoEliminacion.trim() || !pinSupervisor.trim()) ? 0.5 : 1
                 }}
               >
-                {guardando ? 'Eliminando...' : 'Confirmar eliminación'}
+                {guardando ? 'Revirtiendo...' : (revertirFolio && popupEliminar.folio ? 'Revertir venta completa' : 'Confirmar eliminación')}
               </button>
             </div>
           </div>
