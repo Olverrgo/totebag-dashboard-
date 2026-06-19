@@ -3993,8 +3993,13 @@ export const convertirCotizacionEnVenta = async (cotizacion, opciones = {}) => {
   }
   if (!clienteId) return { data: null, error: { message: 'No se pudo resolver el cliente de la cotización' } };
 
-  const slug = cotizacion.tiers_precio?.slug || opciones.tipo_operacion;
-  const esConsignacion = slug === 'consignacion';
+  // Tipo de operación: lo ELIGE el usuario al convertir (opciones.tipo_operacion).
+  // El slug del tier es solo respaldo. El tier es CANAL DE PRECIO, no tipo de pago:
+  // 'mayoreo' puede venderse pagado O a consignación, así que NO se asume del slug
+  // (ese supuesto registró BSIN-2026-06-016 como directa/pagada por error).
+  const tipoOperacion = opciones.tipo_operacion
+    || (cotizacion.tiers_precio?.slug === 'consignacion' ? 'consignacion' : 'directa');
+  const esConsignacion = tipoOperacion === 'consignacion';
 
   const header = {
     cliente_id: clienteId,

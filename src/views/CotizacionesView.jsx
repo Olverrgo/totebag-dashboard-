@@ -36,6 +36,7 @@ const CotizacionesView = ({ isAdmin }) => {
   const [selectedCot, setSelectedCot] = useState(null);
   const [showTarifas, setShowTarifas] = useState(false);
   const [convirtiendo, setConvirtiendo] = useState(null); // id en proceso de conversión
+  const [convertirCot, setConvertirCot] = useState(null); // cotización en modal de elección de tipo
   const [faltantesCot, setFaltantesCot] = useState(null); // { cotizacion, faltantes } → modal producir
 
   useEffect(() => {
@@ -67,14 +68,18 @@ const CotizacionesView = ({ isAdmin }) => {
     if (error) { alert('No se pudo cambiar el estado: ' + error.message); fetchData(); }
   };
 
-  const handleConvertir = async (c) => {
+  // Abre el modal de elección de tipo (directa pagada / directa pendiente / consignación).
+  // El tipo de operación lo decide el usuario, NO el tier (canal de precio).
+  const handleConvertir = (c) => {
     if (c.venta_folio) return;
-    const tipo = c.tiers_precio?.slug === 'consignacion' ? 'consignación' : 'venta directa';
-    const aviso = c.cliente_id ? '' : `\n\nEl cliente "${c.cliente_nombre}" no está registrado: se dará de alta automáticamente.`;
-    if (!window.confirm(`Convertir la cotización ${c.folio} en ${tipo}.\nSe descontará stock del taller.${aviso}\n\n¿Continuar?`)) return;
+    setConvertirCot(c);
+  };
 
+  // Ejecuta la conversión con las opciones elegidas en el modal.
+  const ejecutarConversion = async (c, opciones) => {
+    setConvertirCot(null);
     setConvirtiendo(c.id);
-    const { folio, okCount, total, faltantes, error } = await convertirCotizacionEnVenta(c);
+    const { folio, okCount, total, faltantes, error } = await convertirCotizacionEnVenta(c, opciones);
     setConvirtiendo(null);
 
     if (folio && total && okCount === total) {
@@ -220,6 +225,14 @@ const CotizacionesView = ({ isAdmin }) => {
         <TarifasModal onClose={() => setShowTarifas(false)} />
       )}
 
+      {convertirCot && (
+        <ConvertirVentaModal
+          cotizacion={convertirCot}
+          onClose={() => setConvertirCot(null)}
+          onConfirm={(opciones) => ejecutarConversion(convertirCot, opciones)}
+        />
+      )}
+
       {faltantesCot && (
         <ProducirFaltantesModal
           cotizacion={faltantesCot.cotizacion}
@@ -320,6 +333,69 @@ const ProducirFaltantesModal = ({ cotizacion, faltantes, onClose }) => {
             </div>
           </>
         )}
+      </div>
+    </div>
+  );
+};
+
+// --- CONVERTIR A VENTA (elección de tipo de operación) ---
+// El usuario elige cómo se registra la venta: directa pagada, directa pendiente o
+// consignación. El tier (canal de precio) solo SUGIERE un default; no decide el tipo
+// de pago (un mayoreo puede ser pagado o consignación).
+
+const ConvertirVentaModal = ({ cotizacion, onClose, onConfirm }) => {
+  const slug = cotizacion.tiers_precio?.slug;
+  // Default sugerido: consignación si el tier es de consignación; si no, directa pagada.
+  const [opcion, setOpcion] = useState(slug === 'consignacion' ? 'consignacion' : 'directa_pagada');
+
+  const OPCIONES = [
+    { id: 'directa_pagada',   titulo: '💵 Venta directa — pagada',          desc: 'Entra a caja como ingreso. El cliente paga ahora.', opciones: { tipo_operacion: 'directa', estado_pago: 'pagado' } },
+    { id: 'directa_pendiente', titulo: '🧾 Venta directa — pendiente de pago', desc: 'Queda como deuda del cliente. No entra a caja todavía.', opciones: { tipo_operacion: 'directa', estado_pago: 'pendiente' } },
+    { id: 'consignacion',     titulo: '📦 Consignación',                      desc: 'La mercancía va "en la calle". El vendedor paga al vender. No cobra al entregar.', opciones: { tipo_operacion: 'consignacion' } }
+  ];
+
+  const sel = OPCIONES.find(o => o.id === opcion);
+  const canalNombre = cotizacion.tiers_precio?.nombre || '—';
+
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: 'white', borderRadius: '15px', width: '520px', maxWidth: '95%', maxHeight: '90vh', overflowY: 'auto', padding: '30px', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <h3 style={{ margin: 0, color: colors.espresso }}>💰 Convertir en venta</h3>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: '20px', cursor: 'pointer' }}>✕</button>
+        </div>
+        <p style={{ color: colors.camel, fontSize: '13px', marginTop: 0 }}>
+          Cotización <b>{cotizacion.folio}</b> · canal <b>{canalNombre}</b>. Elige cómo se registra la venta
+          (el canal define el precio, no el tipo de pago).
+        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', margin: '15px 0' }}>
+          {OPCIONES.map(o => (
+            <label key={o.id} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '12px', borderRadius: '10px', cursor: 'pointer', border: `2px solid ${opcion === o.id ? colors.sidebarBg : colors.sand}`, background: opcion === o.id ? colors.cream : 'white' }}>
+              <input type="radio" name="tipoConv" checked={opcion === o.id} onChange={() => setOpcion(o.id)} style={{ marginTop: '3px' }} />
+              <div>
+                <div style={{ fontWeight: '600', color: colors.espresso, fontSize: '14px' }}>{o.titulo}</div>
+                <div style={{ fontSize: '12px', color: colors.camel }}>{o.desc}</div>
+              </div>
+            </label>
+          ))}
+        </div>
+
+        {!cotizacion.cliente_id && (
+          <div style={{ padding: '10px', background: '#FCF3CF', borderRadius: '8px', fontSize: '12px', color: '#7D6608', marginBottom: '10px' }}>
+            El cliente "{cotizacion.cliente_nombre}" no está registrado: se dará de alta automáticamente.
+          </div>
+        )}
+        <div style={{ fontSize: '12px', color: colors.camel, marginBottom: '16px' }}>
+          Se descontará stock del taller. Si falta stock, se te ofrecerá producir lo faltante.
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <button onClick={onClose} style={{ padding: '10px 18px', borderRadius: '8px', background: 'white', border: `1px solid ${colors.sand}`, cursor: 'pointer' }}>Cancelar</button>
+          <button onClick={() => onConfirm(sel.opciones)} style={{ padding: '10px 18px', borderRadius: '8px', border: 'none', background: colors.sidebarBg, color: 'white', fontWeight: '600', cursor: 'pointer' }}>
+            Convertir
+          </button>
+        </div>
       </div>
     </div>
   );
