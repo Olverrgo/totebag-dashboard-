@@ -6,6 +6,7 @@ import {
   getProductos,
   getClientes,
   crearCotizacionCompleta,
+  actualizarCotizacionCompleta,
   eliminarCotizacion,
   calcularPrecioSugerido,
   updateCotizacion,
@@ -33,6 +34,7 @@ const CotizacionesView = ({ isAdmin }) => {
   const [cotizaciones, setCotizaciones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editarCot, setEditarCot] = useState(null); // cotización editable abierta en el wizard
   const [selectedCot, setSelectedCot] = useState(null);
   const [showTarifas, setShowTarifas] = useState(false);
   const [convirtiendo, setConvirtiendo] = useState(null); // id en proceso de conversión
@@ -181,6 +183,9 @@ const CotizacionesView = ({ isAdmin }) => {
                     </td>
                     <td style={{ padding: '15px', display: 'flex', gap: '10px', alignItems: 'center' }}>
                       <button onClick={() => setSelectedCot(c)} title="Ver detalle" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>👁️</button>
+                      {!c.venta_folio && !['rechazada', 'vencida'].includes(c.estado) && (
+                        <button onClick={() => setEditarCot(c)} title="Editar" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>✏️</button>
+                      )}
                       {c.estado === 'aceptada' && !c.venta_folio && (
                         <button
                           onClick={() => handleConvertir(c)}
@@ -207,10 +212,11 @@ const CotizacionesView = ({ isAdmin }) => {
         </div>
       )}
 
-      {showModal && (
-        <CotizacionWizard 
-          onClose={() => setShowModal(false)} 
-          onSuccess={() => { setShowModal(false); fetchData(); }} 
+      {(showModal || editarCot) && (
+        <CotizacionWizard
+          cotizacionEditar={editarCot}
+          onClose={() => { setShowModal(false); setEditarCot(null); }}
+          onSuccess={() => { setShowModal(false); setEditarCot(null); fetchData(); }}
         />
       )}
 
@@ -641,13 +647,14 @@ const CotizacionDetailModal = ({ cotizacion, onClose }) => {
 
 // --- WIZARD COMPONENT ---
 
-const CotizacionWizard = ({ onClose, onSuccess }) => {
+const CotizacionWizard = ({ onClose, onSuccess, cotizacionEditar = null }) => {
+  const esEdicion = !!cotizacionEditar;
   const [paso, setPaso] = useState(1);
   const [loading, setLoading] = useState(false);
   const [tiers, setTiers] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [productos, setProductos] = useState([]);
-  
+
   // Form State
   const [clienteId, setClienteId] = useState('');
   const [clienteNombre, setClienteNombre] = useState('');
@@ -668,6 +675,28 @@ const CotizacionWizard = ({ onClose, onSuccess }) => {
     };
     loadWizardData();
   }, []);
+
+  // Modo edición: precargar cabecera + líneas de la cotización existente.
+  useEffect(() => {
+    if (!cotizacionEditar) return;
+    setClienteId(cotizacionEditar.cliente_id ? String(cotizacionEditar.cliente_id) : '');
+    setClienteNombre(cotizacionEditar.cliente_id ? '' : (cotizacionEditar.cliente_nombre || ''));
+    setTierId(cotizacionEditar.tier_id || '');
+    setNotas(cotizacionEditar.notas || '');
+    const cargarDetalle = async () => {
+      const { data } = await getCotizacionDetalle(cotizacionEditar.id);
+      if (data) setItems(data.map(d => ({
+        producto_id: d.producto_id != null ? String(d.producto_id) : '',
+        variante_id: d.variante_id != null ? String(d.variante_id) : '',
+        cantidad: d.cantidad,
+        costo_snapshot: d.costo_snapshot,
+        tier_multiplicador: d.tier_multiplicador,
+        precio_unitario: d.precio_unitario,
+        descripcion: d.descripcion || ''
+      })));
+    };
+    cargarDetalle();
+  }, [cotizacionEditar]);
 
   const selectedTier = tiers.find(t => t.id === tierId);
 
@@ -716,7 +745,9 @@ const CotizacionWizard = ({ onClose, onSuccess }) => {
       total
     };
     
-    const { error } = await crearCotizacionCompleta(cabecera, items);
+    const { error } = esEdicion
+      ? await actualizarCotizacionCompleta(cotizacionEditar.id, cabecera, items)
+      : await crearCotizacionCompleta(cabecera, items);
     setLoading(false);
     if (!error) onSuccess();
     else alert('Error: ' + error.message);
@@ -740,7 +771,7 @@ const CotizacionWizard = ({ onClose, onSuccess }) => {
         boxSizing: 'border-box'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', borderBottom: `1px solid ${colors.sand}`, paddingBottom: '15px' }}>
-          <h3 style={{ margin: 0, color: colors.espresso }}>Nueva Cotización - Paso {paso}/3</h3>
+          <h3 style={{ margin: 0, color: colors.espresso }}>{esEdicion ? `Editar ${cotizacionEditar.folio}` : 'Nueva Cotización'} - Paso {paso}/3</h3>
           <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: '20px', cursor: 'pointer' }}>✕</button>
         </div>
 

@@ -3974,6 +3974,48 @@ export const updateCotizacion = async (id, updates) => {
   return { data, error: handleRLSError(error) };
 };
 
+// Edita una cotización EXISTENTE (cabecera + líneas) conservando su folio. Solo si
+// sigue editable: NO vendida (venta_folio vacío) y NO rechazada/vencida (guard de
+// integridad; la UI también oculta el botón = defensa en 2 capas). Reemplaza las
+// líneas (borra + inserta); el trigger recalcula el total. Folio y estado NO se tocan.
+export const actualizarCotizacionCompleta = async (id, cabecera, lineas) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  if (!id) return { data: null, error: { message: 'Cotización inválida' } };
+
+  const { data: cot, error: errGet } = await supabase
+    .from('cotizaciones')
+    .select('estado, venta_folio')
+    .eq('id', id)
+    .single();
+  if (errGet) return { data: null, error: handleRLSError(errGet) };
+  if (cot?.venta_folio) return { data: null, error: { message: 'No se puede editar: la cotización ya se convirtió en venta.' } };
+  if (['rechazada', 'vencida'].includes(cot?.estado)) {
+    return { data: null, error: { message: `No se puede editar una cotización ${cot.estado}.` } };
+  }
+
+  const { error: errCab } = await supabase.from('cotizaciones').update(cabecera).eq('id', id);
+  if (errCab) return { data: null, error: handleRLSError(errCab) };
+
+  // Reemplazar líneas: borrar viejas + insertar nuevas (el trigger recalcula el total).
+  const { error: errDel } = await supabase.from('detalle_cotizacion').delete().eq('cotizacion_id', id);
+  if (errDel) return { data: null, error: handleRLSError(errDel) };
+
+  if (lineas && lineas.length > 0) {
+    const aIntONull = (v) => (v === '' || v === null || v === undefined ? null : parseInt(v, 10));
+    const filas = lineas.map(l => ({
+      ...l,
+      cotizacion_id: id,
+      producto_id: aIntONull(l.producto_id),
+      variante_id: aIntONull(l.variante_id)
+    }));
+    const { error: errIns } = await supabase.from('detalle_cotizacion').insert(filas);
+    if (errIns) return { data: null, error: handleRLSError(errIns) };
+  }
+
+  const { data, error } = await supabase.from('cotizaciones').select().eq('id', id).single();
+  return { data, error: handleRLSError(error) };
+};
+
 export const eliminarCotizacion = async (id) => {
   if (!supabase) return { error: 'Supabase no configurado' };
   // ON DELETE CASCADE borra las líneas de detalle_cotizacion.
