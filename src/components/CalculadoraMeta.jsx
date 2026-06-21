@@ -38,9 +38,19 @@ function infoProducto(prod, varianteId) {
     ? (parseFloat(config.costo_confeccion) || 0) + (parseFloat(config.costo_empaque) || 0)
     : 0;
 
-  const costo = variante
-    ? parseFloat(variante.costo_unitario) || 0
-    : parseFloat(prod.costo_total_1_tinta) || 0;
+  let costo;
+  if (variante) {
+    costo = parseFloat(variante.costo_unitario) || 0;
+  } else {
+    // Consistente con el resto de la app (vista Ritmo / wizard): usa el costo
+    // unitario guardado del producto, con fallback a la receta (materiales no
+    // opcionales) + mano de obra. Antes usaba `costo_total_1_tinta` = el costo
+    // "ruidoso" legacy poco confiable.
+    const recetaMat = (prod.recetas || [])
+      .filter((r) => r.activo !== false && !r.opcional && r.variante_id == null)
+      .reduce((a, r) => a + (parseFloat(r.cantidad) || 0) * (parseFloat(r.material?.costo_unitario) || 0), 0);
+    costo = parseFloat(prod.costo_unitario) > 0 ? parseFloat(prod.costo_unitario) : recetaMat + manoObra;
+  }
 
   const precio = variante
     ? parseFloat(variante.precio_venta) || 0
@@ -303,9 +313,9 @@ const CalculadoraMeta = () => {
       {/* Dashboard de Impacto */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', marginBottom: '30px' }}>
         {bigCard('Proyección Ingresos', money0(totales.ingreso), `De ${totales.cantidad} piezas a entregar`, energyColors.electric, '💰')}
-        {bigCard('Tu Ganancia Real', money0(totales.utilidad), '¡Dinero directo a tu bolsa!', energyColors.success, '💎')}
+        {bigCard('Ganancia Proyectada', money0(totales.utilidad), 'Utilidad bruta del plan (aún por cobrar)', energyColors.success, '💎')}
         {bigCard('Pago a Maquila', money0(totales.manoObra), 'Mano de obra garantizada', energyColors.terracotta, '🧵')}
-        {bigCard('Inversión Material', money0(totales.costo), 'Costo total de producción', energyColors.warning, '📦')}
+        {bigCard('Inversión Material', money0(totales.costo - totales.manoObra), 'Solo telas e insumos', energyColors.warning, '📦')}
       </div>
 
       {/* Meta Visual Extrema */}
