@@ -55,6 +55,11 @@ const ProduccionView = ({ isAdmin }) => {
   const [mostrarCompletar, setMostrarCompletar] = useState(null);
   const [filtroEstadoOrden, setFiltroEstadoOrden] = useState('pendientes');
 
+  // --- Ritmo state ---
+  const [ritmoProductoId, setRitmoProductoId] = useState('');
+  const [ritmoReceta, setRitmoReceta] = useState([]);
+  const [ritmoForm, setRitmoForm] = useState({ cantidad: '', plazoDias: '6', anaquelDias: '6', cobroDias: '8', horasDia: '8', costo: '', precio: '' });
+
   const categoriasM = ['todas', 'tela', 'cierre', 'hilo', 'etiqueta', 'empaque', 'otro'];
   const unidades = ['metros', 'piezas', 'kilos', 'rollos', 'litros', 'conos'];
   const inputBase = { width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', fontFamily: 'inherit', boxSizing: 'border-box', color: colors.espresso, background: '#fff' };
@@ -63,7 +68,8 @@ const ProduccionView = ({ isAdmin }) => {
   const tabs = [
     { id: 'materiales', nombre: 'Materiales', icon: '🧶' },
     { id: 'recetas', nombre: 'Recetas', icon: '📋' },
-    { id: 'producir', nombre: 'Producir', icon: '⚙️' }
+    { id: 'producir', nombre: 'Producir', icon: '⚙️' },
+    { id: 'ritmo', nombre: 'Ritmo', icon: '⏱️' }
   ];
 
 
@@ -192,6 +198,27 @@ const ProduccionView = ({ isAdmin }) => {
     const res = await deleteRecetaLinea(id);
     if (res.error) mostrarMsg('error', res.error.message || 'Error');
     else { mostrarMsg('ok', 'Línea eliminada'); cargarReceta(productoReceta); }
+  };
+
+  // ---- RITMO handlers ----
+  const cargarRitmoProducto = async (id) => {
+    setRitmoProductoId(id);
+    if (!id) { setRitmoReceta([]); setRitmoForm(f => ({ ...f, costo: '', precio: '' })); return; }
+    const prod = productos.find(p => String(p.id) === String(id));
+    const res = await getRecetasProducto(id);
+    const lineas = res.data || [];
+    setRitmoReceta(lineas);
+    const cfg = (prod?.configuraciones_corte || []).find(c => c.es_configuracion_actual);
+    const costoMatReceta = lineas
+      .filter(r => !r.opcional)
+      .reduce((a, r) => a + (parseFloat(r.cantidad) || 0) * (parseFloat(r.material?.costo_unitario) || 0), 0);
+    const prefillCosto = (cfg && parseFloat(cfg.costo_total) > 0) ? parseFloat(cfg.costo_total)
+      : (parseFloat(prod?.costo_unitario) > 0 ? parseFloat(prod.costo_unitario) : costoMatReceta);
+    setRitmoForm(f => ({
+      ...f,
+      costo: prefillCosto ? String(Math.round(prefillCosto * 100) / 100) : '',
+      precio: (parseFloat(prod?.precio_venta) > 0) ? String(prod.precio_venta) : ''
+    }));
   };
 
   // ---- PRODUCCIÓN handlers ----
@@ -1073,6 +1100,163 @@ const ProduccionView = ({ isAdmin }) => {
               )}
             </div>
           )}
+
+          {/* ========== TAB RITMO ========== */}
+          {tabActivo === 'ritmo' && (() => {
+            const C = { verde: '#2e7d32', amber: '#e08e0b', rojo: '#c62828', neutro: colors.camel };
+            const cantidad = parseInt(ritmoForm.cantidad) || 0;
+            const plazo = parseFloat(ritmoForm.plazoDias) || 0;
+            const horasDia = parseFloat(ritmoForm.horasDia) || 0;
+            const costo = parseFloat(ritmoForm.costo) || 0;
+            const precio = parseFloat(ritmoForm.precio) || 0;
+            const anaquel = parseFloat(ritmoForm.anaquelDias) || 0;
+            const cobro = parseFloat(ritmoForm.cobroDias) || 0;
+
+            const costoMatReceta = ritmoReceta
+              .filter(r => !r.opcional)
+              .reduce((a, r) => a + (parseFloat(r.cantidad) || 0) * (parseFloat(r.material?.costo_unitario) || 0), 0);
+
+            const ritmoDia = plazo > 0 ? cantidad / plazo : 0;
+            const ritmoHora = horasDia > 0 ? ritmoDia / horasDia : 0;
+            const costoLote = cantidad * costo;
+            const ingresoLote = cantidad * precio;
+            const utilidadLote = ingresoLote - costoLote;
+            const margen = ingresoLote > 0 ? (utilidadLote / ingresoLote) * 100 : 0;
+            const mult = costo > 0 ? precio / costo : 0;
+            const cicloCaja = plazo + anaquel + cobro;
+            const precioConsig = costo * 1.5;
+            const precioDetalle = costo * 2.0;
+
+            const plazoColor = plazo <= 0 ? C.neutro : plazo <= 6 ? C.verde : plazo === 7 ? C.amber : C.rojo;
+            const plazoMsg = plazo <= 0 ? 'Define un plazo' : plazo <= 6 ? 'Controlado: cabe dentro del anaquel' : plazo === 7 ? 'Al límite' : 'Rompe el ciclo: parte el lote o suma maquila';
+            const precioColor = mult <= 0 ? C.neutro : mult >= 1.5 ? C.verde : mult >= 1.3 ? C.amber : C.rojo;
+            const precioMsg = mult <= 0 ? '—' : mult >= 1.5 ? 'Precio sano (≥ tier consignación)' : mult >= 1.3 ? 'Apenas mayoreo — subir' : 'Subpreciado: nivel mayoreo o menos';
+
+            const lineasMat = ritmoReceta.filter(r => !r.opcional).map(r => {
+              const porPieza = parseFloat(r.cantidad) || 0;
+              const total = porPieza * cantidad;
+              const stock = parseFloat(r.material?.stock) || 0;
+              return { nombre: r.material?.nombre || '-', unidad: r.material?.unidad || '', total, stock, suficiente: stock >= total };
+            });
+            const faltaMaterial = lineasMat.some(l => !l.suficiente);
+
+            const kpiCard = (label, valor, sub, color) => (
+              <div style={{ background: colors.cotton, borderRadius: '10px', padding: '16px', textAlign: 'center', border: `1px solid ${colors.sand}` }}>
+                <div style={{ fontSize: '11px', color: colors.camel, textTransform: 'uppercase', letterSpacing: '1px' }}>{label}</div>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: color || colors.sidebarBg }}>{valor}</div>
+                {sub && <div style={{ fontSize: '11px', color: colors.camel, marginTop: '2px' }}>{sub}</div>}
+              </div>
+            );
+
+            return (
+              <div>
+                {/* Explicación de la regla */}
+                <div style={{ background: colors.linen, borderRadius: '10px', padding: '14px 16px', marginBottom: '20px', border: `1px solid ${colors.sand}`, fontSize: '13px', color: colors.espresso }}>
+                  <strong>Ciclo de caja = Producción + Anaquel (~6 d) + Cobro (~8 d).</strong> Como anaquel + cobro ya suman ~14 días, la producción de cada lote debe quedar lista en <strong>≤ 6 días</strong> (ideal 4-5), entregando en gotas. Define el plazo y la app te dice el ritmo diario que necesitas.
+                </div>
+
+                {/* Selector producto */}
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '1px' }}>Producto a producir</label>
+                  <select value={ritmoProductoId} onChange={e => cargarRitmoProducto(e.target.value)} style={{ ...selectBase, maxWidth: '420px', padding: '10px 14px' }}>
+                    <option value="" style={optStyle}>-- Seleccionar producto --</option>
+                    {productos.filter(p => p.es_manufacturado).map(p => <option key={p.id} value={p.id} style={optStyle}>{p.linea_nombre || p.nombre}</option>)}
+                  </select>
+                </div>
+
+                {/* Inputs */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', marginBottom: '8px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Tamaño del lote (pz)</label>
+                    <input type="number" value={ritmoForm.cantidad} onChange={e => setRitmoForm(f => ({ ...f, cantidad: e.target.value }))} style={inputBase} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Plazo objetivo (días)</label>
+                    <input type="number" value={ritmoForm.plazoDias} onChange={e => setRitmoForm(f => ({ ...f, plazoDias: e.target.value }))} style={inputBase} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Horas/día</label>
+                    <input type="number" value={ritmoForm.horasDia} onChange={e => setRitmoForm(f => ({ ...f, horasDia: e.target.value }))} style={inputBase} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Costo/pieza $</label>
+                    <input type="number" step="0.01" value={ritmoForm.costo} onChange={e => setRitmoForm(f => ({ ...f, costo: e.target.value }))} style={inputBase} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Precio/pieza $</label>
+                    <input type="number" step="0.01" value={ritmoForm.precio} onChange={e => setRitmoForm(f => ({ ...f, precio: e.target.value }))} style={inputBase} />
+                  </div>
+                </div>
+                {ritmoProductoId && costoMatReceta > 0 && (
+                  <div style={{ fontSize: '11px', color: colors.camel, marginBottom: '20px', fontStyle: 'italic' }}>
+                    Costo de materia según receta: {formatearMoneda(costoMatReceta)}/pza (sin confección). Ajusta el costo/pieza si incluyes mano de obra.
+                  </div>
+                )}
+
+                {ritmoProductoId ? (
+                  <>
+                    {/* KPIs de ritmo */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', marginBottom: '16px' }}>
+                      {kpiCard('Ritmo requerido', ritmoDia ? `${ritmoDia.toLocaleString('es-MX', { maximumFractionDigits: 1 })} pz/día` : '—', ritmoHora ? `${ritmoHora.toLocaleString('es-MX', { maximumFractionDigits: 1 })} pz/hora` : null)}
+                      {kpiCard('Costo del lote', formatearMoneda(costoLote), `${cantidad} pz × ${formatearMoneda(costo)}`)}
+                      {kpiCard('Retorno esperado', formatearMoneda(ingresoLote), `× ${formatearMoneda(precio)}`)}
+                      {kpiCard('Utilidad del lote', formatearMoneda(utilidadLote), `margen ${margen.toLocaleString('es-MX', { maximumFractionDigits: 0 })}%`, utilidadLote >= 0 ? C.verde : C.rojo)}
+                    </div>
+
+                    {/* Semáforos */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px', marginBottom: '16px' }}>
+                      <div style={{ background: '#fff', border: `2px solid ${plazoColor}`, borderRadius: '10px', padding: '14px' }}>
+                        <div style={{ fontSize: '11px', color: colors.camel, textTransform: 'uppercase', letterSpacing: '1px' }}>Ciclo de caja proyectado</div>
+                        <div style={{ fontSize: '22px', fontWeight: '700', color: plazoColor }}>{cicloCaja || '—'} días</div>
+                        <div style={{ fontSize: '12px', color: colors.camel }}>{plazo || 0} producción + {anaquel} anaquel + {cobro} cobro</div>
+                        <div style={{ fontSize: '12px', color: plazoColor, fontWeight: '600', marginTop: '4px' }}>● {plazoMsg}</div>
+                      </div>
+                      <div style={{ background: '#fff', border: `2px solid ${precioColor}`, borderRadius: '10px', padding: '14px' }}>
+                        <div style={{ fontSize: '11px', color: colors.camel, textTransform: 'uppercase', letterSpacing: '1px' }}>Multiplicador de precio</div>
+                        <div style={{ fontSize: '22px', fontWeight: '700', color: precioColor }}>{mult ? `${mult.toLocaleString('es-MX', { maximumFractionDigits: 2 })}x` : '—'}</div>
+                        <div style={{ fontSize: '12px', color: precioColor, fontWeight: '600' }}>● {precioMsg}</div>
+                        {costo > 0 && (
+                          <div style={{ fontSize: '11px', color: colors.camel, marginTop: '4px' }}>
+                            Tier: consignación {formatearMoneda(precioConsig)} (1.5x) · detalle {formatearMoneda(precioDetalle)} (2.0x)
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Material requerido vs stock */}
+                    {lineasMat.length > 0 && (
+                      <div style={{ marginBottom: '8px' }}>
+                        <h3 style={{ fontSize: '15px', color: colors.espresso, margin: '0 0 8px' }}>Material para el lote {faltaMaterial && <span style={{ color: C.rojo, fontSize: '13px' }}>⚠️ falta stock</span>}</h3>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                          <thead>
+                            <tr style={{ background: colors.sand }}>
+                              {['Material', 'Requerido', 'En stock', ''].map(h => (
+                                <th key={h} style={{ padding: '8px', textAlign: 'left', color: colors.espresso, fontWeight: '600' }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {lineasMat.map((l, i) => (
+                              <tr key={i} style={{ borderBottom: `1px solid ${colors.sand}`, background: l.suficiente ? 'transparent' : '#fff3e0' }}>
+                                <td style={{ padding: '8px', fontWeight: '600' }}>{l.nombre}</td>
+                                <td style={{ padding: '8px' }}>{l.total.toLocaleString('es-MX', { maximumFractionDigits: 2 })} {l.unidad}</td>
+                                <td style={{ padding: '8px', color: l.suficiente ? colors.camel : C.rojo }}>{l.stock.toLocaleString('es-MX', { maximumFractionDigits: 2 })} {l.unidad}</td>
+                                <td style={{ padding: '8px', color: l.suficiente ? C.verde : C.rojo, fontWeight: '600' }}>{l.suficiente ? '✓ alcanza' : '✗ falta'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '40px', color: colors.camel, background: colors.cotton, borderRadius: '12px', border: `1px dashed ${colors.sand}` }}>
+                    Selecciona un producto para calcular su ritmo de producción
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </>
       )}
     </div>
