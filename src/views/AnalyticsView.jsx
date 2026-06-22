@@ -28,12 +28,13 @@ const AnalyticsView = ({ isAdmin }) => {
     { id: 'todo', label: 'Todo' },
   ];
 
+  // Márgenes expone costos/utilidad → solo admin (igual que ProductosView).
   const tabs = [
     { id: 'ventas', nombre: 'Ventas', icon: '📈' },
     { id: 'productos', nombre: 'Productos', icon: '🏆' },
     { id: 'clientes', nombre: 'Clientes', icon: '👥' },
     { id: 'flujo', nombre: 'Ingresos vs Egresos', icon: '💰' },
-    { id: 'margenes', nombre: 'Margenes', icon: '📊' },
+    ...(isAdmin ? [{ id: 'margenes', nombre: 'Margenes', icon: '📊' }] : []),
   ];
 
   const getFechaInicio = () => {
@@ -71,7 +72,12 @@ const AnalyticsView = ({ isAdmin }) => {
 
     setVentas((ventasRes.data || []).filter(v => v.estado_pago !== 'cancelado'));
     setMovimientosCaja(cajaRes.data || []);
-    setServicios(serviciosRes.data || []);
+    // getServiciosMaquila no filtra por fecha en el server → recortamos al periodo aquí.
+    setServicios((serviciosRes.data || []).filter(s => {
+      if (!fechaInicio) return true;
+      const f = s.fecha ? s.fecha.split('T')[0] : null;
+      return f && f >= fechaInicio && f <= fechaFin;
+    }));
     setCargando(false);
   };
 
@@ -117,10 +123,21 @@ const AnalyticsView = ({ isAdmin }) => {
   };
 
   // --- Datos calculados ---
+  // Ingresos por periodo: productos (tabla ventas) + maquila (servicios_maquila),
+  // fusionados por bucket para graficar su composición sin doble conteo.
   const datosVentasPeriodo = useMemo(() => {
-    const agrupado = agruparPorPeriodo(ventas, 'created_at', 'total', 'cantidad');
-    return agrupado.map(g => ({ ...g, label: formatLabel(g.periodo) }));
-  }, [ventas, periodo]);
+    const ventasAgr = agruparPorPeriodo(ventas, 'created_at', 'total', 'cantidad');
+    const maquilaAgr = agruparPorPeriodo(servicios, 'fecha', 'total');
+    const mapa = {};
+    ventasAgr.forEach(g => { mapa[g.periodo] = { periodo: g.periodo, monto: g.monto, cantidad: g.cantidad, montoMaquila: 0 }; });
+    maquilaAgr.forEach(g => {
+      if (!mapa[g.periodo]) mapa[g.periodo] = { periodo: g.periodo, monto: 0, cantidad: 0, montoMaquila: 0 };
+      mapa[g.periodo].montoMaquila += g.monto;
+    });
+    return Object.values(mapa)
+      .sort((a, b) => a.periodo.localeCompare(b.periodo))
+      .map(g => ({ ...g, label: formatLabel(g.periodo) }));
+  }, [ventas, servicios, periodo]);
 
   const topProductos = useMemo(() => {
     const porProducto = {};
@@ -195,8 +212,12 @@ const AnalyticsView = ({ isAdmin }) => {
     const ticketPromedio = ventas.length > 0 ? totalVentas / ventas.length : 0;
     const totalIngresos = movimientosCaja.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + (parseFloat(m.monto) || 0), 0);
     const totalEgresos = movimientosCaja.filter(m => m.tipo === 'egreso').reduce((s, m) => s + (parseFloat(m.monto) || 0), 0);
-    return { totalVentas, totalPiezas, totalCobrado, ticketPromedio, numVentas: ventas.length, totalIngresos, totalEgresos };
-  }, [ventas, movimientosCaja]);
+    // Maquila: facturado (total) y cobrado (monto_pagado). El cobro YA está en caja
+    // vía movimientos_caja, por eso aquí solo lo sumamos al ingreso por VENTAS, no al flujo.
+    const totalMaquila = servicios.reduce((s, x) => s + (parseFloat(x.total) || 0), 0);
+    const cobradoMaquila = servicios.reduce((s, x) => s + (parseFloat(x.monto_pagado) || 0), 0);
+    return { totalVentas, totalPiezas, totalCobrado, ticketPromedio, numVentas: ventas.length, totalIngresos, totalEgresos, totalMaquila, cobradoMaquila, ingresoTotal: totalVentas + totalMaquila };
+  }, [ventas, movimientosCaja, servicios]);
 
   // --- Estilos ---
   const cardStyle = {
@@ -274,12 +295,22 @@ const AnalyticsView = ({ isAdmin }) => {
                   <div style={{ fontSize: '11px', color: colors.camel, textTransform: 'uppercase', letterSpacing: '1px' }}>Operaciones</div>
                   <div style={{ fontSize: '22px', fontWeight: '700', color: colors.camel }}>{resumen.numVentas}</div>
                 </div>
+                <div style={cardStyle}>
+                  <div style={{ fontSize: '11px', color: colors.camel, textTransform: 'uppercase', letterSpacing: '1px' }}>Maquila</div>
+                  <div style={{ fontSize: '22px', fontWeight: '700', color: colors.olive }}>{formatearMoneda(resumen.totalMaquila)}</div>
+                  <div style={{ fontSize: '10px', color: colors.camel }}>Cobrado {formatearMoneda(resumen.cobradoMaquila)}</div>
+                </div>
+                <div style={{ ...cardStyle, borderColor: colors.sidebarBg }}>
+                  <div style={{ fontSize: '11px', color: colors.camel, textTransform: 'uppercase', letterSpacing: '1px' }}>Ingreso total</div>
+                  <div style={{ fontSize: '22px', fontWeight: '700', color: colors.sidebarBg }}>{formatearMoneda(resumen.ingresoTotal)}</div>
+                  <div style={{ fontSize: '10px', color: colors.camel }}>Productos + maquila</div>
+                </div>
               </div>
 
               {/* Grafica */}
               {datosVentasPeriodo.length > 0 ? (
                 <div style={{ background: colors.cotton, borderRadius: '12px', padding: '20px', border: `1px solid ${colors.sand}` }}>
-                  <h3 style={{ margin: '0 0 16px', color: colors.espresso, fontSize: '16px' }}>Ventas por periodo</h3>
+                  <h3 style={{ margin: '0 0 16px', color: colors.espresso, fontSize: '16px' }}>Ingresos por periodo (productos + maquila)</h3>
                   <ResponsiveContainer width="100%" height={300}>
                     <AreaChart data={datosVentasPeriodo}>
                       <defs>
@@ -287,12 +318,18 @@ const AnalyticsView = ({ isAdmin }) => {
                           <stop offset="5%" stopColor={colors.sidebarBg} stopOpacity={0.3} />
                           <stop offset="95%" stopColor={colors.sidebarBg} stopOpacity={0} />
                         </linearGradient>
+                        <linearGradient id="gradMaquila" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={colors.olive} stopOpacity={0.35} />
+                          <stop offset="95%" stopColor={colors.olive} stopOpacity={0} />
+                        </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke={colors.sand} />
                       <XAxis dataKey="label" tick={{ fontSize: 11, fill: colors.camel }} />
                       <YAxis tick={{ fontSize: 11, fill: colors.camel }} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
-                      <Tooltip {...tooltipStyle} formatter={(v) => [formatearMoneda(v), 'Monto']} />
-                      <Area type="monotone" dataKey="monto" stroke={colors.sidebarBg} fill="url(#gradVentas)" strokeWidth={2} name="Ventas" />
+                      <Tooltip {...tooltipStyle} formatter={(v, name) => [formatearMoneda(v), name]} />
+                      <Legend wrapperStyle={{ fontSize: '12px' }} />
+                      <Area type="monotone" dataKey="monto" stackId="1" stroke={colors.sidebarBg} fill="url(#gradVentas)" strokeWidth={2} name="Productos" />
+                      <Area type="monotone" dataKey="montoMaquila" stackId="1" stroke={colors.olive} fill="url(#gradMaquila)" strokeWidth={2} name="Maquila" />
                     </AreaChart>
                   </ResponsiveContainer>
 
@@ -507,8 +544,8 @@ const AnalyticsView = ({ isAdmin }) => {
             </div>
           )}
 
-          {/* ========== TAB MARGENES ========== */}
-          {tabActivo === 'margenes' && (
+          {/* ========== TAB MARGENES (solo admin) ========== */}
+          {tabActivo === 'margenes' && isAdmin && (
             <div>
               {margenes.length > 0 ? (
                 <>
