@@ -17,7 +17,13 @@ import {
   createMaterialesUsados,
   completarOrdenProduccion,
   registrarCompraMaterial,
+  getConfiguracionActual,
+  createConfiguracionCorte,
+  updateConfiguracionCorte,
+  duplicarConfiguracionConNuevoPrecio,
+  getHistorialPrecios
 } from '../supabaseClient';
+
 
 const ProduccionView = ({ isAdmin }) => {
   const [tabActivo, setTabActivo] = useState('materiales');
@@ -44,6 +50,20 @@ const ProduccionView = ({ isAdmin }) => {
   const [recetaLineas, setRecetaLineas] = useState([]);
   const [mostrarFormReceta, setMostrarFormReceta] = useState(false);
   const [formReceta, setFormReceta] = useState({ material_id: '', cantidad: '', notas: '', opcional: false });
+  const [varianteReceta, setVarianteReceta] = useState('');
+  const [variantesProductoReceta, setVariantesProductoReceta] = useState([]);
+  const [configCorteActual, setConfigCorteActual] = useState(null);
+  const [formConfigCorte, setFormConfigCorte] = useState({
+    nombre: '',
+    porcentaje_desperdicio: 10,
+    precio_tela_metro: 0,
+    material_id: '',
+    costo_confeccion: 0,
+    costo_empaque: 0,
+    medidas_json: []
+  });
+  const [historialPrecios, setHistorialPrecios] = useState([]);
+
 
   // --- Producción state ---
   const [mostrarWizard, setMostrarWizard] = useState(false);
@@ -170,10 +190,163 @@ const ProduccionView = ({ isAdmin }) => {
 
   // ---- RECETAS handlers ----
   const cargarReceta = async (prodId) => {
-    setProductoReceta(prodId);
     if (!prodId) { setRecetaLineas([]); return; }
     const res = await getRecetasProducto(prodId);
     setRecetaLineas(res.data || []);
+  };
+
+  const handleSeleccionarProductoReceta = async (prodId) => {
+    setProductoReceta(prodId);
+    setVarianteReceta('');
+    if (!prodId) {
+      setRecetaLineas([]);
+      setVariantesProductoReceta([]);
+      setConfigCorteActual(null);
+      setFormConfigCorte({
+        nombre: '', porcentaje_desperdicio: 10, precio_tela_metro: 0, material_id: '', costo_confeccion: 0, costo_empaque: 0, medidas_json: []
+      });
+      setHistorialPrecios([]);
+      return;
+    }
+    
+    // Load variants
+    const pId = parseInt(prodId);
+    const varRes = await getVariantes(pId);
+    setVariantesProductoReceta(varRes.data || []);
+    
+    // Load recipe and corte for base product
+    await Promise.all([
+      cargarReceta(pId),
+      cargarConfigCorte(pId, '')
+    ]);
+  };
+
+  const handleSeleccionarVarianteReceta = async (varId) => {
+    setVarianteReceta(varId);
+    await cargarConfigCorte(productoReceta, varId);
+  };
+
+  const cargarConfigCorte = async (prodId, varId) => {
+    if (!prodId) {
+      setConfigCorteActual(null);
+      setFormConfigCorte({
+        nombre: '', porcentaje_desperdicio: 10, precio_tela_metro: 0, material_id: '', costo_confeccion: 0, costo_empaque: 0, medidas_json: []
+      });
+      setHistorialPrecios([]);
+      return;
+    }
+    const pId = parseInt(prodId);
+    const vId = varId ? parseInt(varId) : null;
+    
+    const { data: config } = await getConfiguracionActual(pId, vId);
+    const prod = productos.find(p => p.id === pId);
+    
+    if (config) {
+      setConfigCorteActual(config);
+      setFormConfigCorte({
+        nombre: config.nombre || '',
+        porcentaje_desperdicio: config.porcentaje_desperdicio || 10,
+        precio_tela_metro: config.precio_tela_metro || 0,
+        material_id: config.material_id || '',
+        costo_confeccion: config.costo_confeccion || 0,
+        costo_empaque: config.costo_empaque || 0,
+        medidas_json: config.medidas_json || []
+      });
+    } else {
+      setConfigCorteActual(null);
+      // Wait, we need to load from variants list
+      // Let's query variants of the product or find in local state
+      const varObj = variantesProductoReceta.find(v => v.id === vId) || prod?.variantes?.find(v => v.id === vId);
+      const suffix = varObj ? ` - ${varObj.material || ''} ${varObj.talla || ''}` : ' - Base';
+      setFormConfigCorte({
+        nombre: `${prod?.linea_nombre || prod?.nombre || ''}${suffix}`.trim(),
+        porcentaje_desperdicio: 10,
+        precio_tela_metro: 0,
+        material_id: '',
+        costo_confeccion: 0,
+        costo_empaque: 0,
+        medidas_json: []
+      });
+    }
+    
+    const { data: historial } = await getHistorialPrecios(pId, vId);
+    setHistorialPrecios(historial || []);
+  };
+
+  const handleGuardarConfigCorte = async () => {
+    if (!formConfigCorte.nombre) {
+      mostrarMsg('error', 'El nombre de la configuración es obligatorio');
+      return;
+    }
+    setGuardando(true);
+    try {
+      const pId = parseInt(productoReceta);
+      const vId = varianteReceta ? parseInt(varianteReceta) : null;
+      const configData = {
+        producto_id: pId,
+        variante_id: vId,
+        nombre: formConfigCorte.nombre,
+        porcentaje_desperdicio: parseFloat(formConfigCorte.porcentaje_desperdicio) || 0,
+        precio_tela_metro: parseFloat(formConfigCorte.precio_tela_metro) || 0,
+        material_id: formConfigCorte.material_id || null,
+        costo_confeccion: parseFloat(formConfigCorte.costo_confeccion) || 0,
+        costo_empaque: parseFloat(formConfigCorte.costo_empaque) || 0,
+        medidas_json: formConfigCorte.medidas_json || [],
+        es_configuracion_actual: true
+      };
+      
+      let result;
+      if (configCorteActual) {
+        result = await updateConfiguracionCorte(configCorteActual.id, configData);
+      } else {
+        result = await createConfiguracionCorte(configData);
+      }
+      
+      if (result.error) {
+        mostrarMsg('error', 'Error al guardar patrón: ' + result.error);
+      } else {
+        mostrarMsg('ok', 'Patrón de corte y costos guardados');
+        setConfigCorteActual(result.data);
+        
+        // Recargar catálogo local
+        await cargarDatos();
+        
+        // Volver a cargar la config guardada
+        await cargarConfigCorte(productoReceta, varianteReceta);
+      }
+    } catch (err) {
+      mostrarMsg('error', 'Error: ' + err.message);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const handleActualizarPrecioTela = async () => {
+    if (!configCorteActual) {
+      mostrarMsg('error', 'Primero guarda la configuración base');
+      return;
+    }
+    const nuevoPrecio = parseFloat(formConfigCorte.precio_tela_metro);
+    if (nuevoPrecio === parseFloat(configCorteActual.precio_tela_metro)) {
+      mostrarMsg('error', 'El precio es igual al actual');
+      return;
+    }
+    setGuardando(true);
+    try {
+      const { data, error } = await duplicarConfiguracionConNuevoPrecio(configCorteActual.id, nuevoPrecio);
+      if (error) {
+        mostrarMsg('error', 'Error: ' + error.message);
+      } else {
+        mostrarMsg('ok', 'Precio actualizado (historial guardado)');
+        setConfigCorteActual(data);
+        await cargarDatos();
+        await cargarConfigCorte(productoReceta, varianteReceta);
+      }
+    } catch (err) {
+      mostrarMsg('error', 'Error: ' + err.message);
+    } finally {
+      setGuardando(false);
+    }
   };
 
   const handleGuardarRecetaLinea = async () => {
@@ -181,14 +354,20 @@ const ProduccionView = ({ isAdmin }) => {
     setGuardando(true);
     try {
       const res = await upsertRecetaLinea({
-        producto_id: productoReceta,
+        producto_id: parseInt(productoReceta),
+        variante_id: varianteReceta ? parseInt(varianteReceta) : null,
         material_id: formReceta.material_id,
         cantidad: parseFloat(formReceta.cantidad),
         notas: formReceta.notas || null,
         opcional: formReceta.opcional
       });
       if (res.error) mostrarMsg('error', res.error.message || 'Error');
-      else { mostrarMsg('ok', 'Línea guardada'); setFormReceta({ material_id: '', cantidad: '', notas: '', opcional: false }); setMostrarFormReceta(false); cargarReceta(productoReceta); }
+      else {
+        mostrarMsg('ok', 'Línea guardada');
+        setFormReceta({ material_id: '', cantidad: '', notas: '', opcional: false });
+        setMostrarFormReceta(false);
+        cargarReceta(productoReceta);
+      }
     } catch (e) { mostrarMsg('error', e.message); }
     setGuardando(false);
   };
@@ -198,6 +377,57 @@ const ProduccionView = ({ isAdmin }) => {
     const res = await deleteRecetaLinea(id);
     if (res.error) mostrarMsg('error', res.error.message || 'Error');
     else { mostrarMsg('ok', 'Línea eliminada'); cargarReceta(productoReceta); }
+  };
+
+  const calcularCorteTemporal = () => {
+    const f = formConfigCorte;
+    if (!f) return { itemsDetalle: [], subtotalMetros: '0.00', metrosConDesperdicio: '0.00', costoMaterial: '0.00', costoTotal: '0.00', precioUsado: '0.00', usandoMaterialCatalogo: false };
+
+    let subtotalMetros = 0;
+    const itemsDetalle = [];
+
+    // (1) SI HAY MEDIDAS_JSON (Nuevo modelo dinámico)
+    if (f.medidas_json && f.medidas_json.length > 0) {
+      f.medidas_json.forEach(p => {
+        if (p.incluir !== false) {
+          const metrosPieza = (parseFloat(p.metros) || 0) * (parseInt(p.cantidad) || 1);
+          subtotalMetros += metrosPieza;
+          itemsDetalle.push({ nombre: p.pieza, metros: metrosPieza.toFixed(2), cantidad: p.cantidad });
+        }
+      });
+    } else {
+      // (2) FALLBACK MODELO LEGACY
+      const mSabanaPlana = f.incluye_sabana_plana ? parseFloat(f.metros_sabana_plana) || 0 : 0;
+      const mSabanaCajon = f.incluye_sabana_cajon ? parseFloat(f.metros_sabana_cajon) || 0 : 0;
+      const mFundas = f.incluye_fundas ? (parseFloat(f.metros_fundas) || 0) * (parseInt(f.cantidad_fundas) || 1) : 0;
+      
+      subtotalMetros = mSabanaPlana + mSabanaCajon + mFundas;
+      
+      if (f.incluye_sabana_plana) itemsDetalle.push({ nombre: 'Sábana Plana', metros: mSabanaPlana.toFixed(2), cantidad: 1 });
+      if (f.incluye_sabana_cajon) itemsDetalle.push({ nombre: 'Sábana Cajón', metros: mSabanaCajon.toFixed(2), cantidad: 1 });
+      if (f.incluye_fundas) itemsDetalle.push({ nombre: 'Fundas', metros: mFundas.toFixed(2), cantidad: f.cantidad_fundas });
+    }
+
+    // Total metros lineales (con desperdicio)
+    const metrosConDesperdicio = subtotalMetros * (1 + (parseFloat(f.porcentaje_desperdicio) || 0) / 100);
+
+    // Costos
+    // Buscar precio real del material si hay material_id
+    const materialReal = f.material_id ? materiales.find(m => m.id === f.material_id) : null;
+    const precioMaterial = materialReal ? parseFloat(materialReal.costo_unitario) : (parseFloat(f.precio_tela_metro) || 0);
+
+    const costoMaterial = metrosConDesperdicio * precioMaterial;
+    const costoTotal = costoMaterial + parseFloat(f.costo_confeccion || 0) + parseFloat(f.costo_empaque || 0);
+
+    return {
+      itemsDetalle,
+      subtotalMetros: subtotalMetros.toFixed(2),
+      metrosConDesperdicio: metrosConDesperdicio.toFixed(2),
+      costoMaterial: costoMaterial.toFixed(2),
+      costoTotal: costoTotal.toFixed(2),
+      precioUsado: precioMaterial.toFixed(2),
+      usandoMaterialCatalogo: !!materialReal
+    };
   };
 
   // ---- RITMO handlers ----
@@ -610,124 +840,461 @@ const ProduccionView = ({ isAdmin }) => {
           {/* ========== TAB RECETAS ========== */}
           {tabActivo === 'recetas' && (
             <div>
-              {/* Selector de producto */}
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '1px' }}>Selecciona un producto</label>
-                <select value={productoReceta} onChange={e => cargarReceta(e.target.value)} style={{ ...selectBase, maxWidth: '400px', padding: '10px 14px' }}>
-                  <option value="" style={optStyle}>-- Seleccionar producto --</option>
-                  {productos.map(p => <option key={p.id} value={p.id} style={optStyle}>{p.linea_nombre || p.nombre}</option>)}
-                </select>
+              <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', flexWrap: 'wrap' }}>
+                {/* Selector de producto */}
+                <div style={{ flex: '1', minWidth: '250px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '1px' }}>Selecciona un producto</label>
+                  <select value={productoReceta} onChange={e => handleSeleccionarProductoReceta(e.target.value)} style={{ ...selectBase, padding: '10px 14px' }}>
+                    <option value="" style={optStyle}>-- Seleccionar producto --</option>
+                    {productos.map(p => <option key={p.id} value={p.id} style={optStyle}>{p.linea_nombre || p.nombre}</option>)}
+                  </select>
+                </div>
+
+                {/* Selector de variante (si tiene) */}
+                {productoReceta && (
+                  <div style={{ flex: '1', minWidth: '250px' }}>
+                    <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '1px' }}>Selecciona una variante</label>
+                    <select value={varianteReceta} onChange={e => handleSeleccionarVarianteReceta(e.target.value)} style={{ ...selectBase, padding: '10px 14px' }}>
+                      <option value="" style={optStyle}>-- Receta Base (Todas las variantes) --</option>
+                      {variantesProductoReceta.map(v => (
+                        <option key={v.id} value={v.id} style={optStyle}>
+                          {v.material || ''} {v.talla || ''} {v.color ? `(${v.color})` : ''} {v.sku ? `[${v.sku}]` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
-              {productoReceta && (
-                <>
-                  {/* Botón agregar línea */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <h3 style={{ margin: 0, color: colors.espresso, fontSize: '18px' }}>Receta (BOM)</h3>
-                    <button onClick={() => { setFormReceta({ material_id: '', cantidad: '', notas: '', opcional: false }); setMostrarFormReceta(true); }} style={{
-                      padding: '8px 20px', background: colors.sidebarBg, color: '#fff', border: 'none',
-                      borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '13px', fontFamily: 'inherit'
-                    }}>
-                      + Agregar material
-                    </button>
-                  </div>
+              {productoReceta && (() => {
+                const prodObj = productos.find(p => p.id === parseInt(productoReceta));
+                const esManufacturado = prodObj?.es_manufacturado === true;
+                const lineasVisibles = recetaLineas.filter(r => {
+                  if (varianteReceta === '') {
+                    return r.variante_id === null;
+                  } else {
+                    return r.variante_id === null || r.variante_id === parseInt(varianteReceta);
+                  }
+                });
 
-                  {/* Tabla receta */}
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                    <thead>
-                      <tr style={{ background: colors.sand }}>
-                        {['Material', 'Cantidad/pieza', 'Unidad', 'Costo contribución', 'Notas', 'Acciones'].map(h => (
-                          <th key={h} style={{ padding: '10px 8px', textAlign: 'left', color: colors.espresso, fontWeight: '600', borderBottom: `2px solid ${colors.camel}` }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {recetaLineas.map(r => (
-                        <tr key={r.id} style={{ borderBottom: `1px solid ${colors.sand}`, background: r.opcional ? 'rgba(218,159,23,0.03)' : 'transparent' }}>
-                          <td style={{ padding: '10px 8px' }}>
-                            <div style={{ fontWeight: '600' }}>{r.material?.nombre || '-'}</div>
-                            {r.opcional && <div style={{ fontSize: '10px', color: colors.camel, fontStyle: 'italic' }}>Opcional / Alternativo</div>}
-                          </td>
-                          <td style={{ padding: '10px 8px' }}>{parseFloat(r.cantidad).toLocaleString('es-MX', { maximumFractionDigits: 4 })}</td>
-                          <td style={{ padding: '10px 8px' }}>{r.material?.unidad || '-'}</td>
-                          <td style={{ padding: '10px 8px', fontWeight: '600' }}>{formatearMoneda((parseFloat(r.cantidad) || 0) * (parseFloat(r.material?.costo_unitario) || 0))}</td>
-                          <td style={{ padding: '10px 8px', color: colors.camel, fontSize: '12px' }}>{r.notas || '-'}</td>
-                          <td style={{ padding: '10px 8px' }}>
-                            <button onClick={() => handleEliminarRecetaLinea(r.id)} style={{
-                              padding: '4px 10px', background: colors.terracotta, color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontFamily: 'inherit'
-                            }}>X</button>
-                          </td>
-                        </tr>
-                      ))}
-                      {recetaLineas.length === 0 && (
-                        <tr><td colSpan={6} style={{ textAlign: 'center', padding: '30px', color: colors.camel }}>No hay materiales en la receta</td></tr>
-                      )}
-                    </tbody>
-                  </table>
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: esManufacturado ? '1fr 1fr' : '1fr', gap: '24px', alignItems: 'start' }}>
+                    
+                    {/* COLUMNA IZQUIERDA: RECETA / BOM */}
+                    <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: `1px solid ${colors.sand}` }}>
+                      {/* Header Receta */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h3 style={{ margin: 0, color: colors.espresso, fontSize: '18px' }}>
+                          Receta (BOM) {varianteReceta ? ' - Variante' : ' - Base'}
+                        </h3>
+                        <button onClick={() => { setFormReceta({ material_id: '', cantidad: '', notas: '', opcional: false }); setMostrarFormReceta(true); }} style={{
+                          padding: '8px 20px', background: colors.sidebarBg, color: '#fff', border: 'none',
+                          borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '13px', fontFamily: 'inherit'
+                        }}>
+                          + Agregar material
+                        </button>
+                      </div>
 
-                  {/* Resumen receta */}
-                  {recetaLineas.length > 0 && (
-                    <div style={{ marginTop: '16px', padding: '16px', background: colors.cotton, borderRadius: '10px', border: `1px solid ${colors.sand}` }}>
-                      <div style={{ fontSize: '14px', fontWeight: '600', color: colors.espresso }}>
-                        Costo base receta: {formatearMoneda(recetaLineas.reduce((acc, r) => {
-                          if (r.opcional) return acc;
-                          return acc + (parseFloat(r.cantidad) || 0) * (parseFloat(r.material?.costo_unitario) || 0);
-                        }, 0))} / pieza
-                      </div>
-                      <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>
-                        {recetaLineas.filter(r => !r.opcional).length} fijos + {recetaLineas.filter(r => r.opcional).length} opcionales/alternativas
-                      </div>
-                      {recetaLineas.some(r => r.opcional) && (
-                        <div style={{ fontSize: '11px', color: colors.camel, marginTop: '8px', fontStyle: 'italic' }}>
-                          * El costo final varía según la tela opcional que se seleccione al producir.
+                      {/* Tabla receta */}
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                        <thead>
+                          <tr style={{ background: colors.sand }}>
+                            {['Material', 'Ámbito', 'Cantidad/pieza', 'Unidad', 'Costo contribución', 'Notas', 'Acciones'].map(h => (
+                              <th key={h} style={{ padding: '10px 8px', textAlign: 'left', color: colors.espresso, fontWeight: '600', borderBottom: `2px solid ${colors.camel}` }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {lineasVisibles.map(r => {
+                            const esDeVariante = r.variante_id !== null;
+                            const esSoloLectura = varianteReceta !== '' && r.variante_id === null;
+                            return (
+                              <tr key={r.id} style={{ borderBottom: `1px solid ${colors.sand}`, background: r.opcional ? 'rgba(218,159,23,0.03)' : 'transparent' }}>
+                                <td style={{ padding: '10px 8px' }}>
+                                  <div style={{ fontWeight: '600' }}>{r.material?.nombre || '-'}</div>
+                                  {r.opcional && <div style={{ fontSize: '10px', color: colors.camel, fontStyle: 'italic' }}>Opcional / Alternativo</div>}
+                                </td>
+                                <td style={{ padding: '10px 8px' }}>
+                                  <span style={{ 
+                                    fontSize: '10px', 
+                                    background: esDeVariante ? '#d4e6f1' : '#d5f5e3', 
+                                    color: esDeVariante ? '#1b4f72' : '#0e6251', 
+                                    padding: '2px 6px', 
+                                    borderRadius: '4px',
+                                    fontWeight: '600'
+                                  }}>
+                                    {esDeVariante ? 'Variante' : 'Base (Gral)'}
+                                  </span>
+                                </td>
+                                <td style={{ padding: '10px 8px' }}>{parseFloat(r.cantidad).toLocaleString('es-MX', { maximumFractionDigits: 4 })}</td>
+                                <td style={{ padding: '10px 8px' }}>{r.material?.unidad || '-'}</td>
+                                <td style={{ padding: '10px 8px', fontWeight: '600' }}>{formatearMoneda((parseFloat(r.cantidad) || 0) * (parseFloat(r.material?.costo_unitario) || 0))}</td>
+                                <td style={{ padding: '10px 8px', color: colors.camel, fontSize: '12px' }}>{r.notes || r.notas || '-'}</td>
+                                <td style={{ padding: '10px 8px' }}>
+                                  {esSoloLectura ? (
+                                    <span style={{ color: colors.camel, fontStyle: 'italic', fontSize: '11px' }}>Editar en Base</span>
+                                  ) : (
+                                    <button onClick={() => handleEliminarRecetaLinea(r.id)} style={{
+                                      padding: '4px 10px', background: colors.terracotta, color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontFamily: 'inherit'
+                                    }}>X</button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {lineasVisibles.length === 0 && (
+                            <tr><td colSpan={7} style={{ textAlign: 'center', padding: '30px', color: colors.camel }}>No hay materiales en la receta</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+
+                      {/* Resumen receta */}
+                      {lineasVisibles.length > 0 && (
+                        <div style={{ marginTop: '16px', padding: '16px', background: colors.cotton, borderRadius: '10px', border: `1px solid ${colors.sand}` }}>
+                          <div style={{ fontSize: '14px', fontWeight: '600', color: colors.espresso }}>
+                            Costo base receta: {formatearMoneda(lineasVisibles.reduce((acc, r) => {
+                              if (r.opcional) return acc;
+                              return acc + (parseFloat(r.cantidad) || 0) * (parseFloat(r.material?.costo_unitario) || 0);
+                            }, 0))} / pieza
+                          </div>
+                          <div style={{ fontSize: '12px', color: colors.camel, marginTop: '4px' }}>
+                            {lineasVisibles.filter(r => !r.opcional).length} fijos + {lineasVisibles.filter(r => r.opcional).length} opcionales/alternativas
+                          </div>
+                          {lineasVisibles.some(r => r.opcional) && (
+                            <div style={{ fontSize: '11px', color: colors.camel, marginTop: '8px', fontStyle: 'italic' }}>
+                              * El costo final varía según la tela opcional que se seleccione al producir.
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
-                  )}
 
-                  {/* Modal agregar línea receta */}
-                  {mostrarFormReceta && (
-                    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-                      <div style={{ background: '#fff', borderRadius: '16px', padding: '24px', maxWidth: '400px', width: '100%' }}>
-                        <h3 style={{ margin: '0 0 16px', color: colors.espresso }}>Agregar material a receta</h3>
-                        <div style={{ display: 'grid', gap: '12px' }}>
+                    {/* COLUMNA DERECHA: PATRÓN DE CORTE Y COSTOS (MANUFACTURADOS) */}
+                    {esManufacturado && formConfigCorte && (
+                      <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: `1px solid ${colors.sand}` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                          <h3 style={{ margin: 0, color: colors.espresso, fontSize: '18px' }}>
+                            Patrón de Corte y Mano de Obra
+                          </h3>
+                          {configCorteActual && (
+                            <span style={{ fontSize: '12px', background: colors.olive, color: '#fff', padding: '4px 8px', borderRadius: '12px', fontWeight: '600' }}>
+                              Configurado ✓
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Nombre de la configuración */}
+                        <div style={{ marginBottom: '16px' }}>
+                          <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', color: colors.camel, textTransform: 'uppercase' }}>Nombre de la configuración</label>
+                          <input
+                            type="text"
+                            value={formConfigCorte.nombre}
+                            onChange={(e) => setFormConfigCorte({ ...formConfigCorte, nombre: e.target.value })}
+                            placeholder="Ej: Juego Matrimonial Bramante"
+                            style={inputBase}
+                          />
+                        </div>
+
+                        {/* Piezas de corte (Modelo dinámico) */}
+                        <div style={{ background: '#f8f8f8', padding: '15px', borderRadius: '12px', marginBottom: '16px', border: `1px solid ${colors.sand}` }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                            <h4 style={{ margin: 0, color: colors.espresso, fontSize: '14px' }}>Piezas de Corte (Metraje)</h4>
+                            <button
+                              onClick={() => {
+                                const nuevasPiezas = [...(formConfigCorte.medidas_json || [])];
+                                nuevasPiezas.push({ pieza: '', metros: '', cantidad: 1, incluir: true });
+                                setFormConfigCorte({ ...formConfigCorte, medidas_json: nuevasPiezas });
+                              }}
+                              style={{ padding: '4px 10px', background: colors.sidebarBg, color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}
+                            >
+                              + Añadir Pieza
+                            </button>
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {(!formConfigCorte.medidas_json || formConfigCorte.medidas_json.length === 0) && (
+                              <div style={{ padding: '15px', textAlign: 'center', color: colors.camel, fontSize: '12px', background: 'white', borderRadius: '8px', border: `1px dashed ${colors.sand}` }}>
+                                Sin piezas de corte definidas. Añade una para calcular el metraje estándar.
+                              </div>
+                            )}
+
+                            {(formConfigCorte.medidas_json || []).map((p, idx) => (
+                              <div key={idx} style={{ background: p.incluir !== false ? 'white' : '#eee', padding: '8px', borderRadius: '8px', border: `1px solid ${colors.sand}`, opacity: p.incluir !== false ? 1 : 0.6 }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.8fr auto', gap: '6px', alignItems: 'center' }}>
+                                  <input
+                                    type="text"
+                                    value={p.pieza}
+                                    placeholder="Pieza (ej: Plana)"
+                                    onChange={(e) => {
+                                      const nuevas = [...formConfigCorte.medidas_json];
+                                      nuevas[idx].pieza = e.target.value;
+                                      setFormConfigCorte({ ...formConfigCorte, medidas_json: nuevas });
+                                    }}
+                                    style={{ ...inputBase, padding: '6px' }}
+                                  />
+                                  <div style={{ position: 'relative' }}>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      value={p.metros}
+                                      placeholder="Metros"
+                                      onChange={(e) => {
+                                        const nuevas = [...formConfigCorte.medidas_json];
+                                        nuevas[idx].metros = e.target.value;
+                                        setFormConfigCorte({ ...formConfigCorte, medidas_json: nuevas });
+                                      }}
+                                      style={{ ...inputBase, padding: '6px 15px 6px 6px' }}
+                                    />
+                                    <span style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)', fontSize: '10px', color: '#999' }}>m</span>
+                                  </div>
+                                  <div style={{ position: 'relative' }}>
+                                    <input
+                                      type="number"
+                                      value={p.skew || p.cantidad}
+                                      placeholder="Cant"
+                                      onChange={(e) => {
+                                        const nuevas = [...formConfigCorte.medidas_json];
+                                        nuevas[idx].cantidad = e.target.value;
+                                        setFormConfigCorte({ ...formConfigCorte, medidas_json: nuevas });
+                                      }}
+                                      style={{ ...inputBase, padding: '6px 15px 6px 6px' }}
+                                    />
+                                    <span style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)', fontSize: '10px', color: '#999' }}>x</span>
+                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      const nuevas = formConfigCorte.medidas_json.filter((_, i) => i !== idx);
+                                      setFormConfigCorte({ ...formConfigCorte, medidas_json: nuevas });
+                                    }}
+                                    style={{ background: 'none', border: 'none', color: colors.terracotta, cursor: 'pointer', fontSize: '14px', padding: '0 4px' }}
+                                    title="Eliminar pieza"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '4px' }}>
+                                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontSize: '10px', color: colors.olive }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={p.incluir !== false}
+                                      onChange={(e) => {
+                                        const nuevas = [...formConfigCorte.medidas_json];
+                                        nuevas[idx].incluir = e.target.checked;
+                                        setFormConfigCorte({ ...formConfigCorte, medidas_json: nuevas });
+                                      }}
+                                    />
+                                    Incluir en cálculo
+                                  </label>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* % Desperdicio / Ajustes */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
                           <div>
-                            <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Material *</label>
-                            <select value={formReceta.material_id} onChange={e => setFormReceta(p => ({ ...p, material_id: e.target.value }))} style={selectBase}>
-                              <option value="" style={optStyle}>-- Seleccionar --</option>
-                              {materiales.map(m => <option key={m.id} value={m.id} style={optStyle}>{m.nombre} ({m.unidad})</option>)}
+                            <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>% Desperdicio / Merma</label>
+                            <input
+                              type="number"
+                              value={formConfigCorte.porcentaje_desperdicio}
+                              onChange={(e) => setFormConfigCorte({ ...formConfigCorte, porcentaje_desperdicio: e.target.value })}
+                              style={inputBase}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Confección ($)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={formConfigCorte.costo_confeccion}
+                              onChange={(e) => setFormConfigCorte({ ...formConfigCorte, costo_confeccion: e.target.value })}
+                              style={inputBase}
+                            />
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Empaque ($)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={formConfigCorte.costo_empaque}
+                              onChange={(e) => setFormConfigCorte({ ...formConfigCorte, costo_empaque: e.target.value })}
+                              style={inputBase}
+                            />
+                          </div>
+                          {/* Selector de material para tela principal */}
+                          <div>
+                            <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Tela del Catálogo (Opcional)</label>
+                            <select
+                              value={formConfigCorte.material_id || ''}
+                              onChange={(e) => {
+                                const mId = e.target.value ? parseInt(e.target.value) : null;
+                                const mat = materiales.find(m => m.id === mId);
+                                setFormConfigCorte({
+                                  ...formConfigCorte,
+                                  material_id: mId,
+                                  precio_tela_metro: mat ? mat.costo_unitario : formConfigCorte.precio_tela_metro
+                                });
+                              }}
+                              style={selectBase}
+                            >
+                              <option value="">-- Usar precio manual --</option>
+                              {materiales.filter(m => m.activo !== false && m.categoria === 'tela').map(m => (
+                                <option key={m.id} value={m.id}>
+                                  {m.nombre} (${parseFloat(m.costo_unitario).toFixed(2)} / m)
+                                </option>
+                              ))}
                             </select>
                           </div>
-                          <div>
-                            <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Cantidad por pieza *</label>
-                            <input type="number" step="0.001" value={formReceta.cantidad} onChange={e => setFormReceta(p => ({ ...p, cantidad: e.target.value }))} style={inputBase} />
-                          </div>
-                          <div>
-                            <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Notas</label>
-                            <input value={formReceta.notas} onChange={e => setFormReceta(p => ({ ...p, notas: e.target.value }))} style={inputBase} />
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <input 
-                              type="checkbox" 
-                              id="receta-opcional"
-                              checked={formReceta.opcional} 
-                              onChange={e => setFormReceta(p => ({ ...p, opcional: e.target.checked }))} 
-                            />
-                            <label htmlFor="receta-opcional" style={{ fontSize: '13px', color: colors.espresso, cursor: 'pointer' }}>
-                              Este material es opcional / alternativo
-                            </label>
-                          </div>
                         </div>
-                        <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
-                          <button onClick={() => setMostrarFormReceta(false)} style={{ padding: '8px 20px', background: colors.sand, border: 'none', borderRadius: '8px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
-                          <button onClick={handleGuardarRecetaLinea} disabled={guardando} style={{ padding: '8px 20px', background: colors.sidebarBg, color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontFamily: 'inherit', opacity: guardando ? 0.6 : 1 }}>
-                            {guardando ? 'Guardando...' : 'Guardar'}
+
+                        {!formConfigCorte.material_id && (
+                          <div style={{ marginBottom: '16px' }}>
+                            <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Precio manual tela por metro ($)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={formConfigCorte.precio_tela_metro}
+                              onChange={(e) => setFormConfigCorte({ ...formConfigCorte, precio_tela_metro: e.target.value })}
+                              style={inputBase}
+                            />
+                          </div>
+                        )}
+
+                        {/* Resumen de Consumo & Costo Calculado */}
+                        <div style={{ background: colors.sidebarBg, padding: '15px', borderRadius: '12px', color: 'white', marginBottom: '16px' }}>
+                          <h4 style={{ margin: '0 0 10px 0', borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: '6px', fontSize: '14px' }}>Cálculos en Tiempo Real</h4>
+                          {(() => {
+                            const calc = calcularCorteTemporal();
+                            return (
+                              <div style={{ fontSize: '13px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                  <span>Subtotal piezas:</span>
+                                  <span>{calc.subtotalMetros} m</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                  <span>Total tela (c/merma):</span>
+                                  <span>{calc.metrosConDesperdicio} m</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                  <span>Costo Tela:</span>
+                                  <span>${calc.costoMaterial}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                  <span>Confección + Empaque:</span>
+                                  <span>${(parseFloat(formConfigCorte.costo_confeccion || 0) + parseFloat(formConfigCorte.costo_empaque || 0)).toFixed(2)}</span>
+                                </div>
+                                <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.3)', margin: '8px 0' }} />
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '700', fontSize: '16px', color: colors.sidebarText }}>
+                                  <span>COSTO TOTAL CORTE:</span>
+                                  <span>${calc.costoTotal}</span>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
+
+                        {/* Botones de acción */}
+                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                          {configCorteActual && (
+                            <button
+                              onClick={handleActualizarPrecioTela}
+                              disabled={guardando}
+                              style={{ padding: '10px 20px', background: colors.camel, color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontFamily: 'inherit', opacity: guardando ? 0.6 : 1 }}
+                              title="Actualizar precio (crea nueva versión en el historial)"
+                            >
+                              Actualizar Precio
+                            </button>
+                          )}
+                          <button
+                            onClick={handleGuardarConfigCorte}
+                            disabled={guardando}
+                            style={{ padding: '10px 20px', background: colors.olive, color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontFamily: 'inherit', opacity: guardando ? 0.6 : 1 }}
+                          >
+                            {guardando ? 'Guardando...' : (configCorteActual ? 'Actualizar Patrón' : 'Guardar Patrón')}
                           </button>
                         </div>
+
+                        {/* Historial de precios */}
+                        {historialPrecios.length > 0 && (
+                          <div style={{ background: '#fff9e6', padding: '12px', borderRadius: '8px', border: '1px solid #ffd54f', marginTop: '16px' }}>
+                            <h4 style={{ margin: '0 0 8px 0', color: colors.camel, fontSize: '13px' }}>Historial de Precios</h4>
+                            <div style={{ maxHeight: '100px', overflowY: 'auto' }}>
+                              {historialPrecios.map((h, idx) => (
+                                <div key={idx} style={{
+                                  display: 'flex', justifyContent: 'space-between', padding: '4px 0',
+                                  borderBottom: idx < historialPrecios.length - 1 ? '1px solid #eee' : 'none',
+                                  fontSize: '12px'
+                                }}>
+                                  <span>{new Date(h.fecha_vigencia).toLocaleDateString()}</span>
+                                  <span>${h.precio_tela_metro}/m</span>
+                                  <span>Total: ${h.costo_total}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* PLACEHOLDER PRODUCTOS DE REVENTA */}
+                    {productoReceta && !esManufacturado && (
+                      <div style={{ background: colors.cotton, padding: '40px', borderRadius: '12px', border: `1px solid ${colors.sand}`, textAlign: 'center', color: colors.camel }}>
+                        <div style={{ fontSize: '40px', marginBottom: '15px' }}>🏷️</div>
+                        <h4 style={{ color: colors.espresso }}>Producto de Reventa</h4>
+                        <p style={{ fontSize: '13px', maxWidth: '350px', margin: '10px auto 0', color: colors.camel }}>
+                          Este producto no está marcado como manufacturado. No requiere patrón de corte ni mano de obra (confección/empaque).
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Modal agregar línea receta */}
+              {mostrarFormReceta && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+                  <div style={{ background: '#fff', borderRadius: '16px', padding: '24px', maxWidth: '400px', width: '100%' }}>
+                    <h3 style={{ margin: '0 0 16px', color: colors.espresso }}>Agregar material a receta</h3>
+                    <div style={{ display: 'grid', gap: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Material *</label>
+                        <select value={formReceta.material_id} onChange={e => setFormReceta(p => ({ ...p, material_id: e.target.value }))} style={selectBase}>
+                          <option value="" style={optStyle}>-- Seleccionar --</option>
+                          {materiales.map(m => <option key={m.id} value={m.id} style={optStyle}>{m.nombre} ({m.unidad})</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Cantidad por pieza *</label>
+                        <input type="number" step="0.001" value={formReceta.cantidad} onChange={e => setFormReceta(p => ({ ...p, cantidad: e.target.value }))} style={inputBase} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '12px', color: colors.camel, marginBottom: '4px' }}>Notas</label>
+                        <input value={formReceta.notas} onChange={e => setFormReceta(p => ({ ...p, notas: e.target.value }))} style={inputBase} />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <input 
+                          type="checkbox" 
+                          id="receta-opcional"
+                          checked={formReceta.opcional} 
+                          onChange={e => setFormReceta(p => ({ ...p, opcional: e.target.checked }))} 
+                        />
+                        <label htmlFor="receta-opcional" style={{ fontSize: '13px', color: colors.espresso, cursor: 'pointer' }}>
+                          Este material es opcional / alternativo
+                        </label>
                       </div>
                     </div>
-                  )}
-                </>
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
+                      <button onClick={() => setMostrarFormReceta(false)} style={{ padding: '8px 20px', background: colors.sand, border: 'none', borderRadius: '8px', cursor: 'pointer', fontFamily: 'inherit' }}>Cancelar</button>
+                      <button onClick={handleGuardarRecetaLinea} disabled={guardando} style={{ padding: '8px 20px', background: colors.sidebarBg, color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontFamily: 'inherit', opacity: guardando ? 0.6 : 1 }}>
+                        {guardando ? 'Guardando...' : 'Guardar'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           )}
