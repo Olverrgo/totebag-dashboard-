@@ -563,14 +563,14 @@ export const getProductos = async (categoriaId = null, subcategoriaId = null) =>
           const merma = parseFloat(config?.porcentaje_desperdicio) || 0;
           const factorMerma = 1 + (merma / 100);
 
-          // 1. Costo de INSUMOS de la receta (resorte, hilo, etc.)
-          // La TELA NO se suma desde la receta: viene exclusivamente del patrón de
-          // corte (paso 2). Esto evita el doble conteo cuando la config aporta la
-          // tela vía `material_id` o `precio_tela_metro` y la receta también la lista
-          // (combinadas blendeadas en el patrón) o cuando hay varias telas alternativas.
-          // Las líneas de tela en la receta quedan como "menú/selección", informativas.
+          // 1. Costo de INSUMOS + telas SECUNDARIAS de la receta.
+          // La tela PRIMARIA (la del patrón de corte) NO se suma aquí: viene del
+          // paso 2 (config). Se excluye por `material_id !== config.material_id`.
+          // El resto de líneas OBLIGATORIAS sí suman, incluidas telas adicionales:
+          // así una COMBINADA (ej. Polish del config + Disperso obligatorio en
+          // receta) costea ambas telas. Las telas ALTERNATIVAS quedan como "menú"
+          // marcándolas `opcional` (ya las excluye el filtro de recetasAplicables).
           const costoMaterialesReceta = recetasAplicables
-            .filter(r => r.material?.categoria !== 'tela')
             .filter(r => r.material_id !== config?.material_id)
             .reduce((sum, r) => {
               const cantidadBase = parseFloat(r.cantidad) || 0;
