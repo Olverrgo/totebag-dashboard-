@@ -744,6 +744,72 @@ export const updateStockVariante = async (id, stockTaller, stockConsignacion = n
   return { data, error: handleRLSError(error) };
 };
 
+// Guardado de stock POR LOTE para el módulo Stocks (botón "Guardar Todo").
+// cambios: array de { tipo, id, stock?, stock_consignacion? }
+//   - tipo: 'variante' (default) → escribe en variantes_producto; 'producto' → en productos.
+//   - id: id de la variante o del producto.
+//   - stock / stock_consignacion: valores ABSOLUTOS finales. La UI ya resolvió el modo
+//     +/- a un valor antes de enviar. Solo se escribe el campo PRESENTE (undefined = no se toca).
+// Guards: rechaza valores no numéricos o negativos; esa fila NO se escribe y se reporta.
+// Hace los updates en SECUENCIA (no Promise.all) para devolver un resultado por fila y no
+// dejar estados parciales en silencio (patrón del proyecto: reporte por línea).
+// ⚠️ stock_consignacion es la fuente canónica de "piezas en la calle" que leen el estado de
+// cuenta y getMercanciaEnCalle: editarlo aquí NO ajusta las deudas de los vendedores (no toca
+// `ventas`). La UI debe advertirlo antes de permitir editarlo.
+// Devuelve: { ok, totalOk, totalFallidos, resultados: [{ tipo, id, ok, error? }] }
+export const updateStockVarianteLote = async (cambios = []) => {
+  if (!supabase) return { ok: false, error: 'Supabase no configurado', totalOk: 0, totalFallidos: 0, resultados: [] };
+  if (!Array.isArray(cambios) || cambios.length === 0) {
+    return { ok: true, totalOk: 0, totalFallidos: 0, resultados: [] };
+  }
+
+  const resultados = [];
+
+  for (const cambio of cambios) {
+    const tipo = cambio?.tipo === 'producto' ? 'producto' : 'variante';
+    const id = cambio?.id;
+
+    if (id === undefined || id === null) {
+      resultados.push({ tipo, id: null, ok: false, error: 'id faltante' });
+      continue;
+    }
+
+    // Construir update solo con los campos presentes (valores absolutos)
+    const updates = {};
+    if (cambio.stock !== undefined && cambio.stock !== null) {
+      updates.stock = Number(cambio.stock);
+    }
+    if (cambio.stock_consignacion !== undefined && cambio.stock_consignacion !== null) {
+      updates.stock_consignacion = Number(cambio.stock_consignacion);
+    }
+
+    if (Object.keys(updates).length === 0) {
+      resultados.push({ tipo, id, ok: false, error: 'Sin campos para actualizar' });
+      continue;
+    }
+
+    // Guard: numérico finito y no negativo
+    const invalido = Object.entries(updates).find(([, v]) => !Number.isFinite(v) || v < 0);
+    if (invalido) {
+      resultados.push({ tipo, id, ok: false, error: `Valor inválido en ${invalido[0]} (no numérico o negativo)` });
+      continue;
+    }
+
+    const tabla = tipo === 'producto' ? 'productos' : 'variantes_producto';
+    const { error } = await supabase.from(tabla).update(updates).eq('id', id);
+
+    if (error) {
+      resultados.push({ tipo, id, ok: false, error: handleRLSError(error) });
+    } else {
+      resultados.push({ tipo, id, ok: true });
+    }
+  }
+
+  const totalOk = resultados.filter(r => r.ok).length;
+  const totalFallidos = resultados.length - totalOk;
+  return { ok: totalFallidos === 0, totalOk, totalFallidos, resultados };
+};
+
 // Subir imagen de variante a Supabase Storage
 export const uploadImagenVariante = async (file, varianteId) => {
   if (!supabase) return { url: null, error: 'Supabase no configurado' };
