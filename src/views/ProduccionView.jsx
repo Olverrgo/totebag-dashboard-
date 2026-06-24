@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { colors } from '../utils/colors';
 import { formatearMoneda } from '../utils/formatearMoneda';
+import { parseLocalDate } from '../utils/formatearFecha';
 import {
   getMateriales,
   createMaterial,
@@ -1229,7 +1230,7 @@ const ProduccionView = ({ isAdmin }) => {
                                   borderBottom: idx < historialPrecios.length - 1 ? '1px solid #eee' : 'none',
                                   fontSize: '12px'
                                 }}>
-                                  <span>{new Date(h.fecha_vigencia).toLocaleDateString()}</span>
+                                  <span>{parseLocalDate(h.fecha_vigencia).toLocaleDateString()}</span>
                                   <span>${h.precio_tela_metro}/m</span>
                                   <span>Total: ${h.costo_total}</span>
                                 </div>

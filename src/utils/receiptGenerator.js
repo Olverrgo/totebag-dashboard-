@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { colors } from './colors';
+import { parseLocalDate } from './formatearFecha';
 
 /**
  * Genera un Recibo PDF profesional para una operación de venta o consignación.
@@ -29,9 +30,7 @@ export const generarReciboPDF = (data) => {
   } = data;
 
   const doc = new jsPDF();
-  const fechaStr = fecha 
-    ? new Date(fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })
-    : new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' });
+  const fechaStr = parseLocalDate(fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' });
 
   const formatCurrency = (val) => {
     return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(val || 0);
@@ -147,9 +146,7 @@ export const generarReciboAbonoPDF = (data) => {
   } = data;
 
   const doc = new jsPDF();
-  const fechaStr = fecha 
-    ? new Date(fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })
-    : new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' });
+  const fechaStr = parseLocalDate(fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' });
 
   const formatCurrency = (val) => {
     return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(val || 0);

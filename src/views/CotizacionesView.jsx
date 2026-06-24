@@ -28,6 +28,7 @@ const estiloEstado = (estado) => {
 };
 import { colors } from '../utils/colors';
 import jsPDF from 'jspdf';
+import { parseLocalDate } from '../utils/formatearFecha';
 import autoTable from 'jspdf-autotable';
 
 const CotizacionesView = ({ isAdmin }) => {
@@ -158,7 +159,7 @@ const CotizacionesView = ({ isAdmin }) => {
                 cotizaciones.map(c => (
                   <tr key={c.id} style={{ borderBottom: `1px solid ${colors.cream}` }}>
                     <td style={{ padding: '15px', fontWeight: 'bold' }}>{c.folio}</td>
-                    <td style={{ padding: '15px' }}>{new Date(c.fecha).toLocaleDateString()}</td>
+                    <td style={{ padding: '15px' }}>{parseLocalDate(c.fecha).toLocaleDateString()}</td>
                     <td style={{ padding: '15px' }}>{c.clientes?.nombre || c.cliente_nombre || 'N/A'}</td>
                     <td style={{ padding: '15px' }}>{c.tiers_precio?.nombre}</td>
                     <td style={{ padding: '15px', fontWeight: '600' }}>{formatCurrency(c.total)}</td>
@@ -515,7 +516,7 @@ const CotizacionDetailModal = ({ cotizacion, onClose }) => {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(10);
     doc.text(`FOLIO: ${cotizacion.folio}`, 195, 25, { align: 'right' });
-    doc.text(`FECHA: ${new Date(cotizacion.fecha).toLocaleDateString()}`, 195, 32, { align: 'right' });
+    doc.text(`FECHA: ${parseLocalDate(cotizacion.fecha).toLocaleDateString()}`, 195, 32, { align: 'right' });
 
     // Datos del Cliente
     doc.setTextColor(0);
@@ -590,7 +591,7 @@ const CotizacionDetailModal = ({ cotizacion, onClose }) => {
             </div>
             <div>
               <div style={{ fontSize: '11px', color: colors.camel }}>Fecha</div>
-              <div style={{ fontWeight: '600' }}>{new Date(cotizacion.fecha).toLocaleDateString()}</div>
+              <div style={{ fontWeight: '600' }}>{parseLocalDate(cotizacion.fecha).toLocaleDateString()}</div>
             </div>
             <div>
               <div style={{ fontSize: '11px', color: colors.camel }}>Estado</div>

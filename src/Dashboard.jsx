@@ -9,6 +9,7 @@ import RetornoCapital from './components/RetornoCapital';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { colors } from './utils/colors';
+import { parseLocalDate } from './utils/formatearFecha';
 import ProduccionView from "./views/ProduccionView";
 import StocksView from "./views/StocksView";
 import AnalyticsView from './views/AnalyticsView';
@@ -4255,7 +4256,7 @@ const ProductosView = ({ isAdmin }) => {
                         return (
                           <tr key={r.id} style={{ borderBottom: `1px solid ${colors.sand}` }}>
                             <td style={{ padding: '10px 8px', color: colors.espresso }}>
-                              {new Date(r.fecha + 'T12:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                              {parseLocalDate(r.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
                             </td>
                             <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: '600', color: colors.olive }}>
                               +{r.cantidad}
@@ -9071,7 +9072,7 @@ const ServiciosView = ({ isAdmin }) => {
 
   const formatearFecha = (fecha) => {
     if (!fecha) return '-';
-    return new Date(fecha + 'T12:00:00').toLocaleDateString('es-MX', {
+    return parseLocalDate(fecha).toLocaleDateString('es-MX', {
       day: '2-digit',
       month: 'short',
       year: 'numeric'

@@ -13,6 +13,7 @@ import {
   updateCompraVencimiento
 } from '../supabaseClient';
 import { colors } from '../utils/colors';
+import { parseLocalDate } from '../utils/formatearFecha';
 
 const ComprasView = ({ isAdmin }) => {
   const [activeSubTab, setActiveSubTab] = useState('compras');
@@ -159,17 +160,17 @@ const ComprasView = ({ isAdmin }) => {
                   </tr>
                 ) : (
                   compras.map(compra => {
-                    const isExpired = compra.saldo_pendiente > 0 && compra.fecha_vencimiento && new Date(compra.fecha_vencimiento) < new Date().setHours(0,0,0,0);
+                    const isExpired = compra.saldo_pendiente > 0 && compra.fecha_vencimiento && parseLocalDate(compra.fecha_vencimiento).getTime() < new Date().setHours(0,0,0,0);
                     return (
                       <tr key={compra.id} style={{ borderBottom: `1px solid ${colors.cream}`, transition: 'background 0.2s' }}>
-                        <td style={{ padding: '15px' }}>{new Date(compra.fecha_compra).toLocaleDateString()}</td>
+                        <td style={{ padding: '15px' }}>{parseLocalDate(compra.fecha_compra).toLocaleDateString()}</td>
                         <td style={{ padding: '15px', fontWeight: '500' }}>{compra.proveedores?.nombre || 'N/A'}</td>
                         <td style={{ padding: '15px' }}>{formatCurrency(compra.monto_total)}</td>
                         <td style={{ padding: '15px', color: compra.saldo_pendiente > 0 ? '#E74C3C' : '#27AE60' }}>
                           {formatCurrency(compra.saldo_pendiente)}
                         </td>
                         <td style={{ padding: '15px', color: isExpired ? '#E74C3C' : 'inherit', fontWeight: isExpired ? '600' : 'normal' }}>
-                          {compra.fecha_vencimiento ? new Date(compra.fecha_vencimiento).toLocaleDateString() : '-'}
+                          {compra.fecha_vencimiento ? parseLocalDate(compra.fecha_vencimiento).toLocaleDateString() : '-'}
                           {isExpired && <div style={{ fontSize: '10px', color: '#E74C3C' }}>VENCIDA</div>}
                         </td>
                         <td style={{ padding: '15px' }}>

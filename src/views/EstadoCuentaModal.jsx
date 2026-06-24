@@ -4,13 +4,29 @@ import { colors } from '../utils/colors';
 import { formatearMoneda } from '../utils/formatearMoneda';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { parseLocalDate } from '../utils/formatearFecha';
+
+// Helpers locales para evitar desajuste de zona horaria al inicializar el input date
+const getLocalDateString = (d = new Date()) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getLocalFirstDayOfMonthString = (d = new Date()) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}-01`;
+};
 
 const EstadoCuentaModal = ({ cliente, onClose }) => {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
+  const hoy = new Date();
   const [periodo, setPeriodo] = useState({
-    desde: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-    hasta: new Date().toISOString().split('T')[0]
+    desde: getLocalFirstDayOfMonthString(hoy),
+    hasta: getLocalDateString(hoy)
   });
 
   const loadData = async () => {
@@ -46,13 +62,13 @@ const EstadoCuentaModal = ({ cliente, onClose }) => {
     doc.text('VENDEDOR / CLIENTE:', 15, 55);
     doc.setFont('helvetica', 'normal');
     doc.text(cliente?.nombre || 'N/A', 15, 62);
-    doc.text(`Periodo: ${new Date(periodo.desde).toLocaleDateString()} al ${new Date(periodo.hasta).toLocaleDateString()}`, 15, 69);
+    doc.text(`Periodo: ${parseLocalDate(periodo.desde).toLocaleDateString()} al ${parseLocalDate(periodo.hasta).toLocaleDateString()}`, 15, 69);
 
     // Tabla Entregas
     doc.setFont('helvetica', 'bold');
     doc.text('ENTREGAS (Mercancía enviada)', 15, 80);
     const entregasRows = data.ventas.map(v => [
-      new Date(v.fecha).toLocaleDateString(),
+      parseLocalDate(v.fecha).toLocaleDateString(),
       v.folio || '-',
       v.producto,
       v.cantidad,
@@ -71,7 +87,7 @@ const EstadoCuentaModal = ({ cliente, onClose }) => {
     doc.setFont('helvetica', 'bold');
     doc.text('PAGOS Y ABONOS RECIBIDOS', 15, nextY);
     const abonosRows = data.abonos.map(a => [
-      new Date(a.fecha).toLocaleDateString(),
+      parseLocalDate(a.fecha).toLocaleDateString(),
       a.folio || 'Abono Libre',
       a.metodo.toUpperCase(),
       '-' + formatearMoneda(a.monto),
@@ -94,7 +110,7 @@ const EstadoCuentaModal = ({ cliente, onClose }) => {
         startY: devY + 5,
         head: [['Fecha', 'Producto', 'Piezas', 'Se resta a deuda']],
         body: data.devoluciones.map(d => [
-          new Date(d.fecha).toLocaleDateString(),
+          parseLocalDate(d.fecha).toLocaleDateString(),
           d.producto,
           `${d.cantidad} pz`,
           '-' + formatearMoneda(d.valor)
@@ -170,7 +186,7 @@ const EstadoCuentaModal = ({ cliente, onClose }) => {
                   {data.ventas.map((v, i) => (
                     <tr key={i} style={{ borderBottom: `1px solid ${colors.cream}` }}>
                       <td style={{ padding: '10px 0' }}>
-                        <div>{new Date(v.fecha).toLocaleDateString()}</div>
+                        <div>{parseLocalDate(v.fecha).toLocaleDateString()}</div>
                         <div style={{ fontSize: '10px', color: colors.sidebarBg, fontWeight: 'bold' }}>{v.folio}</div>
                       </td>
                       <td>{v.producto} ({v.cantidad} pza)</td>
@@ -195,7 +211,7 @@ const EstadoCuentaModal = ({ cliente, onClose }) => {
                   {data.abonos.map((a, i) => (
                     <tr key={i} style={{ borderBottom: `1px solid ${colors.cream}` }}>
                       <td style={{ padding: '10px 0' }}>
-                        <div>{new Date(a.fecha).toLocaleDateString()}</div>
+                        <div>{parseLocalDate(a.fecha).toLocaleDateString()}</div>
                         <div style={{ fontSize: '10px', color: colors.olive, fontWeight: 'bold' }}>{a.folio || 'S/F'}</div>
                       </td>
                       <td style={{ textAlign: 'right' }}>
@@ -265,7 +281,7 @@ const EstadoCuentaModal = ({ cliente, onClose }) => {
                 <tbody>
                   {data.devoluciones.map((d, i) => (
                     <tr key={i} style={{ borderBottom: `1px solid ${colors.cream}` }}>
-                      <td style={{ padding: '10px 0' }}>{new Date(d.fecha).toLocaleDateString()}</td>
+                      <td style={{ padding: '10px 0' }}>{parseLocalDate(d.fecha).toLocaleDateString()}</td>
                       <td>{d.producto}</td>
                       <td style={{ textAlign: 'center', fontWeight: '700', color: colors.terracotta }}>{d.cantidad} pz</td>
                       <td style={{ textAlign: 'right', fontWeight: '600', color: colors.terracotta }}>−{formatearMoneda(d.valor)}</td>
