@@ -2022,6 +2022,8 @@ const ProductosView = ({ isAdmin }) => {
   // Cargar datos de Supabase al montar
   useEffect(() => {
     const cargarDatos = async () => {
+      let primeraCatId = null;
+
       // Cargar categorías
       const { data: categoriasData } = await getCategorias();
       if (categoriasData && categoriasData.length > 0) {
@@ -2029,6 +2031,7 @@ const ProductosView = ({ isAdmin }) => {
         // Seleccionar primera categoría (Totebags) por defecto
         const primeraCategoria = categoriasData[0];
         setCategoriaActiva(primeraCategoria);
+        primeraCatId = primeraCategoria.id;
 
         // Cargar subcategorías de la primera categoría
         const { data: subcatsData } = await getSubcategorias(primeraCategoria.id);
@@ -2066,8 +2069,8 @@ const ProductosView = ({ isAdmin }) => {
         }));
       }
 
-      // Cargar productos guardados
-      const { data: productosData } = await getProductos();
+      // Cargar productos guardados (filtrados por la categoría inicial activa)
+      const { data: productosData } = await getProductos(primeraCatId);
       if (productosData) {
         setProductosGuardados(productosData);
       }
@@ -2726,12 +2729,13 @@ const ProductosView = ({ isAdmin }) => {
       } else {
         setMensaje({ tipo: 'exito', texto: productoEditandoId ? 'Producto actualizado correctamente' : 'Producto guardado correctamente' });
 
-        // Actualizar lista de productos
-        if (productoEditandoId) {
-          setProductosGuardados(productosGuardados.map(p => p.id === Number(productoEditandoId) ? data : p));
-        } else {
-          setProductosGuardados([data, ...productosGuardados]);
+        // Recargar productos de la categoría activa para traerlos con todas las relaciones de Supabase
+        const { data: productosActualizados } = await getProductos(categoriaActiva?.id, subcategoriaActiva?.id);
+        if (productosActualizados) {
+          setProductosGuardados(productosActualizados);
+        }
 
+        if (!productoEditandoId) {
           // Registrar primer resurtido automático para categorías de compra/reventa
           if (!esCategoriaLegacy() && camposCategoria.length === 0) {
             const cantidadAdquirida = parseInt(formProducto.cantidadAdquirida) || 0;
