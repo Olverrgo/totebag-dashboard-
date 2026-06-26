@@ -1132,7 +1132,7 @@ const ProduccionView = ({ isAdmin }) => {
                             <select
                               value={formConfigCorte.material_id || ''}
                               onChange={(e) => {
-                                const mId = e.target.value ? parseInt(e.target.value) : null;
+                                const mId = e.target.value || null; // materiales.id es UUID, NO parsear
                                 const mat = materiales.find(m => m.id === mId);
                                 setFormConfigCorte({
                                   ...formConfigCorte,
