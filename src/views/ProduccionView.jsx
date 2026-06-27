@@ -9,6 +9,8 @@ import {
   registrarAjusteMaterial,
   deleteMaterial,
   getProductos,
+  updateProducto,
+  updateVariante,
   getVariantes,
   getRecetasProducto,
   upsertRecetaLinea,
@@ -317,7 +319,27 @@ const ProduccionView = ({ isAdmin }) => {
       } else {
         mostrarMsg('ok', 'Patrón de corte y costos guardados');
         setConfigCorteActual(result.data);
-        
+
+        // Recalcular y persistir el costo_unitario de la variante/producto desde el
+        // patrón recién guardado + insumos de la receta (misma lógica que
+        // calcularVariante en supabaseClient). Antes esto NO se hacía y el costo
+        // quedaba viejo al crear/editar recetas.
+        const cfg = result.data || {};
+        const factorMerma = 1 + (parseFloat(cfg.porcentaje_desperdicio) || 0) / 100;
+        const costoServicios = (parseFloat(cfg.costo_confeccion) || 0) + (parseFloat(cfg.costo_empaque) || 0);
+        const costoTela = parseFloat(cfg.costo_material) || 0; // tela principal (metros × precio), ya con merma vía trigger
+        const costoInsumos = (recetaLineas || [])
+          .filter(r => r.activo && !r.opcional
+            && (r.variante_id === null || r.variante_id === vId)
+            && r.material_id !== cfg.material_id) // excluye la tela primaria (viene del patrón)
+          .reduce((acc, r) => acc + (parseFloat(r.cantidad) || 0) * factorMerma * (parseFloat(r.material?.costo_unitario) || 0), 0);
+        const costoVariante = Math.round((costoTela + costoServicios + costoInsumos) * 100) / 100;
+        if (vId) {
+          await updateVariante(vId, { costo_unitario: costoVariante });
+        } else {
+          await updateProducto(pId, { costo_unitario: costoVariante });
+        }
+
         // Recargar catálogo local
         await cargarDatos();
         
