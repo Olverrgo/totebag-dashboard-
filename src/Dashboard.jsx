@@ -4,7 +4,6 @@ import { useAuth } from './AuthContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart } from 'recharts';
 import VentasPorLineaChart from './components/VentasPorLineaChart';
 import CalculadoraMeta from './components/CalculadoraMeta';
-import EstrategiaOperativa from './components/EstrategiaOperativa';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { colors } from './utils/colors';
@@ -556,7 +555,6 @@ const Sidebar = ({ seccionActiva, setSeccionActiva, menuAbierto, setMenuAbierto,
     { id: 'compras', nombre: 'Compras', icon: '🧾' },
     { id: 'cotizaciones', nombre: 'Cotizaciones', icon: '🖋️' },
     { id: 'calculadora', nombre: 'Kaizen', icon: '🌱' },
-    { id: 'estrategia', nombre: 'Estrategia', icon: '🎯' },
     { id: 'mayoreo', nombre: 'Mayoreo', icon: '📦' },
     { id: 'ecommerce', nombre: 'E-commerce', icon: '🛒' },
     { id: 'promociones', nombre: 'Promociones', icon: '🎉' },
@@ -11141,7 +11139,6 @@ export default function DashboardToteBag() {
       case 'compras': return <ComprasView isAdmin={isAdmin} />;
       case 'cotizaciones': return <CotizacionesView isAdmin={isAdmin} />;
       case 'calculadora': return <CalculadoraMeta />;
-      case 'estrategia': return <EstrategiaOperativa />;
       case 'mayoreo': return <MayoreoView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} />;
       case 'ecommerce': return <EcommerceView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} datosDB={datosDB} costosAmazon={costosAmazon} setCostosAmazon={setCostosAmazon} isAdmin={isAdmin} />;
       case 'promociones': return <PromocionesView productosActualizados={productosActualizados} todasCondiciones={todasCondiciones} />;
