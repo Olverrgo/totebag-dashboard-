@@ -6,6 +6,7 @@ import {
   getMateriales,
   createMaterial,
   updateMaterial,
+  registrarAjusteMaterial,
   deleteMaterial,
   getProductos,
   getVariantes,
@@ -146,6 +147,14 @@ const ProduccionView = ({ isAdmin }) => {
       let res;
       if (editandoMaterial) {
         res = await updateMaterial(editandoMaterial.id, datos);
+        // Si cambió el stock manualmente, deja un movimiento 'ajuste' para que
+        // el libro de movimientos cuadre con materiales.stock (trazabilidad).
+        if (!res.error) {
+          const delta = (parseFloat(datos.stock) || 0) - (parseFloat(editandoMaterial.stock) || 0);
+          if (Math.abs(delta) > 0.0001) {
+            await registrarAjusteMaterial(editandoMaterial.id, delta, datos.notas || `Ajuste manual de ${formMaterial.nombre.trim()}`);
+          }
+        }
       } else {
         res = await createMaterial(datos);
       }

@@ -3280,6 +3280,29 @@ export const deleteMaterial = async (id) => {
   return { error: handleRLSError(error) };
 };
 
+// Registra un movimiento de AJUSTE de inventario de material (no es compra ni
+// producción). `delta` va firmado: + entra al inventario, − sale. Sirve para que
+// el libro de movimientos cuadre con materiales.stock (stock = Σ movimientos).
+// NO modifica el stock: el stock lo fija quien llama (updateMaterial); esto solo
+// deja el registro para trazabilidad/auditoría.
+export const registrarAjusteMaterial = async (materialId, delta, notas = null) => {
+  if (!supabase) return { error: 'Supabase no configurado' };
+  const cantidad = Math.round((parseFloat(delta) || 0) * 100) / 100;
+  if (cantidad === 0) return { error: null };
+
+  const { error } = await supabase
+    .from('movimientos_material')
+    .insert([{
+      material_id: materialId,
+      tipo: 'ajuste',
+      cantidad,
+      referencia_tipo: 'ajuste_manual',
+      notas: notas || 'Ajuste manual de inventario'
+    }]);
+
+  return { error: handleRLSError(error) };
+};
+
 // =====================================================
 // FUNCIONES PARA RECETAS (BOM por producto)
 // =====================================================
