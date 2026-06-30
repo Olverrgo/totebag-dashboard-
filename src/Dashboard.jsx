@@ -9,6 +9,7 @@ import 'jspdf-autotable';
 import { colors } from './utils/colors';
 import { parseLocalDate } from './utils/formatearFecha';
 import ProduccionView from "./views/ProduccionView";
+import ManoObraView from "./views/ManoObraView";
 import StocksView from "./views/StocksView";
 import AnalyticsView from './views/AnalyticsView';
 import ComprasView from './views/ComprasView';
@@ -552,6 +553,7 @@ const Sidebar = ({ seccionActiva, setSeccionActiva, menuAbierto, setMenuAbierto,
     { id: 'balance', nombre: 'Balance', icon: '📒' },
     { id: 'servicios', nombre: 'Servicios', icon: '🧵' },
     { id: 'produccion', nombre: 'Producción', icon: '🏭' },
+    { id: 'mano_obra', nombre: 'Mano de Obra', icon: '👷' },
     { id: 'compras', nombre: 'Compras', icon: '🧾' },
     { id: 'cotizaciones', nombre: 'Cotizaciones', icon: '🖋️' },
     { id: 'calculadora', nombre: 'Kaizen', icon: '🌱' },
@@ -11136,6 +11138,7 @@ export default function DashboardToteBag() {
       case 'balance': return <BalanceView isAdmin={isAdmin} />;
       case 'servicios': return <ServiciosView isAdmin={isAdmin} />;
       case 'produccion': return <ProduccionView isAdmin={isAdmin} />;
+      case 'mano_obra': return <ManoObraView isAdmin={isAdmin} />;
       case 'compras': return <ComprasView isAdmin={isAdmin} />;
       case 'cotizaciones': return <CotizacionesView isAdmin={isAdmin} />;
       case 'calculadora': return <CalculadoraMeta />;

@@ -4242,3 +4242,135 @@ export const convertirCotizacionEnVenta = async (cotizacion, opciones = {}) => {
 
   return { data: res.data, folio: res.folio, okCount, total: lineas.length, error: res.error };
 };
+
+// ============================================================================
+// MANO DE OBRA — colaboradores, tareas y registros de trabajo
+// (módulo: captar costo y productividad de la mano de obra; ver
+//  supabase-mano-obra.sql). Pago MIXTO: cada registro es por 'hora' o 'pieza'.
+// ============================================================================
+
+// ── Colaboradores ──
+export const getColaboradores = async (soloActivos = true) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  let q = supabase.from('colaboradores').select('*').order('nombre');
+  if (soloActivos) q = q.eq('activo', true);
+  const { data, error } = await q;
+  return { data, error: handleRLSError(error) };
+};
+
+export const createColaborador = async (colaborador) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  const { data, error } = await supabase
+    .from('colaboradores')
+    .insert([colaborador])
+    .select()
+    .single();
+  return { data, error: handleRLSError(error) };
+};
+
+export const updateColaborador = async (id, updates) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  const { data, error } = await supabase
+    .from('colaboradores')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  return { data, error: handleRLSError(error) };
+};
+
+// ── Catálogo de tareas ──
+export const getTareasTrabajo = async () => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  const { data, error } = await supabase
+    .from('tareas_trabajo')
+    .select('*')
+    .eq('activo', true)
+    .order('orden');
+  return { data, error: handleRLSError(error) };
+};
+
+// ── Registros de trabajo ──
+// Inserta una sesión de trabajo. El `costo` lo calcula la BD (columna generada).
+// Si no se pasa `tarifa_aplicada`, se resuelve de la tarifa del colaborador
+// según la modalidad ('hora' → tarifa_hora, 'pieza' → tarifa_pieza).
+export const registrarTrabajo = async (registro) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+
+  const payload = { ...registro };
+  if (payload.tarifa_aplicada == null && payload.colaborador_id) {
+    const { data: colab } = await supabase
+      .from('colaboradores')
+      .select('tarifa_hora, tarifa_pieza')
+      .eq('id', payload.colaborador_id)
+      .single();
+    if (colab) {
+      payload.tarifa_aplicada =
+        payload.modalidad === 'hora' ? (colab.tarifa_hora || 0) : (colab.tarifa_pieza || 0);
+    }
+  }
+
+  const { data, error } = await supabase
+    .from('registros_trabajo')
+    .insert([payload])
+    .select()
+    .single();
+  return { data, error: handleRLSError(error) };
+};
+
+export const getRegistrosTrabajo = async ({ colaboradorId, desde, hasta } = {}) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  let q = supabase
+    .from('registros_trabajo')
+    .select(`
+      *,
+      colaboradores (nombre, rol),
+      tareas_trabajo (nombre, slug, unidad)
+    `)
+    .order('fecha', { ascending: false });
+  if (colaboradorId) q = q.eq('colaborador_id', colaboradorId);
+  if (desde) q = q.gte('fecha', desde);
+  if (hasta) q = q.lte('fecha', hasta);
+  const { data, error } = await q;
+  return { data, error: handleRLSError(error) };
+};
+
+export const eliminarRegistroTrabajo = async (id) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  const { data, error } = await supabase
+    .from('registros_trabajo')
+    .delete()
+    .eq('id', id);
+  return { data, error: handleRLSError(error) };
+};
+
+// Resumen de mano de obra (vista v_mano_obra): horas, piezas, costo,
+// productividad (pz/hora) y costo/pieza por día y tarea. Acepta rango opcional.
+export const getResumenManoObra = async ({ desde, hasta, colaboradorId } = {}) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  let q = supabase.from('v_mano_obra').select('*').order('fecha', { ascending: false });
+  if (desde) q = q.gte('fecha', desde);
+  if (hasta) q = q.lte('fecha', hasta);
+  if (colaboradorId) q = q.eq('colaborador_id', colaboradorId);
+  const { data, error } = await q;
+  return { data, error: handleRLSError(error) };
+};
+
+// Costo total de mano de obra en un periodo (para alimentar utilidad/análisis).
+export const getCostoManoObraPeriodo = async (desde, hasta) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  let q = supabase.from('registros_trabajo').select('costo, horas, cantidad');
+  if (desde) q = q.gte('fecha', desde);
+  if (hasta) q = q.lte('fecha', hasta);
+  const { data, error } = await q;
+  if (error) return { data: null, error: handleRLSError(error) };
+  const total = (data || []).reduce(
+    (acc, r) => ({
+      costo: acc.costo + (Number(r.costo) || 0),
+      horas: acc.horas + (Number(r.horas) || 0),
+      piezas: acc.piezas + (Number(r.cantidad) || 0),
+    }),
+    { costo: 0, horas: 0, piezas: 0 }
+  );
+  return { data: total, error: null };
+};
