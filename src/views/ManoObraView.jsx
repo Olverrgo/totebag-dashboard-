@@ -344,7 +344,6 @@ const ManoObraView = ({ isAdmin }) => {
       tarifa_hora: parseFloat(formColab.tarifa_hora) || 0,
       tarifa_pieza: parseFloat(formColab.tarifa_pieza) || 0,
       activo: formColab.activo,
-      notes: formColab.notas, // mapped correctly to notes/notas
       notas: formColab.notas
     };
 
