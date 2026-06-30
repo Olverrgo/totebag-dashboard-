@@ -4374,3 +4374,81 @@ export const getCostoManoObraPeriodo = async (desde, hasta) => {
   );
   return { data: total, error: null };
 };
+
+// ============================================================================
+// RELOJ CHECADOR (jornadas) + COSTEO POR PROCESO
+// (módulo: ver supabase-jornadas-costeo.sql). Transiciones de estado vía RPC
+// para garantizar atomicidad (pausa abierta, estado, etc.).
+// ============================================================================
+
+// ── Jornadas (reloj) ──
+export const iniciarJornada = async (colaboradorId) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  const { data, error } = await supabase.rpc('iniciar_jornada', { p_colaborador: colaboradorId });
+  return { data, error: handleRLSError(error) };
+};
+
+export const pausarJornada = async (jornadaId, tipo, justificacion = null) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  const { data, error } = await supabase.rpc('pausar_jornada', {
+    p_jornada: jornadaId, p_tipo: tipo, p_justif: justificacion,
+  });
+  return { data, error: handleRLSError(error) };
+};
+
+export const reanudarJornada = async (jornadaId) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  const { data, error } = await supabase.rpc('reanudar_jornada', { p_jornada: jornadaId });
+  return { data, error: handleRLSError(error) };
+};
+
+export const cerrarJornada = async (jornadaId) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  const { data, error } = await supabase.rpc('cerrar_jornada', { p_jornada: jornadaId });
+  return { data, error: handleRLSError(error) };
+};
+
+// Jornada abierta (activa o pausada) de un colaborador, con sus pausas.
+export const getJornadaActiva = async (colaboradorId) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  const { data, error } = await supabase
+    .from('jornadas')
+    .select(`*, jornada_pausas (*)`)
+    .eq('colaborador_id', colaboradorId)
+    .neq('estado', 'cerrada')
+    .order('inicio', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return { data, error: handleRLSError(error) };
+};
+
+// Jornadas con horas netas calculadas (vista v_jornadas). Rango opcional.
+export const getJornadas = async ({ colaboradorId, desde, hasta } = {}) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  let q = supabase.from('v_jornadas').select('*').order('inicio', { ascending: false });
+  if (colaboradorId) q = q.eq('colaborador_id', colaboradorId);
+  if (desde) q = q.gte('fecha', desde);
+  if (hasta) q = q.lte('fecha', hasta);
+  const { data, error } = await q;
+  return { data, error: handleRLSError(error) };
+};
+
+// ── Costeo por proceso ──
+// Costo real por pieza de cada proceso (corte/confección/empaque) por producto.
+export const getCostoPorProceso = async (productoId = null) => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  let q = supabase.from('v_costo_proceso').select('*').order('producto');
+  if (productoId) q = q.eq('producto_id', productoId);
+  const { data, error } = await q;
+  return { data, error: handleRLSError(error) };
+};
+
+// Maquila REAL por producto (suma de procesos) vs el estándar (costo_maquila).
+export const getMaquilaPorProducto = async () => {
+  if (!supabase) return { data: null, error: 'Supabase no configurado' };
+  const { data, error } = await supabase
+    .from('v_maquila_producto')
+    .select('*')
+    .order('producto');
+  return { data, error: handleRLSError(error) };
+};

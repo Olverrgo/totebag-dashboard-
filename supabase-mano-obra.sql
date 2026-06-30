@@ -18,7 +18,7 @@ create table if not exists colaboradores (
   id           uuid primary key default gen_random_uuid(),
   nombre       text not null,
   rol          text,                 -- 'empaque','corte','costura','acabado','multi'
-  tarifa_hora  numeric default 0,    -- $/hora (para registros por hora)
+  tarifa_hora  numeric default 40,   -- $/hora base (para registros por hora)
   tarifa_pieza numeric default 0,    -- $/pieza (para registros por pieza)
   activo       boolean default true,
   fecha_alta   date default (now() at time zone 'America/Mexico_City')::date,
