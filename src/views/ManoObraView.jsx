@@ -11,7 +11,15 @@ import {
   getCostoManoObraPeriodo,
   getOrdenesProduccion,
   getProductos,
-  getVariantes
+  getVariantes,
+  iniciarJornada,
+  pausarJornada,
+  reanudarJornada,
+  cerrarJornada,
+  getJornadaActiva,
+  getJornadas,
+  getCostoPorProceso,
+  getMaquilaPorProducto
 } from '../supabaseClient';
 import { colors } from '../utils/colors';
 import { formatearFechaCorta } from '../utils/formatearFecha';
@@ -31,6 +39,23 @@ const ManoObraView = ({ isAdmin }) => {
   const [ordenes, setOrdenes] = useState([]);
   const [productos, setProductos] = useState([]);
   const [variantes, setVariantes] = useState([]);
+
+  // Datos Reloj Checador
+  const [colaboradorChecadorId, setColaboradorChecadorId] = useState('');
+  const [jornadaActiva, setJornadaActiva] = useState(null);
+  const [jornadasColaborador, setJornadasColaborador] = useState([]);
+  const [tiempoNeto, setTiempoNeto] = useState(0);
+  
+  // Modal Pausa
+  const [showModalPausa, setShowModalPausa] = useState(false);
+  const [formPausa, setFormPausa] = useState({
+    tipo: 'comida',
+    justificacion: ''
+  });
+
+  // Datos Costeo por Proceso
+  const [costoProceso, setCostoProceso] = useState([]);
+  const [maquilaProducto, setMaquilaProducto] = useState([]);
 
   // Rango de fechas
   const getFechaHoyStr = () => {
@@ -96,8 +121,62 @@ const ManoObraView = ({ isAdmin }) => {
       fetchResumen();
     } else if (activeSubTab === 'registros') {
       fetchRegistros();
+    } else if (activeSubTab === 'costos_proceso') {
+      fetchCostosProceso();
     }
   }, [activeSubTab, fechaDesde, fechaHasta]);
+
+  useEffect(() => {
+    if (colaboradorChecadorId) {
+      fetchJornadaColaborador(colaboradorChecadorId);
+    } else {
+      setJornadaActiva(null);
+      setJornadasColaborador([]);
+    }
+  }, [colaboradorChecadorId]);
+
+  // Cronómetro live para el Reloj Checador
+  useEffect(() => {
+    let timer;
+    if (jornadaActiva) {
+      setTiempoNeto(calcularTiempoNetoMs(jornadaActiva));
+      
+      if (jornadaActiva.estado === 'activa') {
+        timer = setInterval(() => {
+          setTiempoNeto(calcularTiempoNetoMs(jornadaActiva));
+        }, 1000);
+      }
+    } else {
+      setTiempoNeto(0);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [jornadaActiva]);
+
+  // Helpers para calcular el cronómetro en milisegundos netos
+  const calcularTiempoNetoMs = (jornada) => {
+    if (!jornada) return 0;
+    const start = new Date(jornada.inicio).getTime();
+    const end = jornada.fin ? new Date(jornada.fin).getTime() : Date.now();
+    let totalPausaMs = 0;
+    if (jornada.jornada_pausas) {
+      jornada.jornada_pausas.forEach(p => {
+        const pStart = new Date(p.inicio).getTime();
+        const pEnd = p.fin ? new Date(p.fin).getTime() : Date.now();
+        totalPausaMs += (pEnd - pStart);
+      });
+    }
+    return Math.max(0, (end - start) - totalPausaMs);
+  };
+
+  const formatearMs = (ms) => {
+    const totalSecs = Math.floor(ms / 1000);
+    const hrs = Math.floor(totalSecs / 3600);
+    const mins = Math.floor((totalSecs % 3600) / 60);
+    const secs = totalSecs % 60;
+    return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
 
   const initData = async () => {
     setLoading(true);
@@ -138,6 +217,74 @@ const ManoObraView = ({ isAdmin }) => {
   const fetchRegistros = async () => {
     const res = await getRegistrosTrabajo({ desde: fechaDesde, hasta: fechaHasta });
     if (res.data) setRegistros(res.data);
+  };
+
+  const fetchCostosProceso = async () => {
+    const [costoRes, maqRes] = await Promise.all([
+      getCostoPorProceso(),
+      getMaquilaPorProducto()
+    ]);
+    if (costoRes.data) setCostoProceso(costoRes.data);
+    if (maqRes.data) setMaquilaProducto(maqRes.data);
+  };
+
+  const fetchJornadaColaborador = async (colabId) => {
+    if (!colabId) return;
+    const activeRes = await getJornadaActiva(colabId);
+    setJornadaActiva(activeRes.data);
+
+    const listRes = await getJornadas({ colaboradorId: colabId });
+    if (listRes.data) setJornadasColaborador(listRes.data);
+  };
+
+  // Acciones Reloj Checador (RPC)
+  const handleIniciarJornada = async () => {
+    if (!colaboradorChecadorId) return;
+    const res = await iniciarJornada(colaboradorChecadorId);
+    if (!res.error) {
+      mostrarAlerta('success', 'Jornada iniciada correctamente.');
+      fetchJornadaColaborador(colaboradorChecadorId);
+    } else {
+      mostrarAlerta('error', 'Error al iniciar jornada: ' + res.error);
+    }
+  };
+
+  const handlePausarJornada = async (e) => {
+    e.preventDefault();
+    if (!jornadaActiva) return;
+    const res = await pausarJornada(jornadaActiva.id, formPausa.tipo, formPausa.justificacion);
+    if (!res.error) {
+      mostrarAlerta('success', 'Jornada pausada correctamente.');
+      setShowModalPausa(false);
+      setFormPausa({ tipo: 'comida', justificacion: '' });
+      fetchJornadaColaborador(colaboradorChecadorId);
+    } else {
+      mostrarAlerta('error', 'Error al pausar jornada: ' + res.error);
+    }
+  };
+
+  const handleReanudarJornada = async () => {
+    if (!jornadaActiva) return;
+    const res = await reanudarJornada(jornadaActiva.id);
+    if (!res.error) {
+      mostrarAlerta('success', 'Jornada reanudada correctamente.');
+      fetchJornadaColaborador(colaboradorChecadorId);
+    } else {
+      mostrarAlerta('error', 'Error al reanudar jornada: ' + res.error);
+    }
+  };
+
+  const handleCerrarJornada = async () => {
+    if (!jornadaActiva) return;
+    if (!window.confirm('¿Deseas finalizar la jornada de trabajo actual?')) return;
+    const res = await cerrarJornada(jornadaActiva.id);
+    if (!res.error) {
+      mostrarAlerta('success', 'Jornada finalizada y registrada correctamente.');
+      fetchJornadaColaborador(colaboradorChecadorId);
+      fetchResumen();
+    } else {
+      mostrarAlerta('error', 'Error al finalizar jornada: ' + res.error);
+    }
   };
 
   // Cargar variantes cuando se selecciona un producto en el registro manual
@@ -197,6 +344,7 @@ const ManoObraView = ({ isAdmin }) => {
       tarifa_hora: parseFloat(formColab.tarifa_hora) || 0,
       tarifa_pieza: parseFloat(formColab.tarifa_pieza) || 0,
       activo: formColab.activo,
+      notes: formColab.notas, // mapped correctly to notes/notas
       notas: formColab.notas
     };
 
@@ -230,11 +378,11 @@ const ManoObraView = ({ isAdmin }) => {
       mostrarAlerta('error', 'Selecciona una tarea.');
       return;
     }
-    if (formRegistro.modalidad === 'hora' && (parseFloat(formRegistro.horas) || 0) <= 0) {
+    if ((parseFloat(formRegistro.horas) || 0) <= 0) {
       mostrarAlerta('error', 'Ingresa una cantidad válida de horas.');
       return;
     }
-    if (formRegistro.modalidad === 'pieza' && (parseInt(formRegistro.cantidad) || 0) <= 0) {
+    if ((parseInt(formRegistro.cantidad) || 0) <= 0) {
       mostrarAlerta('error', 'Ingresa una cantidad válida de piezas.');
       return;
     }
@@ -244,8 +392,8 @@ const ManoObraView = ({ isAdmin }) => {
       tarea_id: formRegistro.tarea_id,
       fecha: formRegistro.fecha,
       modalidad: formRegistro.modalidad,
-      horas: formRegistro.modalidad === 'hora' ? parseFloat(formRegistro.horas) : null,
-      cantidad: formRegistro.modalidad === 'pieza' ? parseInt(formRegistro.cantidad) : null,
+      horas: parseFloat(formRegistro.horas) || 0,
+      cantidad: parseInt(formRegistro.cantidad) || 0,
       notas: formRegistro.notas,
       orden_produccion_id: formRegistro.vincularOrden && formRegistro.orden_produccion_id ? formRegistro.orden_produccion_id : null,
       producto_id: formRegistro.producto_id ? parseInt(formRegistro.producto_id) : null,
@@ -299,7 +447,7 @@ const ManoObraView = ({ isAdmin }) => {
       tarifa_hora: colab.tarifa_hora || 0,
       tarifa_pieza: colab.tarifa_pieza || 0,
       activo: colab.activo,
-      notas: colab.notas || ''
+      notas: colab.notes || colab.notas || ''
     });
     setShowModalColab(true);
   };
@@ -346,46 +494,50 @@ const ManoObraView = ({ isAdmin }) => {
             👷 Mano de Obra y Rendimiento
           </h2>
           <p style={{ color: colors.camel, margin: 0, fontSize: '14px' }}>
-            Registro de actividades, cálculo de nómina y análisis de productividad
+            Registro de actividades, checador de asistencia y análisis de costo por proceso
           </p>
         </div>
         
         {/* Rango de Fechas (Global para consultas) */}
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', background: '#fff', padding: '10px 15px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '10px', color: colors.camel, textTransform: 'uppercase', fontWeight: 'bold' }}>Desde</label>
-            <input 
-              type="date" 
-              value={fechaDesde} 
-              onChange={e => setFechaDesde(e.target.value)} 
-              style={{ border: 'none', color: colors.espresso, fontWeight: '600', outline: 'none', background: 'none' }}
-            />
+        {activeSubTab !== 'costos_proceso' && (
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', background: '#fff', padding: '10px 15px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '10px', color: colors.camel, textTransform: 'uppercase', fontWeight: 'bold' }}>Desde</label>
+              <input 
+                type="date" 
+                value={fechaDesde} 
+                onChange={e => setFechaDesde(e.target.value)} 
+                style={{ border: 'none', color: colors.espresso, fontWeight: '600', outline: 'none', background: 'none' }}
+              />
+            </div>
+            <div style={{ color: colors.sand, fontWeight: 'bold' }}>|</div>
+            <div>
+              <label style={{ display: 'block', fontSize: '10px', color: colors.camel, textTransform: 'uppercase', fontWeight: 'bold' }}>Hasta</label>
+              <input 
+                type="date" 
+                value={fechaHasta} 
+                onChange={e => setFechaHasta(e.target.value)} 
+                style={{ border: 'none', color: colors.espresso, fontWeight: '600', outline: 'none', background: 'none' }}
+              />
+            </div>
           </div>
-          <div style={{ color: colors.sand, fontWeight: 'bold' }}>|</div>
-          <div>
-            <label style={{ display: 'block', fontSize: '10px', color: colors.camel, textTransform: 'uppercase', fontWeight: 'bold' }}>Hasta</label>
-            <input 
-              type="date" 
-              value={fechaHasta} 
-              onChange={e => setFechaHasta(e.target.value)} 
-              style={{ border: 'none', color: colors.espresso, fontWeight: '600', outline: 'none', background: 'none' }}
-            />
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Navegación de Sub-tabs */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '25px', borderBottom: `1px solid ${colors.sand}` }}>
+      <div style={{ display: 'flex', gap: '5px', marginBottom: '25px', borderBottom: `1px solid ${colors.sand}`, overflowX: 'auto', paddingBottom: '5px' }}>
         {[
           { id: 'resumen', label: '📊 Resumen y Eficiencia' },
-          { id: 'registros', label: '⏱️ Registros de Trabajo' },
+          { id: 'checador', label: '🕐 Reloj Checador' },
+          { id: 'registros', label: '⏱️ Historial de Actividades' },
+          { id: 'costos_proceso', label: '💰 Costeo por Proceso' },
           { id: 'colaboradores', label: '👥 Colaboradores y Tarifas' }
         ].map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveSubTab(tab.id)}
             style={{
-              padding: '12px 24px',
+              padding: '12px 20px',
               background: 'none',
               border: 'none',
               borderBottom: activeSubTab === tab.id ? `3px solid ${colors.sidebarBg}` : '3px solid transparent',
@@ -393,7 +545,8 @@ const ManoObraView = ({ isAdmin }) => {
               fontWeight: activeSubTab === tab.id ? '600' : '400',
               cursor: 'pointer',
               transition: 'all 0.2s',
-              fontSize: '14px'
+              fontSize: '14px',
+              whiteSpace: 'nowrap'
             }}
           >
             {tab.label}
@@ -432,7 +585,7 @@ const ManoObraView = ({ isAdmin }) => {
                   <div style={{ fontSize: '26px', fontWeight: '700', color: colors.espresso, marginTop: '5px' }}>
                     {(resumenPeriodo.piezas || 0).toLocaleString('es-MX')} pzs
                   </div>
-                  <div style={{ fontSize: '12px', color: colors.olive, marginTop: '5px' }}>Volumen por destajo</div>
+                  <div style={{ fontSize: '12px', color: colors.olive, marginTop: '5px' }}>Volumen total procesado</div>
                 </div>
 
                 <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)', borderLeft: `5px solid ${colors.gold}` }}>
@@ -440,7 +593,7 @@ const ManoObraView = ({ isAdmin }) => {
                   <div style={{ fontSize: '26px', fontWeight: '700', color: colors.espresso, marginTop: '5px' }}>
                     {resumenPeriodo.horas > 0 ? ((resumenPeriodo.piezas || 0) / resumenPeriodo.horas).toFixed(1) : '0.0'} pz/hr
                   </div>
-                  <div style={{ fontSize: '12px', color: colors.gold, marginTop: '5px' }}>Velocidad de empaque/doble</div>
+                  <div style={{ fontSize: '12px', color: colors.gold, marginTop: '5px' }}>Velocidad general por hora</div>
                 </div>
               </div>
 
@@ -468,7 +621,7 @@ const ManoObraView = ({ isAdmin }) => {
                     {resumenDiario.length === 0 ? (
                       <tr>
                         <td colSpan="8" style={{ padding: '40px', textAlign: 'center', color: colors.camel }}>
-                          No hay resumen disponible en este rango de fechas. Registra trabajo en la siguiente pestaña.
+                          No hay resumen disponible en este rango de fechas. Registra trabajo o usa el checador.
                         </td>
                       </tr>
                     ) : (
@@ -501,7 +654,169 @@ const ManoObraView = ({ isAdmin }) => {
             </div>
           )}
 
-          {/* TAB 2: REGISTROS DE TRABAJO */}
+          {/* TAB 2: RELOJ CHECADOR */}
+          {activeSubTab === 'checador' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', alignItems: 'start' }}>
+              
+              {/* Columna Izquierda: Panel de Checado */}
+              <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
+                <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', color: colors.espresso, fontWeight: '600', borderBottom: `1px solid ${colors.cream}`, paddingBottom: '10px' }}>
+                  🕐 Reloj Checador Digital
+                </h3>
+                
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', color: colors.camel, textTransform: 'uppercase', fontWeight: 'bold', marginBottom: '8px' }}>Selecciona Colaborador</label>
+                  <select
+                    value={colaboradorChecadorId}
+                    onChange={e => setColaboradorChecadorId(e.target.value)}
+                    style={{ width: '100%', padding: '10px 14px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '15px', outline: 'none', background: '#fff' }}
+                  >
+                    <option value="">-- Elige un colaborador --</option>
+                    {colaboradores.filter(c => c.activo).map(c => (
+                      <option key={c.id} value={c.id}>{c.nombre} ({c.rol || 'Empaque'})</option>
+                    ))}
+                  </select>
+                </div>
+
+                {colaboradorChecadorId ? (
+                  <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                    {jornadaActiva ? (
+                      <div>
+                        {/* Estado Badge */}
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '20px', fontWeight: 'bold', fontSize: '12px',
+                          background: jornadaActiva.estado === 'activa' ? '#D5F5E3' : '#FCF3CF',
+                          color: jornadaActiva.estado === 'activa' ? '#27AE60' : '#B7950B',
+                          marginBottom: '20px'
+                        }}>
+                          <span style={{ fontSize: '10px' }}>●</span>
+                          {jornadaActiva.estado === 'activa' ? 'TRABAJANDO (JORNADA ACTIVA)' : 'PAUSADO (EN DESCANSO)'}
+                        </div>
+
+                        {/* Cronómetro Digital */}
+                        <div style={{ fontSize: '48px', fontWeight: '800', fontFamily: 'monospace', color: colors.espresso, letterSpacing: '2px', marginBottom: '25px' }}>
+                          {formatearMs(tiempoNeto)}
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '25px', background: colors.cotton, padding: '15px', borderRadius: '8px' }}>
+                          <div style={{ textAlign: 'left' }}>
+                            <div style={{ fontSize: '10px', color: colors.camel, textTransform: 'uppercase' }}>Hora de Inicio</div>
+                            <div style={{ fontSize: '13px', fontWeight: '600', color: colors.espresso }}>
+                              {new Date(jornadaActiva.inicio).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '10px', color: colors.camel, textTransform: 'uppercase' }}>Pausas Totales</div>
+                            <div style={{ fontSize: '13px', fontWeight: '600', color: colors.espresso }}>
+                              {jornadaActiva.jornada_pausas ? `${jornadaActiva.jornada_pausas.length} pausas` : 'Ninguna'}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Botones de acción */}
+                        <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
+                          {jornadaActiva.estado === 'activa' ? (
+                            <button
+                              onClick={() => setShowModalPausa(true)}
+                              style={{ flex: 1, padding: '12px', background: colors.gold, color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}
+                            >
+                              ⏸️ Pausar Jornada
+                            </button>
+                          ) : (
+                            <button
+                              onClick={handleReanudarJornada}
+                              style={{ flex: 1, padding: '12px', background: colors.olive, color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}
+                            >
+                              ▶️ Reanudar Trabajo
+                            </button>
+                          )}
+                          <button
+                            onClick={handleCerrarJornada}
+                            style={{ flex: 1, padding: '12px', background: colors.terracotta, color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}
+                          >
+                            ⏹️ Cerrar Jornada
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ padding: '30px 10px' }}>
+                        <div style={{ fontSize: '15px', color: colors.camel, marginBottom: '20px' }}>
+                          No hay ninguna jornada de trabajo abierta para este colaborador el día de hoy.
+                        </div>
+                        <button
+                          onClick={handleIniciarJornada}
+                          style={{ width: '100%', padding: '15px', background: colors.olive, color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '16px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}
+                        >
+                          ▶️ Iniciar Jornada de Trabajo
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ padding: '40px 10px', textAlign: 'center', color: colors.camel }}>
+                    Selecciona un colaborador para interactuar con el Reloj Checador
+                  </div>
+                )}
+              </div>
+
+              {/* Columna Derecha: Historial de jornadas del colaborador o de todos */}
+              <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
+                <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', color: colors.espresso, fontWeight: '600', borderBottom: `1px solid ${colors.cream}`, paddingBottom: '10px' }}>
+                  📅 Historial de Jornadas Registradas
+                </h3>
+                
+                <div style={{ overflowX: 'auto', maxHeight: '380px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12px' }}>
+                    <thead>
+                      <tr style={{ background: colors.cream, borderBottom: `1px solid ${colors.sand}` }}>
+                        <th style={{ padding: '10px', color: colors.espresso, fontWeight: '600' }}>Fecha</th>
+                        <th style={{ padding: '10px', color: colors.espresso, fontWeight: '600' }}>Entrada</th>
+                        <th style={{ padding: '10px', color: colors.espresso, fontWeight: '600' }}>Salida</th>
+                        <th style={{ padding: '10px', color: colors.espresso, fontWeight: '600', textAlign: 'right' }}>Pausas</th>
+                        <th style={{ padding: '10px', color: colors.espresso, fontWeight: '600', textAlign: 'right' }}>Hrs Netas</th>
+                        <th style={{ padding: '10px', color: colors.espresso, fontWeight: '600' }}>Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {jornadasColaborador.length === 0 ? (
+                        <tr>
+                          <td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: colors.camel }}>
+                            {colaboradorChecadorId ? 'Sin jornadas registradas aún.' : 'Elige un colaborador a la izquierda.'}
+                          </td>
+                        </tr>
+                      ) : (
+                        jornadasColaborador.map(j => (
+                          <tr key={j.id} style={{ borderBottom: `1px solid ${colors.cream}` }}>
+                            <td style={{ padding: '10px' }}>{formatearFechaCorta(j.fecha)}</td>
+                            <td style={{ padding: '10px' }}>{new Date(j.inicio).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</td>
+                            <td style={{ padding: '10px' }}>
+                              {j.fin ? new Date(j.fin).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                            </td>
+                            <td style={{ padding: '10px', textAlign: 'right', color: colors.gold }}>
+                              {j.horas_pausa > 0 ? `${j.horas_pausa.toFixed(1)} hrs` : '-'}
+                            </td>
+                            <td style={{ padding: '10px', textAlign: 'right', fontWeight: '600', color: colors.espresso }}>
+                              {j.horas_netas ? `${j.horas_netas.toFixed(2)} hrs` : '-'}
+                            </td>
+                            <td style={{ padding: '10px' }}>
+                              <span style={{ 
+                                padding: '2px 6px', borderRadius: '10px', fontSize: '10px', fontWeight: 'bold',
+                                background: j.estado === 'cerrada' ? '#EAECEE' : j.estado === 'activa' ? '#D5F5E3' : '#FCF3CF',
+                                color: j.estado === 'cerrada' ? '#5D6D7E' : j.estado === 'activa' ? '#27AE60' : '#B7950B',
+                              }}>
+                                {j.estado.toUpperCase()}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: REGISTROS DE TRABAJO */}
           {activeSubTab === 'registros' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', alignItems: 'center' }}>
@@ -537,9 +852,10 @@ const ManoObraView = ({ isAdmin }) => {
                       <th style={{ padding: '15px', color: colors.espresso, fontWeight: '600', fontSize: '13px' }}>Colaborador</th>
                       <th style={{ padding: '15px', color: colors.espresso, fontWeight: '600', fontSize: '13px' }}>Tarea</th>
                       <th style={{ padding: '15px', color: colors.espresso, fontWeight: '600', fontSize: '13px' }}>Orden / Producto</th>
-                      <th style={{ padding: '15px', color: colors.espresso, fontWeight: '600', fontSize: '13px', textAlign: 'right' }}>Cantidad / Horas</th>
+                      <th style={{ padding: '15px', color: colors.espresso, fontWeight: '600', fontSize: '13px', textAlign: 'right' }}>Horas Dedicadas</th>
+                      <th style={{ padding: '15px', color: colors.espresso, fontWeight: '600', fontSize: '13px', textAlign: 'right' }}>Piezas Producidas</th>
                       <th style={{ padding: '15px', color: colors.espresso, fontWeight: '600', fontSize: '13px', textAlign: 'right' }}>Tarifa Usada</th>
-                      <th style={{ padding: '15px', color: colors.espresso, fontWeight: '600', fontSize: '13px', textAlign: 'right' }}>Costo</th>
+                      <th style={{ padding: '15px', color: colors.espresso, fontWeight: '600', fontSize: '13px', textAlign: 'right' }}>Costo Total</th>
                       <th style={{ padding: '15px', color: colors.espresso, fontWeight: '600', fontSize: '13px' }}>Notas</th>
                       <th style={{ padding: '15px', color: colors.espresso, fontWeight: '600', fontSize: '13px', textAlign: 'center' }}>Acciones</th>
                     </tr>
@@ -547,7 +863,7 @@ const ManoObraView = ({ isAdmin }) => {
                   <tbody>
                     {registros.length === 0 ? (
                       <tr>
-                        <td colSpan="9" style={{ padding: '40px', textAlign: 'center', color: colors.camel }}>
+                        <td colSpan="10" style={{ padding: '40px', textAlign: 'center', color: colors.camel }}>
                           No hay registros de trabajo guardados en este periodo.
                         </td>
                       </tr>
@@ -581,12 +897,11 @@ const ManoObraView = ({ isAdmin }) => {
                                 <span style={{ color: '#aaa', fontSize: '11px' }}>No vinculado</span>
                               )}
                             </td>
-                            <td style={{ padding: '15px', textAlign: 'right', fontWeight: '500' }}>
-                              {reg.modalidad === 'hora' ? (
-                                <span>⏱️ {Number(reg.horas).toFixed(1)} hrs</span>
-                              ) : (
-                                <span>📦 {Number(reg.cantidad).toLocaleString()} pzs</span>
-                              )}
+                            <td style={{ padding: '15px', textAlign: 'right' }}>
+                              {reg.horas ? `⏱️ ${Number(reg.horas).toFixed(1)} hrs` : '0.0 hrs'}
+                            </td>
+                            <td style={{ padding: '15px', textAlign: 'right' }}>
+                              {reg.cantidad ? `📦 ${Number(reg.cantidad).toLocaleString()} pzs` : '0 pzs'}
                             </td>
                             <td style={{ padding: '15px', textAlign: 'right', color: colors.camel }}>
                               {formatearMoneda(reg.tarifa_aplicada)}
@@ -595,8 +910,8 @@ const ManoObraView = ({ isAdmin }) => {
                             <td style={{ padding: '15px', textAlign: 'right', fontWeight: '700', color: colors.sidebarBg }}>
                               {formatearMoneda(reg.costo)}
                             </td>
-                            <td style={{ padding: '15px', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={reg.notas}>
-                              {reg.notas || '-'}
+                            <td style={{ padding: '15px', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={reg.notes || reg.notas}>
+                              {reg.notes || reg.notas || '-'}
                             </td>
                             <td style={{ padding: '15px', textAlign: 'center' }}>
                               <button
@@ -624,7 +939,122 @@ const ManoObraView = ({ isAdmin }) => {
             </div>
           )}
 
-          {/* TAB 3: COLABORADORES Y TARIFAS */}
+          {/* TAB 4: COSTEO POR PROCESO */}
+          {activeSubTab === 'costos_proceso' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '30px', alignItems: 'start' }}>
+              
+              {/* Costeo por Proceso Table */}
+              <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
+                <h3 style={{ margin: '0 0 15px 0', fontSize: '18px', color: colors.espresso, fontWeight: '600', borderBottom: `1px solid ${colors.cream}`, paddingBottom: '10px' }}>
+                  💸 Costo Real de Operación por Proceso
+                </h3>
+                <p style={{ fontSize: '13px', color: colors.camel, margin: '0 0 20px 0' }}>
+                  El costo unitario por pieza se calcula dividiendo la nómina total pagada (horas × tarifa o piezas × tarifa) entre el número de piezas producidas en cada tarea.
+                </p>
+
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+                    <thead>
+                      <tr style={{ background: colors.cream, borderBottom: `1px solid ${colors.sand}` }}>
+                        <th style={{ padding: '12px 10px', color: colors.espresso, fontWeight: '600' }}>Producto</th>
+                        <th style={{ padding: '12px 10px', color: colors.espresso, fontWeight: '600' }}>Proceso / Tarea</th>
+                        <th style={{ padding: '12px 10px', color: colors.espresso, fontWeight: '600', textAlign: 'right' }}>Horas Totales</th>
+                        <th style={{ padding: '12px 10px', color: colors.espresso, fontWeight: '600', textAlign: 'right' }}>Piezas Listas</th>
+                        <th style={{ padding: '12px 10px', color: colors.espresso, fontWeight: '600', textAlign: 'right' }}>Costo Acum.</th>
+                        <th style={{ padding: '12px 10px', color: colors.espresso, fontWeight: '600', textAlign: 'right' }}>Costo Real / Pza</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {costoProceso.length === 0 ? (
+                        <tr>
+                          <td colSpan="6" style={{ padding: '30px', textAlign: 'center', color: colors.camel }}>
+                            Sin datos de costeo de procesos aún. Registra actividades con piezas y horas para calcular.
+                          </td>
+                        </tr>
+                      ) : (
+                        costoProceso.map((row, idx) => (
+                          <tr key={idx} style={{ borderBottom: `1px solid ${colors.cream}` }}>
+                            <td style={{ padding: '12px 10px', fontWeight: '600', color: colors.espresso }}>{row.producto || 'Sin Vincular'}</td>
+                            <td style={{ padding: '12px 10px' }}>
+                              <span style={{ background: colors.cream, padding: '2px 6px', borderRadius: '4px', fontSize: '11px', color: colors.espresso }}>
+                                {row.proceso}
+                              </span>
+                            </td>
+                            <td style={{ padding: '12px 10px', textAlign: 'right' }}>{row.horas ? `${row.horas.toFixed(1)} hrs` : '-'}</td>
+                            <td style={{ padding: '12px 10px', textAlign: 'right' }}>{row.piezas ? Number(row.piezas).toLocaleString() : '-'}</td>
+                            <td style={{ padding: '12px 10px', textAlign: 'right', fontWeight: '500', color: colors.sidebarBg }}>
+                              {formatearMoneda(row.costo_total)}
+                            </td>
+                            <td style={{ padding: '12px 10px', textAlign: 'right', fontWeight: '700', color: colors.terracotta }}>
+                              {row.costo_por_pieza ? formatearMoneda(row.costo_por_pieza) : '-'}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Maquila Real vs Estándar Table */}
+              <div style={{ background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
+                <h3 style={{ margin: '0 0 15px 0', fontSize: '18px', color: colors.espresso, fontWeight: '600', borderBottom: `1px solid ${colors.cream}`, paddingBottom: '10px' }}>
+                  🧵 Costo de Maquila vs Estándar ($20)
+                </h3>
+                <p style={{ fontSize: '13px', color: colors.camel, margin: '0 0 20px 0' }}>
+                  Compara la suma de la maquila real de todos los procesos contra el costo estándar de maquila de referencia del producto.
+                </p>
+
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+                    <thead>
+                      <tr style={{ background: colors.cream, borderBottom: `1px solid ${colors.sand}` }}>
+                        <th style={{ padding: '12px 10px', color: colors.espresso, fontWeight: '600' }}>Producto</th>
+                        <th style={{ padding: '12px 10px', color: colors.espresso, fontWeight: '600', textAlign: 'right' }}>Maquila Real</th>
+                        <th style={{ padding: '12px 10px', color: colors.espresso, fontWeight: '600', textAlign: 'right' }}>Estándar</th>
+                        <th style={{ padding: '12px 10px', color: colors.espresso, fontWeight: '600', textAlign: 'right' }}>Desviación</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {maquilaProducto.length === 0 ? (
+                        <tr>
+                          <td colSpan="4" style={{ padding: '30px', textAlign: 'center', color: colors.camel }}>
+                            Sin datos de maquila real aún.
+                          </td>
+                        </tr>
+                      ) : (
+                        maquilaProducto.map((row, idx) => {
+                          const esMayor = row.diferencia_vs_estandar > 0;
+                          return (
+                            <tr key={idx} style={{ borderBottom: `1px solid ${colors.cream}` }}>
+                              <td style={{ padding: '12px 10px', fontWeight: '600', color: colors.espresso }}>{row.producto}</td>
+                              <td style={{ padding: '12px 10px', textAlign: 'right', fontWeight: '700', color: colors.sidebarBg }}>
+                                {formatearMoneda(row.maquila_real_por_pieza)}
+                              </td>
+                              <td style={{ padding: '12px 10px', textAlign: 'right', color: colors.camel }}>
+                                {formatearMoneda(row.maquila_estandar || 20)}
+                              </td>
+                              <td style={{ padding: '12px 10px', textAlign: 'right', fontWeight: 'bold', 
+                                color: esMayor ? colors.terracotta : colors.olive 
+                              }}>
+                                {row.diferencia_vs_estandar > 0 ? '+' : ''}{formatearMoneda(row.diferencia_vs_estandar)}
+                                <span style={{ fontSize: '10px', display: 'block', fontWeight: 'normal' }}>
+                                  {esMayor ? '🔴 Sobrecosto' : '🟢 Eficiencia'}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* TAB 5: COLABORADORES Y TARIFAS */}
           {activeSubTab === 'colaboradores' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', alignItems: 'center' }}>
@@ -831,33 +1261,41 @@ const ManoObraView = ({ isAdmin }) => {
                 </div>
               </div>
 
-              <div style={{ marginBottom: '15px' }}>
-                {formRegistro.modalidad === 'hora' ? (
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', color: colors.espresso, marginBottom: '5px', fontWeight: '600' }}>Horas Trabajadas *</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={formRegistro.horas}
-                      onChange={e => setFormRegistro(prev => ({ ...prev, horas: e.target.value }))}
-                      style={{ width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '6px', fontSize: '14px', outline: 'none' }}
-                      min="0.1"
-                      required
-                    />
-                  </div>
-                ) : (
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', color: colors.espresso, marginBottom: '5px', fontWeight: '600' }}>Cantidad Producida (piezas) *</label>
-                    <input
-                      type="number"
-                      value={formRegistro.cantidad}
-                      onChange={e => setFormRegistro(prev => ({ ...prev, cantidad: e.target.value }))}
-                      style={{ width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '6px', fontSize: '14px', outline: 'none' }}
-                      min="1"
-                      required
-                    />
-                  </div>
-                )}
+              {/* Inputs obligatorios para horas y piezas en ambas modalidades */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px', background: '#fcfcfc', padding: '10px', borderRadius: '8px', border: `1px solid ${colors.cream}` }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', color: colors.espresso, marginBottom: '5px', fontWeight: '600' }}>
+                    Horas Trabajadas *
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={formRegistro.horas}
+                    onChange={e => setFormRegistro(prev => ({ ...prev, horas: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '6px', fontSize: '14px', outline: 'none' }}
+                    min="0.1"
+                    required
+                  />
+                  <span style={{ fontSize: '10px', color: colors.camel }}>
+                    {formRegistro.modalidad === 'hora' ? 'Determina el pago de la sesión.' : 'Ayuda a calcular productividad.'}
+                  </span>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', color: colors.espresso, marginBottom: '5px', fontWeight: '600' }}>
+                    Cantidad Producida (piezas) *
+                  </label>
+                  <input
+                    type="number"
+                    value={formRegistro.cantidad}
+                    onChange={e => setFormRegistro(prev => ({ ...prev, cantidad: e.target.value }))}
+                    style={{ width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '6px', fontSize: '14px', outline: 'none' }}
+                    min="1"
+                    required
+                  />
+                  <span style={{ fontSize: '10px', color: colors.camel }}>
+                    {formRegistro.modalidad === 'pieza' ? 'Determina el pago de la sesión.' : 'Requerido para costear el proceso real.'}
+                  </span>
+                </div>
               </div>
 
               {/* Vinculación con Orden de Producción */}
@@ -913,7 +1351,7 @@ const ManoObraView = ({ isAdmin }) => {
                       >
                         <option value="">-- Ninguna --</option>
                         {variantes.map(v => (
-                          <option key={v.id} value={v.id}>{v.variante_label}</option>
+                          <option key={v.id} value={v.id}>{v.variante_label || [v.material, v.color, v.talla].filter(Boolean).join(' - ')}</option>
                         ))}
                       </select>
                     </div>
@@ -1065,6 +1503,74 @@ const ManoObraView = ({ isAdmin }) => {
                   style={{ padding: '10px 20px', background: colors.sidebarBg, color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}
                 >
                   {colabEditando ? 'Guardar Cambios' : 'Crear Colaborador'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: TOMAR PAUSA */}
+      {showModalPausa && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex', justifyContent: 'center', alignItems: 'center',
+          zIndex: 1000,
+          padding: '15px'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '12px',
+            width: '100%',
+            maxWidth: '450px',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
+            overflow: 'hidden'
+          }}>
+            <div style={{ background: colors.gold, color: '#fff', padding: '15px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>⏸️ Registrar Descanso / Pausa</h3>
+              <button onClick={() => setShowModalPausa(false)} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '20px', cursor: 'pointer' }}>✕</button>
+            </div>
+            
+            <form onSubmit={handlePausarJornada} style={{ padding: '20px' }}>
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: colors.espresso, marginBottom: '5px', fontWeight: '600' }}>Tipo de Pausa *</label>
+                <select
+                  value={formPausa.tipo}
+                  onChange={e => setFormPausa(prev => ({ ...prev, tipo: e.target.value }))}
+                  style={{ width: '100%', padding: '10px 14px', border: `1px solid ${colors.sand}`, borderRadius: '8px', fontSize: '14px', outline: 'none', background: '#fff' }}
+                  required
+                >
+                  <option value="comida">Comida / Almuerzo</option>
+                  <option value="permiso">Permiso Temporal</option>
+                  <option value="otro">Otro</option>
+                </select>
+              </div>
+
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', fontSize: '12px', color: colors.espresso, marginBottom: '5px' }}>Justificación / Nota</label>
+                <textarea
+                  value={formPausa.justificacion}
+                  onChange={e => setFormPausa(prev => ({ ...prev, justificacion: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 12px', border: `1px solid ${colors.sand}`, borderRadius: '6px', fontSize: '14px', outline: 'none', height: '60px', resize: 'none' }}
+                  placeholder="Ej: Salida a banco o almuerzo reglamentario"
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowModalPausa(false)}
+                  style={{ padding: '10px 20px', background: colors.sand, border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  style={{ padding: '10px 20px', background: colors.gold, color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}
+                >
+                  Pausar Jornada
                 </button>
               </div>
             </form>
