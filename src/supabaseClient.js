@@ -2235,6 +2235,32 @@ export const registrarDevolucionConsignacion = async (movimiento, datosDevolucio
     cantidadPorDevolver -= cantidadAReducir;
   }
 
+  // 4. Regresar las piezas al taller (stock_consignacion → stock). El ajuste
+  // vive AQUÍ para que todos los caminos (DevolucionModal, Salidas) lo hagan
+  // una sola vez; quien llame esta función NO debe volver a escribir stock.
+  if (datosDevolucion.variante_id != null) {
+    const { data: v } = await supabase
+      .from('variantes_producto')
+      .select('stock, stock_consignacion')
+      .eq('id', datosDevolucion.variante_id)
+      .single();
+    await updateStockVariante(
+      datosDevolucion.variante_id,
+      (v?.stock || 0) + datosDevolucion.cantidad,
+      (v?.stock_consignacion || 0) - datosDevolucion.cantidad
+    );
+  } else {
+    const { data: p } = await supabase
+      .from('productos')
+      .select('stock, stock_consignacion')
+      .eq('id', datosDevolucion.producto_id)
+      .single();
+    await updateProducto(datosDevolucion.producto_id, {
+      stock: (p?.stock || 0) + datosDevolucion.cantidad,
+      stock_consignacion: (p?.stock_consignacion || 0) - datosDevolucion.cantidad
+    });
+  }
+
   return {
     data: { movimiento: movData, ventasActualizadas },
     error: null

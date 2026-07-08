@@ -5102,8 +5102,9 @@ const SalidasView = ({ isAdmin }) => {
             nuevaConsig = vConsigActual - cantidad;
           }
 
-          // Para venta_consignacion no escribir a DB (registrarPagoVenta ya lo hizo)
-          if (formSalida.tipoMovimiento !== 'venta_consignacion') {
+          // Para venta_consignacion no escribir a DB (registrarPagoVenta ya lo hizo);
+          // para devolucion tampoco (registrarDevolucionConsignacion ya ajusta stock)
+          if (formSalida.tipoMovimiento !== 'venta_consignacion' && formSalida.tipoMovimiento !== 'devolucion') {
             await updateStockVariante(variante.id, nuevoStock, nuevaConsig);
           }
 
@@ -5149,10 +5150,7 @@ const SalidasView = ({ isAdmin }) => {
               p.id === Number(productoId) ? { ...p, stock_consignacion: consignacionActual - cantidad } : p
             ));
           } else if (formSalida.tipoMovimiento === 'devolucion') {
-            await updateProducto(productoId, {
-              stock: stockActual + cantidad,
-              stock_consignacion: consignacionActual - cantidad
-            });
+            // stock ya ajustado por registrarDevolucionConsignacion, solo estado local
             setProductos(productos.map(p =>
               p.id === Number(productoId) ? {
                 ...p,
