@@ -8622,9 +8622,13 @@ const BalanceView = ({ isAdmin }) => {
 
       mapa[clienteId].registros.push({ ...v, _tipo_registro: 'venta' });
       mapa[clienteId].numVentas += 1;
-      mapa[clienteId].totalVendido += parseFloat(v.total) || 0;
-      mapa[clienteId].totalCobrado += parseFloat(v.monto_pagado) || 0;
-      mapa[clienteId].totalPendiente += Math.max(0, (parseFloat(v.total) || 0) - (parseFloat(v.monto_pagado) || 0));
+      // Las canceladas (devueltas) se listan en el historial pero NO suman a la
+      // deuda ni al vendido: la mercancía ya regresó al taller.
+      if (v.estado_pago !== 'cancelado') {
+        mapa[clienteId].totalVendido += parseFloat(v.total) || 0;
+        mapa[clienteId].totalCobrado += parseFloat(v.monto_pagado) || 0;
+        mapa[clienteId].totalPendiente += Math.max(0, (parseFloat(v.total) || 0) - (parseFloat(v.monto_pagado) || 0));
+      }
     });
 
     // Procesar servicios de maquila
@@ -8941,7 +8945,8 @@ const BalanceView = ({ isAdmin }) => {
                               const esServicio = r._tipo_registro === 'servicio';
                               const total = parseFloat(r.total) || 0;
                               const pagado = parseFloat(r.monto_pagado) || 0;
-                              const pendiente = Math.max(0, total - pagado);
+                              // Cancelada (devuelta) = ya no se debe nada de esa línea
+                              const pendiente = r.estado_pago === 'cancelado' ? 0 : Math.max(0, total - pagado);
                               const fecha = esServicio ? r.fecha : r.created_at;
                               const concepto = esServicio
                                 ? `${r.maquila} - ${r.tipo_producto}`
