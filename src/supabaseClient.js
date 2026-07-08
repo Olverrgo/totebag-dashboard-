@@ -1788,7 +1788,7 @@ export const getEstadoCuentaVendedor = async (clienteId, { desde, hasta } = {}) 
   // 1. Todas las ventas del cliente (para ligar abonos y calcular saldo vivo)
   const { data: ventasAll, error: errV } = await supabase
     .from('ventas')
-    .select('id, folio_operacion, producto_id, producto_nombre, cantidad, precio_unitario, total, monto_pagado, monto_pendiente, tipo_venta, estado_pago, notas, created_at')
+    .select('id, folio_operacion, producto_id, variante_id, producto_nombre, cantidad, precio_unitario, total, monto_pagado, monto_pendiente, tipo_venta, estado_pago, notas, created_at')
     .eq('cliente_id', clienteId)
     .eq('activo', true)
     .order('created_at', { ascending: true });
@@ -1890,11 +1890,15 @@ export const getEstadoCuentaVendedor = async (clienteId, { desde, hasta } = {}) 
 
   // 4. Devoluciones REALES: cada evento está en movimientos_stock
   //    (tipo_movimiento='devolucion') con la cantidad efectivamente devuelta y su fecha.
-  //    El valor que se resta a la deuda = cantidad × precio de consignación del producto.
+  //    El valor que se resta a la deuda = cantidad × precio de consignación de LA
+  //    VARIANTE devuelta (un mismo producto puede tener precios distintos por
+  //    variante/talla: valorar por producto tomaba el precio de otra variante).
   const precioPorProducto = {};
+  const precioPorVariante = {};
   (ventasAll || []).forEach(v => {
     if (v.tipo_venta === 'consignacion' && v.producto_id != null && (parseFloat(v.precio_unitario) || 0) > 0) {
       precioPorProducto[v.producto_id] = parseFloat(v.precio_unitario);
+      if (v.variante_id != null) precioPorVariante[`${v.producto_id}__${v.variante_id}`] = parseFloat(v.precio_unitario);
     }
   });
 
@@ -1902,14 +1906,15 @@ export const getEstadoCuentaVendedor = async (clienteId, { desde, hasta } = {}) 
   {
     const { data: movsDev } = await supabase
       .from('movimientos_stock')
-      .select('id, producto_id, cantidad, notas, fecha, producto:productos(linea_nombre)')
+      .select('id, producto_id, variante_id, cantidad, notas, fecha, producto:productos(linea_nombre)')
       .eq('cliente_id', clienteId)
       .eq('tipo_movimiento', 'devolucion')
       .order('fecha', { ascending: true });
     devoluciones = (movsDev || [])
       .filter(m => (!desde && !hasta) || dentroRango(m.fecha))
       .map(m => {
-        const precio = precioPorProducto[m.producto_id] || 0;
+        const precio = (m.variante_id != null && precioPorVariante[`${m.producto_id}__${m.variante_id}`])
+          || precioPorProducto[m.producto_id] || 0;
         return {
           fecha: m.fecha,
           producto: m.producto?.linea_nombre || `Producto ${m.producto_id}`,
