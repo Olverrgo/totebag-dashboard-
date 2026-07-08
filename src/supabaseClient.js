@@ -1874,10 +1874,15 @@ export const getEstadoCuentaVendedor = async (clienteId, { desde, hasta } = {}) 
     saldo_inicial = entregadoAntes - cobradoAntes;
   }
 
-  const entregado = ventas.reduce((s, v) => s + (parseFloat(v.total) || 0), 0);
+  // Las ventas CANCELADAS (devueltas completas) se excluyen del entregado neto y
+  // del saldo: su valor ya se refleja en el renglón de devoluciones (si se sumaran
+  // aquí, el flujo las contaría dos veces: entregado_bruto = entregado + devuelto).
+  const entregado = ventas
+    .filter(v => v.estado_pago !== 'cancelado')
+    .reduce((s, v) => s + (parseFloat(v.total) || 0), 0);
   const cobrado = abonos.reduce((s, a) => s + a.monto, 0);
   const pendiente = (ventasAll || [])
-    .filter(v => v.tipo_venta === 'consignacion')
+    .filter(v => v.tipo_venta === 'consignacion' && v.estado_pago !== 'cancelado')
     .reduce((s, v) => s + (parseFloat(v.monto_pendiente) || 0), 0); // saldo VIVO total (actual)
 
   // Shape amigable para la UI: ventas con fecha/folio/producto (la UI ya los usa así)
@@ -1910,19 +1915,29 @@ export const getEstadoCuentaVendedor = async (clienteId, { desde, hasta } = {}) 
       .eq('cliente_id', clienteId)
       .eq('tipo_movimiento', 'devolucion')
       .order('fecha', { ascending: true });
+    const valorar = (m) => {
+      const precio = (m.variante_id != null && precioPorVariante[`${m.producto_id}__${m.variante_id}`])
+        || precioPorProducto[m.producto_id] || 0;
+      return (parseFloat(m.cantidad) || 0) * precio;
+    };
     devoluciones = (movsDev || [])
       .filter(m => (!desde && !hasta) || dentroRango(m.fecha))
-      .map(m => {
-        const precio = (m.variante_id != null && precioPorVariante[`${m.producto_id}__${m.variante_id}`])
-          || precioPorProducto[m.producto_id] || 0;
-        return {
-          fecha: m.fecha,
-          producto: m.producto?.linea_nombre || `Producto ${m.producto_id}`,
-          cantidad: parseFloat(m.cantidad) || 0,
-          valor: (parseFloat(m.cantidad) || 0) * precio,
-          notas: m.notas || ''
-        };
-      });
+      .map(m => ({
+        fecha: m.fecha,
+        producto: m.producto?.linea_nombre || `Producto ${m.producto_id}`,
+        cantidad: parseFloat(m.cantidad) || 0,
+        valor: valorar(m),
+        notas: m.notas || ''
+      }));
+    // El saldo anterior también debe restar lo devuelto ANTES del periodo
+    // (simétrico al entregadoAntes − cobradoAntes de arriba).
+    if (desde) {
+      const t0 = new Date(desde).getTime();
+      const devueltoAntes = (movsDev || [])
+        .filter(m => new Date(m.fecha).getTime() < t0)
+        .reduce((s, m) => s + valorar(m), 0);
+      saldo_inicial -= devueltoAntes;
+    }
   }
   const devuelto = devoluciones.reduce((s, d) => s + d.valor, 0);
 
