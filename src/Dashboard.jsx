@@ -4037,6 +4037,22 @@ const ProductosView = ({ isAdmin }) => {
                         }}>
                         Editar
                       </button>
+                      {!prod.es_manufacturado && (
+                        <button
+                          onClick={() => abrirResurtir(prod)}
+                          style={{
+                            padding: '8px 14px',
+                            background: colors.camel,
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            fontWeight: '500'
+                          }}>
+                          Resurtir
+                        </button>
+                      )}
                     </div>
 
                     <div style={{ display: 'flex', gap: '8px' }}>
