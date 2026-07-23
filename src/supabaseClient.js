@@ -3742,6 +3742,29 @@ export const generarOrdenesDesdeFaltantes = async (faltantes, cotizacion) => {
     const qty = parseInt(f.faltan) || 0;
     if (qty <= 0) continue;
 
+    // Blindaje: ignorar faltantes sin producto real (línea fantasma).
+    if (!f.producto_id) { resultados.push({ faltante: f, status: 'invalido' }); continue; }
+
+    // Anti-duplicado: si ya existe una orden ABIERTA (no completada/cancelada) para esta
+    // misma cotización + producto + variante, reusarla en vez de crear otra. Evita que
+    // reintentar "Vender" genere órdenes repetidas y produzca stock de más.
+    if (folio) {
+      let qExist = supabase
+        .from('ordenes_produccion')
+        .select('id, cantidad, estado')
+        .eq('cotizacion_folio', folio)
+        .eq('producto_id', f.producto_id)
+        .not('estado', 'in', '(completada,cancelada)');
+      qExist = (f.variante_id == null)
+        ? qExist.is('variante_id', null)
+        : qExist.eq('variante_id', f.variante_id);
+      const { data: abiertas } = await qExist;
+      if (abiertas && abiertas.length > 0) {
+        resultados.push({ faltante: f, status: 'ya_existe', ordenId: abiertas[0].id, cantidad: abiertas[0].cantidad });
+        continue;
+      }
+    }
+
     const { data: calc, error: errCalc } = await calcularMaterialesProduccion(f.producto_id, f.variante_id, qty);
     if (errCalc) { resultados.push({ faltante: f, status: 'error', mensaje: errCalc.message || 'Error calculando materiales' }); continue; }
 
@@ -3777,7 +3800,8 @@ export const generarOrdenesDesdeFaltantes = async (faltantes, cotizacion) => {
 
   const creadas = resultados.filter(r => r.status === 'creada').length;
   const bloqueadas = resultados.filter(r => r.status === 'sin_materia_prima').length;
-  return { data: resultados, creadas, bloqueadas, error: null };
+  const reutilizadas = resultados.filter(r => r.status === 'ya_existe').length;
+  return { data: resultados, creadas, bloqueadas, reutilizadas, error: null };
 };
 
 // Registrar compra de material:
@@ -4079,11 +4103,14 @@ export const crearCotizacionCompleta = async (cabecera, lineas) => {
 
   if (errCab) return { data: null, error: handleRLSError(errCab) };
 
-  if (lineas && lineas.length > 0) {
-    // Sanitizar FKs enteros: la UI puede mandar '' (sin variante seleccionada)
-    // y Postgres rechaza '' en columnas INTEGER. '' → null, lo demás a número.
-    const aIntONull = (v) => (v === '' || v === null || v === undefined ? null : parseInt(v, 10));
-    const filas = lineas.map(l => ({
+  // Sanitizar FKs enteros: la UI puede mandar '' (sin variante seleccionada)
+  // y Postgres rechaza '' en columnas INTEGER. '' → null, lo demás a número.
+  const aIntONull = (v) => (v === '' || v === null || v === undefined ? null : parseInt(v, 10));
+  // Blindaje: descartar líneas fantasma (sin producto). No deben persistir: rompen el
+  // pre-chequeo de stock y disparan órdenes de producción para un producto inexistente.
+  const lineasValidas = (lineas || []).filter(l => aIntONull(l.producto_id) != null);
+  if (lineasValidas.length > 0) {
+    const filas = lineasValidas.map(l => ({
       ...l,
       cotizacion_id: nuevaCot.id,
       producto_id: aIntONull(l.producto_id),
@@ -4135,9 +4162,11 @@ export const actualizarCotizacionCompleta = async (id, cabecera, lineas) => {
   const { error: errDel } = await supabase.from('detalle_cotizacion').delete().eq('cotizacion_id', id);
   if (errDel) return { data: null, error: handleRLSError(errDel) };
 
-  if (lineas && lineas.length > 0) {
-    const aIntONull = (v) => (v === '' || v === null || v === undefined ? null : parseInt(v, 10));
-    const filas = lineas.map(l => ({
+  const aIntONull = (v) => (v === '' || v === null || v === undefined ? null : parseInt(v, 10));
+  // Blindaje: descartar líneas fantasma (sin producto) — ver crearCotizacionCompleta.
+  const lineasValidas = (lineas || []).filter(l => aIntONull(l.producto_id) != null);
+  if (lineasValidas.length > 0) {
+    const filas = lineasValidas.map(l => ({
       ...l,
       cotizacion_id: id,
       producto_id: aIntONull(l.producto_id),
@@ -4211,6 +4240,7 @@ export const convertirCotizacionEnVenta = async (cotizacion, opciones = {}) => {
   // devolvemos `faltantes` para decidir (¿hay stock? ¿se genera orden de producción?).
   const demanda = new Map();
   for (const d of detalle) {
+    if (d.producto_id == null) continue; // blindaje: ignorar línea fantasma
     const key = `${d.producto_id}::${d.variante_id ?? ''}`;
     const prev = demanda.get(key) || {
       producto_id: d.producto_id, variante_id: d.variante_id,

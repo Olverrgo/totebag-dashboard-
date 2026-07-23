@@ -264,10 +264,10 @@ const ProducirFaltantesModal = ({ cotizacion, faltantes, onClose }) => {
 
   const generar = async () => {
     setGenerando(true);
-    const { data, creadas, bloqueadas, error } = await generarOrdenesDesdeFaltantes(faltantes, cotizacion);
+    const { data, creadas, bloqueadas, reutilizadas, error } = await generarOrdenesDesdeFaltantes(faltantes, cotizacion);
     setGenerando(false);
     if (error) { alert('Error: ' + error.message); return; }
-    setResultados({ data, creadas, bloqueadas });
+    setResultados({ data, creadas, bloqueadas, reutilizadas });
   };
 
   return (
@@ -305,7 +305,7 @@ const ProducirFaltantesModal = ({ cotizacion, faltantes, onClose }) => {
         ) : (
           <>
             <div style={{ margin: '15px 0', padding: '12px', borderRadius: '8px', background: colors.cream, fontSize: '13px', color: colors.espresso }}>
-              ✅ {resultados.creadas} orden(es) creada(s){resultados.bloqueadas > 0 ? ` · 🔴 ${resultados.bloqueadas} sin materia prima` : ''}
+              ✅ {resultados.creadas} orden(es) creada(s){resultados.reutilizadas > 0 ? ` · ♻️ ${resultados.reutilizadas} ya existía(n)` : ''}{resultados.bloqueadas > 0 ? ` · 🔴 ${resultados.bloqueadas} sin materia prima` : ''}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {resultados.data.map((r, i) => (
@@ -315,6 +315,9 @@ const ProducirFaltantesModal = ({ cotizacion, faltantes, onClose }) => {
                   </div>
                   {r.status === 'creada' && (
                     <div style={{ color: '#27AE60', fontSize: '12px' }}>✓ Orden de producción creada (en proceso)</div>
+                  )}
+                  {r.status === 'ya_existe' && (
+                    <div style={{ color: '#B9770E', fontSize: '12px' }}>♻️ Ya había una orden abierta para este producto — no se duplicó</div>
                   )}
                   {r.status === 'sin_materia_prima' && (
                     <div style={{ color: '#C0392B', fontSize: '12px' }}>
@@ -735,20 +738,37 @@ const CotizacionWizard = ({ onClose, onSuccess, cotizacionEditar = null }) => {
   const total = items.reduce((acc, curr) => acc + (curr.cantidad * curr.precio_unitario), 0);
 
   const handleGuardar = async () => {
-    if (!tierId || items.length === 0) return alert('Datos incompletos');
-    
+    if (!tierId) return alert('Datos incompletos');
+
+    // Blindaje anti-línea-fantasma: descartar renglones sin producto seleccionado.
+    // Un renglón vacío rompe el flujo de venta/producción (pide una orden por un
+    // producto inexistente). Avisamos, lo quitamos en automático y guardamos lo válido.
+    const itemsValidos = items.filter(it => it.producto_id !== '' && it.producto_id != null);
+    const fantasmas = items.length - itemsValidos.length;
+    if (itemsValidos.length === 0) {
+      return alert('La cotización no tiene ningún producto válido. Selecciona un producto en cada renglón antes de guardar.');
+    }
+    if (fantasmas > 0) {
+      const ok = window.confirm(
+        `Hay ${fantasmas} renglón(es) sin producto. Se eliminará(n) automáticamente y se guardará solo lo válido.\n\n¿Continuar?`
+      );
+      if (!ok) return;
+    }
+
+    const totalValido = itemsValidos.reduce((acc, curr) => acc + (curr.cantidad * curr.precio_unitario), 0);
+
     setLoading(true);
     const cabecera = {
       cliente_id: clienteId || null,
       cliente_nombre: clienteId ? clientes.find(c => c.id === parseInt(clienteId))?.nombre : clienteNombre,
       tier_id: tierId,
       notas,
-      total
+      total: totalValido
     };
-    
+
     const { error } = esEdicion
-      ? await actualizarCotizacionCompleta(cotizacionEditar.id, cabecera, items)
-      : await crearCotizacionCompleta(cabecera, items);
+      ? await actualizarCotizacionCompleta(cotizacionEditar.id, cabecera, itemsValidos)
+      : await crearCotizacionCompleta(cabecera, itemsValidos);
     setLoading(false);
     if (!error) onSuccess();
     else alert('Error: ' + error.message);
