@@ -2279,6 +2279,7 @@ const ProductosView = ({ isAdmin }) => {
   // Abrir modal de variantes para un producto
   const abrirVariantes = async (producto) => {
     setProductoVariantes(producto);
+    setVariantes([]); // limpiar variantes del producto anterior para no mostrar stale
     const { data } = await getVariantes(producto.id);
     setVariantes(data || []);
   };
